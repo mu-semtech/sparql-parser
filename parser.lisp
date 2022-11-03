@@ -1,8 +1,7 @@
 (in-package :sparql-parser)
 
-;; Tree DB T:1 ends here
-
-;; [[file:../../../20221008110913-ll1_parser.org::*Types T][Types T:1]]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; rules and solution structures
 (defstruct rule
   "Expresses an expansion rule."
   (name (error "Must supply rule name") :type keyword)
@@ -33,12 +32,16 @@ We accept strings and uppercase symbols as terminals."
        (cl-ppcre:scan "^[A-Z_0-9]+$" (symbol-name thing)))
    t))
 
-;; [[file:../../../20221008110913-ll1_parser.org::*Constants T][Constants T:1]]
+;;;;;;;;;;;;;;
+;;;; Constants
+
 (defconstant +END+ :end-eof "Last token to be processed.")
 (defconstant +EMPTY+ :empty-statement "Indicates a statement which carries no content")
-;; Constants T:1 ends here
 
-;; [[file:../../../20221008110913-ll1_parser.org::*Language rules T][Language rules T:1]]
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Stub language rules
+
 (defparameter *rules*
   (mapcar (lambda (specification)
             (destructuring-bind (name &rest expansion) specification
@@ -53,9 +56,10 @@ We accept strings and uppercase symbols as terminals."
 
 (defparameter *start-symbol* :|statement|
   "The symbol used to start processing.")
-;; Language rules T:1 ends here
 
-;; [[file:../../../20221008110913-ll1_parser.org::*Building a transition table T][Building a transition table T:1]]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Construction of transition table
+
 (defun find-rules (rule-name)
   "Finds all rules with name RULE-NAME."
   (remove-if-not (alexandria:curry #'eq rule-name)
@@ -228,9 +232,10 @@ symbol.  It is important when coping with symbols that may be empty."
 
 (defparameter *transition-table* (construct-transition-table *rules*)
   "Transition table [stack top, next symbol] => next rule")
-;; Building a transition table T:1 ends here
 
-;; [[file:../../../20221008110913-ll1_parser.org::*Print helpers T][Print helpers T:1]]
+;;;;;;;;;;;;;;;;;;
+;;;; Print helpers
+
 (defmethod print-object ((rule rule) stream)
   (print-unreadable-object (rule stream :type "RULE")
     (format stream "~A => ~{~A~,^ ~}" (rule-name rule) (rule-expansion rule))))
@@ -264,9 +269,10 @@ symbol.  It is important when coping with symbols that may be empty."
                          (print-it submatch (cons prefix-prepend prefix))
                          (format stream "~&~{~A~}[~A]~%" (cons prefix-prepend prefix) submatch)))))))
       (print-it match start-prefix))))
-;; Print helpers T:1 ends here
 
-;; [[file:../../../20221008110913-ll1_parser.org::*Detecting tokens T][Detecting tokens T:1]]
+;;;;;;;;;;;;;;;;;;;;;
+;;;; Detecting tokens
+
 (defparameter *token-parsers*
   (list 'ID (cl-ppcre:create-scanner "^([0-9]+|[A-Z][a-zA-Z0-9]*)"))
   "Listing of all things that can parse a token.")
@@ -277,7 +283,6 @@ symbol.  It is important when coping with symbols that may be empty."
       ;; scan the string
       (cl-ppcre:create-scanner (concatenate 'string "^" token))
       (getf *token-parsers* token)))
-
 
 (defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
   "Reusable scanner for whitespace between tokens.")
@@ -336,9 +341,10 @@ as the starting point in STRING."
             (make-scanned-token :start start :end start :token +END+)
             start))
           (t nil))))
-;; Detecting tokens T:1 ends here
 
-;; [[file:../../../20221008110913-ll1_parser.org::*Parser implementation T][Parser implementation T:1]]
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Parser implementation
+
 (defvar *stack* nil "Place to store the items to be parsed.")
 (defparameter *scanning-string* nil "The string to scan.")
 (defvar *match-tree* nil "Place to store the entry point of the matching tree.")
@@ -435,4 +441,4 @@ as the starting point in STRING."
         until (parse-step))
   (format t "~&===RESULT===~%")
   (print-match *match-tree* :rulep nil))
-;; Parser implementation T:1 ends here
+
