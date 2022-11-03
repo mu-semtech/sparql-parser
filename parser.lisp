@@ -25,9 +25,11 @@
   (token (error "Must supply matched token") :type symbol))
 
 (defun terminalp (symbol)
-  "We assume something is a terminal if it's not in the keyword package."
-  (not (keywordp symbol)))
-;; Types T:1 ends here
+  "Returns truethy iff symbol represents a terminal.
+
+We accept strings and uppercase symbols as terminals."
+  (and (cl-ppcre:scan "^[A-Z_0-9]+$" (symbol-name symbol)) t))
+
 
 ;; [[file:../../../20221008110913-ll1_parser.org::*Constants T][Constants T:1]]
 (defconstant +END+ :end-eof "Last token to be processed.")
@@ -39,15 +41,15 @@
   (mapcar (lambda (specification)
             (destructuring-bind (name &rest expansion) specification
               (make-rule :name name :expansion expansion)))
-          `((:statement if :expression then :statement else :statement)
-            (:statement while :expression do :statement)
-            (:statement begin :statements end)
-            (:statements :statement \; :statements)
-            (:statements)
-            (:expression id)))
+          `((:|statement| IF :|expression| THEN :|statement| ELSE :|statement|)
+            (:|statement| WHILE :|expression| DO :|statement|)
+            (:|statement| BEGIN :|statements| END)
+            (:|statements| :|statement| SEMI :|statements|)
+            (:|statements|)
+            (:|expression| ID)))
   "All known rules")
 
-(defparameter *start-symbol* :statement
+(defparameter *start-symbol* :|statement|
   "The symbol used to start processing.")
 ;; Language rules T:1 ends here
 
@@ -264,15 +266,15 @@ symbol.  It is important when coping with symbols that may be empty."
 
 ;; [[file:../../../20221008110913-ll1_parser.org::*Detecting tokens T][Detecting tokens T:1]]
 (defparameter *token-parsers*
-  (list 'if (cl-ppcre:create-scanner "^if")
-        'then (cl-ppcre:create-scanner "^then")
-        'else (cl-ppcre:create-scanner "^else")
-        'while (cl-ppcre:create-scanner "^while")
-        'do (cl-ppcre:create-scanner "^do")
-        'begin (cl-ppcre:create-scanner "^begin")
-        'end (cl-ppcre:create-scanner "^end")
-        '\; (cl-ppcre:create-scanner "^;")
-        'id (cl-ppcre:create-scanner "^([0-9]+|[A-Z][a-zA-Z0-9]*)"))
+  (list 'IF (cl-ppcre:create-scanner "^if")
+        'THEN (cl-ppcre:create-scanner "^then")
+        'ELSE (cl-ppcre:create-scanner "^else")
+        'WHILE (cl-ppcre:create-scanner "^while")
+        'DO (cl-ppcre:create-scanner "^do")
+        'BEGIN (cl-ppcre:create-scanner "^begin")
+        'END (cl-ppcre:create-scanner "^end")
+        'SEMI (cl-ppcre:create-scanner "^;")
+        'ID (cl-ppcre:create-scanner "^([0-9]+|[A-Z][a-zA-Z0-9]*)"))
   "Listing of all things that can parse a token.")
 
 (defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
