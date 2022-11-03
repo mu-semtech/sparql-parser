@@ -9,7 +9,7 @@
   (expansion nil :type list))
 
 (defstruct match
-  (term (error "Must supply term when creating a match") :type symbol)
+  (term (error "Must supply term when creating a match") :type (or symbol string))
   (rule nil :type (or null rule))        ; nil when rule is not known yet
   (submatches nil :type list))
 
@@ -22,14 +22,16 @@
                                         ; the result 0 would mean no
                                         ; characters are read to match
                                         ; the token.
-  (token (error "Must supply matched token") :type symbol))
+  (token (error "Must supply matched token") :type (or symbol string)))
 
-(defun terminalp (symbol)
+(defun terminalp (thing)
   "Returns truethy iff symbol represents a terminal.
 
 We accept strings and uppercase symbols as terminals."
-  (and (cl-ppcre:scan "^[A-Z_0-9]+$" (symbol-name symbol)) t))
-
+  (and
+   (or (stringp thing)
+       (cl-ppcre:scan "^[A-Z_0-9]+$" (symbol-name thing)))
+   t))
 
 ;; [[file:../../../20221008110913-ll1_parser.org::*Constants T][Constants T:1]]
 (defconstant +END+ :end-eof "Last token to be processed.")
@@ -41,10 +43,10 @@ We accept strings and uppercase symbols as terminals."
   (mapcar (lambda (specification)
             (destructuring-bind (name &rest expansion) specification
               (make-rule :name name :expansion expansion)))
-          `((:|statement| IF :|expression| THEN :|statement| ELSE :|statement|)
-            (:|statement| WHILE :|expression| DO :|statement|)
-            (:|statement| BEGIN :|statements| END)
-            (:|statements| :|statement| SEMI :|statements|)
+          `((:|statement| "if" :|expression| "then" :|statement| "else" :|statement|)
+            (:|statement| "while" :|expression| "do" :|statement|)
+            (:|statement| "begin" :|statements| "end")
+            (:|statements| :|statement| ";" :|statements|)
             (:|statements|)
             (:|expression| ID)))
   "All known rules")
@@ -78,7 +80,7 @@ We accept strings and uppercase symbols as terminals."
                for result = list then (union result list)
                finally (return result))
          #'string<
-         :key #'symbol-name)))
+         :key (lambda (thing) (if (symbolp thing) (symbol-name thing) thing)))))
 
 (defun group-by (items &key (key #'identity) (test #'eq) (value #'identity))
   "Groups supplied items by the given property."
@@ -266,16 +268,16 @@ symbol.  It is important when coping with symbols that may be empty."
 
 ;; [[file:../../../20221008110913-ll1_parser.org::*Detecting tokens T][Detecting tokens T:1]]
 (defparameter *token-parsers*
-  (list 'IF (cl-ppcre:create-scanner "^if")
-        'THEN (cl-ppcre:create-scanner "^then")
-        'ELSE (cl-ppcre:create-scanner "^else")
-        'WHILE (cl-ppcre:create-scanner "^while")
-        'DO (cl-ppcre:create-scanner "^do")
-        'BEGIN (cl-ppcre:create-scanner "^begin")
-        'END (cl-ppcre:create-scanner "^end")
-        'SEMI (cl-ppcre:create-scanner "^;")
-        'ID (cl-ppcre:create-scanner "^([0-9]+|[A-Z][a-zA-Z0-9]*)"))
+  (list 'ID (cl-ppcre:create-scanner "^([0-9]+|[A-Z][a-zA-Z0-9]*)"))
   "Listing of all things that can parse a token.")
+
+(defun get-token-parser (token)
+  "Returns a token parser for the given token."
+  (if (stringp token)
+      ;; scan the string
+      (cl-ppcre:create-scanner (concatenate 'string "^" token))
+      (getf *token-parsers* token)))
+
 
 (defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
   "Reusable scanner for whitespace between tokens.")
@@ -313,7 +315,7 @@ the string, rather nil is returned."
           (alexandria:extremum
            (loop
              for token in tokens
-             for scanner = (getf *token-parsers* token)
+             for scanner = (get-token-parser token)
              for end-position = (second (multiple-value-list
                                          (cl-ppcre:scan scanner string :start start)))
              if end-position collect (cons token end-position))
@@ -382,6 +384,12 @@ as the starting point in STRING."
               (error "Could not calculate token at index ~A for stack-top ~A.~&Searched tokens ~A"
                      *next-char-idx* stack-top next-token-list))))))
 
+(defun get-stack-transition (table thing)
+  "Like getf, but understands strings too"
+  (loop for (label result) on table by #'cddr
+        if (equal thing label)
+          return result))
+
 (defun parse-step ()
   "Executes one step of the LL1 parser."
   (let* ((stack-top-match (car *stack*))
@@ -398,15 +406,15 @@ as the starting point in STRING."
        (return-from parse-step t))
       ((terminalp stack-top)
        ;; terminals in the syntax need to be matched verbatim
-       (if (eq stack-top next-token)
+       (if (equal stack-top next-token)
            (progn
              (setf (match-submatches stack-top-match) (list next-token-object))
              (pop *stack*)
              (setf *current-token* nil))
            (error "Error during parsing: Token ~A does not match ~A." next-token stack-top)))
       (t
-       (alexandria:if-let ((stack-transitions (getf *transition-table* stack-top)))
-         (alexandria:if-let ((rule (getf stack-transitions next-token)))
+       (alexandria:if-let ((stack-transitions (get-stack-transition *transition-table* stack-top)))
+         (alexandria:if-let ((rule (get-stack-transition stack-transitions next-token)))
            (let ((stack-insertion (mapcar (lambda (term) (make-match :term term))
                                           (rule-expansion rule))))
              (setf (match-submatches stack-top-match)
