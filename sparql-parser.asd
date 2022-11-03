@@ -8,4 +8,5 @@
   :serial t
   :depends-on (alexandria cl-ppcre)
   :components ((:file "packages")
+               (:file "support/tree-db")
                (:file "parser")))
