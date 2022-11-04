@@ -1,11 +1,14 @@
 (in-package :sparql-terminals)
 
+;; (declaim (optimize (speed 0) (safety 3) (debug 3)))
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; SPARQL terminal syntax
 ;;;;
 ;;;; Scanners for SPARQL's terminal syntax
 
-(defparameter *raw-syntax-strings*
+(defparameter *raw-syntax-strings-full*
   `((sparql-bnf::|PN_LOCAL_ESC| . "\\\\[_~.\\-!$&'()*+,;=/?#@%]")
     (sparql-bnf::|HEX| . "[0-9A-Fa-f]")
     (sparql-bnf::|PERCENT| . "%[0-9A-Fa-f][0-9A-Fa-f]")
@@ -43,6 +46,50 @@
     (sparql-bnf::|IRIREF| . "<([^<>\"{}|^`#x00-#x20])*>") ; :IRIREF . '<' ([^<>"{}|^`\]-[#x00-#x20])* '>'
     )
   "The syntax strings in their raw embedded regex format.")
+
+(defparameter *raw-syntax-strings-simple*
+  `((sparql-bnf::|PN_LOCAL_ESC| . "\\\\[_~.\\-!$&'()*+,;=/?#@%]")
+    (sparql-bnf::|HEX| . "[0-9A-Fa-f]")
+    (sparql-bnf::|PERCENT| . "%[0-9A-Fa-f][0-9A-Fa-f]")
+    (sparql-bnf::|PLX| . "(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])")
+    (sparql-bnf::|PN_LOCAL| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?"  ) ; :PN_LOCAL . (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
+    (sparql-bnf::|PN_PREFIX| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?") ; :PN_PREFIX . PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
+    (sparql-bnf::|PN_CHARS| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]") ; :PN_CHARS . PN_CHARS_U | '-' | [0-9] | #x00B7 | [] | []
+    (sparql-bnf::|VARNAME| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VARNAME . ( PN_CHARS_U | [0-9] ) ( PN_CHARS_U | [0-9] | #x00B7 | [] | [] )*
+    (sparql-bnf::|PN_CHARS_U| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]") ; :PN_CHARS_U . PN_CHARS_BASE | '_'
+    (sparql-bnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+    (sparql-bnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
+    (sparql-bnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
+    (sparql-bnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
+    (sparql-bnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
+    (sparql-bnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
+    (sparql-bnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
+    (sparql-bnf::|STRING_LITERAL2| . "\"(([^#x22#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*\"") ; :STRING_LITERAL2 . '"' ( ([^#x22#x5C#xA#xD]) | ECHAR )* '"'
+    (sparql-bnf::|STRING_LITERAL1| . "'(([^#x27#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*'") ; :STRING_LITERAL1 . "'" ( ([^#x27#x5C#xA#xD]) | ECHAR )* "'"
+    (sparql-bnf::|EXPONENT| . "[eE][+-]?[0-9]+") ; :EXPONENT . [eE] [+-]? [0-9]+
+    (sparql-bnf::|DOUBLE_NEGATIVE| . "-([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)" ) ; :DOUBLE_NEGATIVE . '-' DOUBLE
+    (sparql-bnf::|DECIMAL_NEGATIVE| . "-[0-9]*\\.[0-9]+") ; :DECIMAL_NEGATIVE . '-' DECIMAL
+    (sparql-bnf::|INTEGER_NEGATIVE| . "-INTEGER") ; :INTEGER_NEGATIVE . '-' INTEGER
+    (sparql-bnf::|DOUBLE_POSITIVE| . "\\+([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)") ; :DOUBLE_POSITIVE . '+' DOUBLE
+    (sparql-bnf::|DECIMAL_POSITIVE| . "\\+[0-9]*\\.[0-9]+") ; :DECIMAL_POSITIVE . '+' DECIMAL
+    (sparql-bnf::|INTEGER_POSITIVE| . "\\+INTEGER") ; :INTEGER_POSITIVE . '+' INTEGER
+    (sparql-bnf::|DOUBLE| . "[0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+") ; :DOUBLE . [0-9]+ '.' [0-9]* EXPONENT | '.' ([0-9])+ EXPONENT | ([0-9])+ EXPONENT
+    (sparql-bnf::|DECIMAL| . "[0-9]*\\.[0-9]+") ; :DECIMAL . [0-9]* '.' [0-9]+
+    (sparql-bnf::|INTEGER| . "[0-9]+") ; :INTEGER . [0-9]+
+    (sparql-bnf::|LANGTAG| . "@[a-zA-Z]+(-[a-zA-Z0-9]+)*") ; :LANGTAG . '@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
+    (sparql-bnf::|VAR2| . "$[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VAR2 . '$' VARNAME
+    (sparql-bnf::|VAR1| . "\\?[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VAR1 . '?' VARNAME
+    (sparql-bnf::|BLANK_NODE_LABEL| . "_:[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9]([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7\\.-]*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?" ) ; :BLANK_NODE_LABEL . '_:' ( PN_CHARS_U | [0-9] ) ((PN_CHARS|'.')* PN_CHARS)?
+    (sparql-bnf::|PNAME_LN| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?)?:(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?)") ; :PNAME_LN . PNAME_NS PN_LOCAL
+    (sparql-bnf::|PNAME_NS| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?)?:") ; :PNAME_NS . PN_PREFIX? ':'
+    (sparql-bnf::|IRIREF| . "<([^<>\"{}|^`#x00-#x20])*>") ; :IRIREF . '<' ([^<>"{}|^`\]-[#x00-#x20])* '>'
+    )
+  "The syntax strings in their raw embedded regex format.")
+
+;; TODO: make these optimizations conditional!
+;; (setf cl-ppcre:*use-bmh-matchers* t)
+;; (setf cl-ppcre:*optimize-char-classes* :charmap)
+(defparameter *raw-syntax-strings* *raw-syntax-strings-simple*)
 
 (defparameter *term-names*
   (loop for (term . regex) in *raw-syntax-strings*
@@ -142,6 +189,7 @@
   "Yields the scanner for terminal symbol TERMINAL."
   (gethash terminal *syntax-scanners*))
 
+(declaim (ftype (function ((or string symbol) fixnum string) (or null fixnum)) scan))
 (defun scan (token start string)
   (if (eq token 'sparql-bnf:|_eof|)
       (when (= start (length string))
@@ -155,4 +203,4 @@
             (cl-ppcre:scan scanner string :start start)
           (declare (ignore start))
           end)
-        (error "Could not find token scanner for ~A" token)))))
+        (error "Could not find token scanner for ~A" token))))

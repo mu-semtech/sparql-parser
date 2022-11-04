@@ -57,6 +57,8 @@ We accept strings and uppercase symbols as terminals."
 
 (defparameter *start-symbol* 'sparql-bnf::|UpdateUnit|
   "The symbol used to start processing.")
+;; (defparameter *start-symbol* 'sparql-bnf::|QueryUnit|
+;;   "The symbol used to start processing.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Construction of transition table
@@ -403,8 +405,13 @@ symbol.  It is important when coping with symbols that may be empty."
 (defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
   "Reusable scanner for whitespace between tokens.")
 
-(defun scan-whitespace (start string)
-  "Scans for any whitespace or comments from START.
+(let ((scanner (cl-ppcre:create-scanner
+                           "^(\\s*(#[^
+]*
+)?)*"
+                           :multi-line-mode t)))
+ (defun scan-whitespace (start string)
+   "Scans for any whitespace or comments from START.
 
 The result is the next position to start reading from.  If the string is
 only whitespace, this will be one character further than the current
@@ -412,17 +419,12 @@ string.
 
 START may be after the length of the current string, in this case START
 is returned."
-  (if (< start (length string))
-      (multiple-value-bind (start end)
-          (cl-ppcre:scan (cl-ppcre:create-scanner
-                          "^(\\s*(#[^
-]*
-)?)*"
-                          :multi-line-mode t)
-                         string :start start)
-        (declare (ignore start))
-        end)
-      start))
+   (if (< start (length string))
+       (multiple-value-bind (start end)
+           (cl-ppcre:scan scanner string :start start)
+         (declare (ignore start))
+         end)
+       start)))
 
 (defun scan-token (tokens start string)
   "Searches best matching token of TOKENS at START in STRING.
@@ -528,7 +530,7 @@ as the starting point in STRING."
        ;; pop off end symbols and end processing
        (pop *stack*)
        (setf *current-token* nil)
-       (format t "~&Parsing succeeded.~%")
+       ;; (format t "~&Parsing succeeded.~%")
        (return-from parse-step t))
       ((terminalp stack-top)
        ;; terminals in the syntax need to be matched verbatim
