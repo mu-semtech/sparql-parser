@@ -7,14 +7,15 @@
 
 (defpackage :support
   (:use :common-lisp)
-  (:export #:-> #:debug-break #:embed-unicode-characters))
+  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char))
 
 (defpackage :sparql-bnf
   (:export #:|rule| #:|terminal| #:|first| #:|follow| #:|seq| #:|alt| #:|_eof| #:|_eps| #:|_empty|))
 
 (defpackage :sparql-terminals
   (:use :common-lisp)
-  (:export #:scan))
+  (:export #:scan)
+  (:import-from :support :hex-char)))
 
 (defpackage #:sparql-parser
   (:use :common-lisp))

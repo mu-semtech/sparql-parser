@@ -3,6 +3,112 @@
 ;; (declaim (optimize (speed 0) (safety 3) (debug 3)))
 (declaim (optimize (speed 3) (safety 0) (debug 0)))
 
+(declaim (ftype (function (simple-string fixnum) (or null fixnum)) scan-uri scan-pname-ns))
+(defun scan-uri (string start)
+  "Scans a string to check whether it's a URI or not."
+  (let ((position start)
+        (string-length (length string)))
+    (flet ((scan-content ()
+             (loop for char = (elt string position)
+                   for char-code = (the fixnum (char-code char))
+                   until (or (char= char #\>) (= string-length position))
+                   if (or (<= 0 char-code 20)
+                          (find (the fixnum char-code) '(60 34 123 125 124 94 96 92) :test #'eql))
+                     do (return-from scan-uri nil)
+                   else
+                     do (incf position)))
+           (scan-start ()
+             (if (char= (elt string position) #\<)
+                 (incf position)
+                 (return-from scan-uri nil)))
+           (scan-end ()
+             (if (char= (elt string position) #\>)
+                 (incf position)
+                 (return-from scan-uri nil))))
+      (scan-start)
+      (scan-content)
+      (scan-end))
+    position))
+
+(defun scan-pname-ns (string start)
+  "Scans a string to check whether it's a PN_PREFIX."
+  ;; PN_PREFIX ::= PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
+  ;; PNAME_NS
+  (let ((position start)
+        (string-length (length string)))
+    (flet ((scan-pn-prefix ()
+             ;; 1. scan PN_CHARS_BASE
+             ;; 2. scan PN_CHARS + .
+             ;; 3. verify last character is not a .
+             ;; Note: we can ignore scanning too far and missing the : because : is not part of PN_CHARS
+             (flet ((scan-one-pn-chars-base ()
+                      ;; "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF]"
+                      (let* ((char (elt string position))
+                             (accepted
+                               (if (char<= char #\z) ; highest numbered regular letter is common case
+                                   (or (char<= #\a char #\z)
+                                       (char<= #\A char #\Z))
+                                   (or (and (char<= #.(hex-char "C0") char #.(hex-char "F6"))
+                                            (char/= #.(hex-char "D7") char))
+                                       (char<= #.(hex-char "F8") char #.(hex-char "2FF"))
+                                       (char<= #.(hex-char "370") char #.(hex-char "37D"))
+                                       (char<= #.(hex-char "37F") char #.(hex-char "1FFF"))
+                                       (char<= #.(hex-char "200C") char #.(hex-char "200D"))
+                                       (char<= #.(hex-char "2070") char #.(hex-char "218F"))
+                                       (char<= #.(hex-char "2C00") char #.(hex-char "2FEF"))
+                                       (char<= #.(hex-char "3001") char #.(hex-char "D7FF"))
+                                       (char<= #.(hex-char "F900") char #.(hex-char "FDCF"))
+                                       (char<= #.(hex-char "FDF0") char #.(hex-char "FFFD"))
+                                       (char<= #.(hex-char "10000") char #.(hex-char "EFFFF"))))))
+                        (when accepted
+                          (incf position))))
+                    (scan-pn-chars-and-dot ()
+                      ;; "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]"
+                      (flet ((accept-current-p ()
+                               (let* ((char (elt string position)))
+                                 (if (char<= char #\z) ; highest numbered regular letter is common case
+                                     (or (char<= #\A char #\Z)
+                                         (char<= #\a char #\z)
+                                         (char= char #\_)
+                                         (char= char #\-)
+                                         (char<= #\0 char #\9))
+                                     (or (char= char #.(hex-char "B7"))
+                                         (and (char<= #.(hex-char "C0") char #.(hex-char "F6"))
+                                              (not (char= char #.(hex-char "D7"))))
+                                         (char<= #.(hex-char "00D8") char #.(hex-char "00F6")) 
+                                         (char<= #.(hex-char "00F8") char #.(hex-char "02FF")) 
+                                         (char<= #.(hex-char "0370") char #.(hex-char "037D")) 
+                                         (char<= #.(hex-char "037F") char #.(hex-char "1FFF")) 
+                                         (char<= #.(hex-char "200C") char #.(hex-char "200D")) 
+                                         (char<= #.(hex-char "2070") char #.(hex-char "218F")) 
+                                         (char<= #.(hex-char "2C00") char #.(hex-char "2FEF")) 
+                                         (char<= #.(hex-char "3001") char #.(hex-char "D7FF")) 
+                                         (char<= #.(hex-char "F900") char #.(hex-char "FDCF")) 
+                                         (char<= #.(hex-char "FDF0") char #.(hex-char "FFFD")) 
+                                         (char<= #.(hex-char "10000") char #.(hex-char "EFFFF")) 
+                                         (char<= #.(hex-char "0300") char #.(hex-char "036F")) 
+                                         (char<= #.(hex-char "203F") char #.(hex-char "2040")))))))
+                        (loop while (and (accept-current-p)
+                                         (< (1+ position) string-length))
+                              do (incf position))
+                        t))
+                    (last-scanned-is-not-dot ()
+                      ;; we know at least one PN_CHARS_BASE was read so we can jump one back
+                      (char/= (elt string (1- position))
+                              #\.)))
+               (and
+                (scan-one-pn-chars-base)
+                (scan-pn-chars-and-dot)
+                (last-scanned-is-not-dot))))
+           (scan-colon ()
+             (when (and (< position string-length)
+                        (char= (elt string position) #\:))
+               (incf position))))
+      
+      (unless (scan-pn-prefix)
+        (setf position start))
+      (scan-colon))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; SPARQL terminal syntax
 ;;;;
@@ -189,18 +295,25 @@
   "Yields the scanner for terminal symbol TERMINAL."
   (gethash terminal *syntax-scanners*))
 
-(declaim (ftype (function ((or string symbol) fixnum string) (or null fixnum)) scan))
+(defparameter *token-history* (make-hash-table :test 'equal))
+
+(declaim (ftype (function ((or base-string symbol) fixnum base-string) (or null fixnum)) scan))
 (defun scan (token start string)
-  (if (eq token 'sparql-bnf:|_eof|)
-      (when (= start (length string))
-        start)
-      (alexandria:if-let
-          ((scanner (typecase token
-                      (string (get-known-word-scanner token))
-                      (symbol (get-symbol-scanner token))
-                      (t (error "Could not find scanners for type ~A of token ~A" (type-of token) token)))))
-        (multiple-value-bind (start end)
-            (cl-ppcre:scan scanner string :start start)
-          (declare (ignore start))
-          end)
-        (error "Could not find token scanner for ~A" token))))
+  ;; (incf (gethash token *token-history* 0))
+  (cond ((eq token 'sparql-bnf:|_eof|)
+         (when (= start (length string))
+           start))
+        ((eq token 'sparql-bnf::|IRIREF|)
+         (scan-uri string start))
+        ((eq token 'sparql-bnf::|PNAME_NS|)
+         (scan-pname-ns string start))
+        (t (alexandria:if-let
+               ((scanner (typecase token
+                           (string (get-known-word-scanner token))
+                           (symbol (get-symbol-scanner token))
+                           (t (error "Could not find scanners for type ~A of token ~A" (type-of token) token)))))
+             (multiple-value-bind (start end)
+                 (cl-ppcre:scan scanner string :start start)
+               (declare (ignore start))
+               end)
+             (error "Could not find token scanner for ~A" token)))))

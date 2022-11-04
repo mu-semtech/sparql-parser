@@ -9,6 +9,10 @@
         (setf construct new-construct)))
     construct))
 
+(defun hex-char (number-string)
+  "Yields the character for the given number."
+  (code-char (parse-integer number-string :radix 16)))
+
 (defmacro debug-break (name &body body)
   "Puts in a break statement at the start and end of the body."
   (let ((result (gensym)))
