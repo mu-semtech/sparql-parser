@@ -8,5 +8,7 @@
   :serial t
   :depends-on (alexandria cl-ppcre)
   :components ((:file "packages")
+               (:file "support")
                (:file "support/tree-db")
+               (:file "sparql-terminals")
                (:file "parser")))

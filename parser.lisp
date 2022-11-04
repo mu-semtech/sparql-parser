@@ -4,7 +4,7 @@
 ;;;; rules and solution structures
 (defstruct rule
   "Expresses an expansion rule."
-  (name (error "Must supply rule name") :type keyword)
+  (name (error "Must supply rule name") :type symbol)
   (expansion nil :type list))
 
 (defstruct match
@@ -35,7 +35,8 @@ We accept strings and uppercase symbols as terminals."
 ;;;;;;;;;;;;;;
 ;;;; Constants
 
-(defconstant +END+ :end-eof "Last token to be processed.")
+(defconstant +END+ 'sparql-bnf:|_eof| ;; :end-eof
+             "Last token to be processed.")
 (defconstant +EMPTY+ :empty-statement "Indicates a statement which carries no content")
 
 
@@ -54,7 +55,7 @@ We accept strings and uppercase symbols as terminals."
             (:|expression| ID)))
   "All known rules")
 
-(defparameter *start-symbol* :|statement|
+(defparameter *start-symbol* 'sparql-bnf::|UpdateUnit|
   "The symbol used to start processing.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -209,6 +210,47 @@ symbol.  It is important when coping with symbols that may be empty."
                                (null (rule-expansion rule))))
            rules))
 
+(defun ebnf-rule-name (rule)
+  "Name of the EBNF rule."
+  (second rule))
+
+(defun ebnf-rule-type (rule)
+  "Type of the ebnf rule."
+  (first rule))
+
+(defun ebnf-rule-terminal-p (rule)
+  "Returns truethy iff the rule is a terminal specification."
+  (eq (ebnf-rule-type rule) 'sparql-bnf:|terminal|))
+
+(defun ebnf-rule-values-for (rule key)
+  "Gets values for KEY in RULE."
+  (loop for props in (rest rule)
+        when (and (listp props)
+                  (eq (first props) key))
+          do (return-from ebnf-rule-values-for
+               (values (rest props) t)))
+  (values nil nil))
+
+(defun ebnf-rule-first (rule)
+  "Get first set of RULE."
+  (ebnf-rule-values-for rule 'sparql-bnf:|first|))
+
+(defun ebnf-rule-follow (rule)
+  "Get first set of RULE."
+  (ebnf-rule-values-for rule 'sparql-bnf:|follow|))
+
+(defun ebnf-rule-expansion (rule)
+  "Returns the rule expansion for RULE."
+  (multiple-value-bind (seq seqp)
+      (ebnf-rule-values-for rule 'sparql-bnf:|seq|)
+    (if seqp
+        (cons 'sparql-bnf:|seq| seq)
+        (cons 'sparql-bnf:|alt| (ebnf-rule-values-for rule 'sparql-bnf:|alt|)))))
+
+(defun ebnf-rule-search (rules key)
+  "Searches a list of BNF rules for the given rule name."
+  (find key rules :key #'second))
+
 (defun construct-transition-table (rules)
   "Constructs the transition table for RULES."
   (let* ((next-set (next-set rules))
@@ -229,6 +271,80 @@ symbol.  It is important when coping with symbols that may be empty."
                             else
                               append (list symbol (empty-rule-for-rule-name rule-name rules)))
                       predicted))))))
+
+(defun read-bnfsexp-from-file (path)
+  "Reads a bnf sxp file file frrom PATH."
+  (let ((*package* (find-package :sparql-bnf))
+        (*readtable* (let ((rt (copy-readtable)))
+                       (set-dispatch-macro-character
+                        #\# #\t
+                        (lambda (s c n)
+                          (declare (ignore s c n))
+                          t))
+                       (setf (readtable-case rt) :preserve)
+                       rt)))
+    (with-open-file (input path :direction :input)
+      (read input))))
+
+(defun construct-transition-table-from-parsed-bnf (parsed-bnf)
+  "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
+  (let ((empty-rule (make-rule :name 'sparql-bnf:|_empty| :expansion nil)))
+    (loop
+      for rule in parsed-bnf
+      for rule-name = (ebnf-rule-name rule)
+      for rule-expansion = (ebnf-rule-expansion rule)
+      for rule-expansion-type = (first rule-expansion)
+      for rule-expansion-options = (rest rule-expansion)
+      for rule-first-all = (ebnf-rule-first rule)
+      for rule-first-includes-empty-p = (some (lambda (k) (eq k 'sparql-bnf:|_eps|)) rule-first-all)
+      for rule-first-options = (remove-if (lambda (k) (eq k 'sparql-bnf:|_eps|)) rule-first-all)
+      for rule-follow = (ebnf-rule-follow rule)
+      unless (ebnf-rule-terminal-p rule)
+        append
+        (list (ebnf-rule-name rule)
+              (cond ((eq rule-expansion-type 'sparql-bnf:|seq|)
+                     ;; sequence
+                     (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
+                            (predicted (loop for first in rule-first-options
+                                             append (list first rule)))
+                            (empty-follow (when rule-first-includes-empty-p
+                                            ;; follow will contain _empty deeper down the stack
+                                            (loop for follow in rule-follow
+                                                  append (list follow rule)))))
+                       (concatenate 'list predicted empty-follow)))
+                    ((eq rule-expansion-type 'sparql-bnf:|alt|)
+                     ;; alternatives
+                     ;;
+                     ;; although this will result in duplicate rules,
+                     ;; we are generating rules on the fly here.
+                     (loop for option in rule-expansion-options
+                           append
+                           (cond ((eq option 'sparql-bnf:|_empty|)
+                                  (loop for key in (cons 'sparql-bnf:|_eof| rule-follow)
+                                        append (list key empty-rule)))
+                                 ((terminalp option)
+                                  (list option (make-rule :name rule-name
+                                                          :expansion (list option))))
+                                 (t ;; a subselection
+                                  (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
+                                         (child-rule (make-rule :name rule-name
+                                                                :expansion (list (ebnf-rule-name ebnf-child-rule)))))
+                                    (loop for key in (ebnf-rule-first ebnf-child-rule)
+                                          unless (eq key 'sparql-bnf:|_eps|)
+                                          append (list key child-rule)))
+                                  ))
+                           ;; if 
+                           ;;   append 
+                           ;; else
+                           ;;   append (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
+                           ;;                 (child-rule (make-rule :name rule-name
+                           ;;                                        :expansion (list (ebnf-rule-name ebnf-child-rule)))))
+                           ;;            (loop for key in (ebnf-rule-first ebnf-child-rule)
+                           ;;                  append (list key child-rule)))
+                           ))
+                    (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
+
+;; eg: (defparameter *transition-table* (construct-transition-table-from-parsed-bnf (read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
 
 (defparameter *transition-table* (construct-transition-table *rules*)
   "Transition table [stack top, next symbol] => next rule")
@@ -298,9 +414,12 @@ START may be after the length of the current string, in this case START
 is returned."
   (if (< start (length string))
       (multiple-value-bind (start end)
-          (cl-ppcre:scan (cl-ppcre:create-scanner "^(\\s*(#[^
+          (cl-ppcre:scan (cl-ppcre:create-scanner
+                          "^(\\s*(#[^
 ]*
-)?)*" :multi-line-mode t) string :start start)
+)?)*"
+                          :multi-line-mode t)
+                         string :start start)
         (declare (ignore start))
         end)
       start))
@@ -320,9 +439,10 @@ the string, rather nil is returned."
           (alexandria:extremum
            (loop
              for token in tokens
-             for scanner = (get-token-parser token)
-             for end-position = (second (multiple-value-list
-                                         (cl-ppcre:scan scanner string :start start)))
+             ;; for scanner = (get-token-parser token)
+             ;; for end-position = (second (multiple-value-list
+             ;;                             (cl-ppcre:scan scanner string :start start)))
+             for end-position = (sparql-terminals:scan token start string)
              if end-position collect (cons token end-position))
            #'> :key #'cdr)))
       (make-scanned-token :start start
@@ -364,9 +484,9 @@ as the starting point in STRING."
   ;; (setf *tokens* `(,@tokens ,+END+))
   (setf *scanning-string* string)
   (setf *next-char-idx*  0)
+  (setf *current-token* nil)
   (setf *match-tree* (make-match :term *start-symbol*))
-  (setf *stack* (list *match-tree* (make-match :term +END+)))
-  (print-state))
+  (setf *stack* (list *match-tree* (make-match :term +END+))))
 
 (defun ensure-current-token ()
   "Calculates the current token if it is not known."
@@ -429,16 +549,22 @@ as the starting point in STRING."
              (setf *stack* `(,@stack-insertion
                              ,@(rest *stack*))))
            (error "No rule found for state ~A with token ~A" stack-top next-token))
-         (error "No transition rules found for state ~A" stack-top)))))
-  (print-state))
+         (error "No transition rules found for state ~A" stack-top))))
+    nil ; indicates another step exists
+    ))
 
-(defun parse-string (string &optional (max-steps 1000))
+(defun parse-string (string &key (max-steps 10000) (print-intermediate-states t) (print-solution t))
   "Parses a set of tokens."
-  (format t "~&===STACK START===~%")
+  (when print-intermediate-states
+    (format t "~&===STACK START===~%")
+    (print-state))
   (parse-setup string)
   (loop for i from 0 below max-steps
-        do (format t "~&~%===PARSING STEP ~A===~%" i)
+        do (when print-intermediate-states
+             (format t "~&~%===PARSING STEP ~A===~%" i)
+             (print-state))
         until (parse-step))
-  (format t "~&===RESULT===~%")
-  (print-match *match-tree* :rulep nil))
+  (when print-solution
+    (format t "~&===RESULT===~%")
+    (print-match *match-tree* :rulep nil)))
 
