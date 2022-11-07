@@ -3,8 +3,8 @@
 ;; (declaim (optimize (speed 0) (safety 3) (debug 3)))
 (declaim (optimize (speed 3) (safety 0) (debug 0)))
 
-(declaim (ftype (function (simple-string fixnum) (or null fixnum)) scan-uri scan-pname-ns tree-scan-pname-ns scan-double scan-integer-positive scan-integer-negative scan-string-literal-long-1))
-(declaim (ftype (function (simple-string fixnum &optional fixnum) (or null fixnum)) scan-integer))
+(declaim (ftype (function (simple-string fixnum) (or null fixnum)) scan-uri scan-pname-ns tree-scan-pname-ln tree-scan-blank-node-label scan-double-negative scan-double-positive scan-decimal-negative scan-decimal-positive scan-integer-positive scan-integer-negative scan-string-literal-long-1 scan-whitespace scan-var1 scan-var2 scan-nil scan-anon scan-string-literal1 scan-string-literal2))
+(declaim (ftype (function (simple-string fixnum &optional fixnum) (or null fixnum)) scan-integer tree-scan-pname-ns scan-double scan-decimal))
 (defun scan-uri (string start)
   "Scans a string to check whether it's a URI or not."
   (let ((position start)
@@ -31,14 +31,13 @@
       (scan-end))
     position))
 
-(defun scan-double (string start)
+(defun scan-double (string start &optional (string-length (length string)))
   "Scans for DOUBLE.
 
 This solution bails out quickly, assuming DOUBLE is often requested with
 failure."
   ;; DOUBLE ::= [0-9]+ '.' [0-9]* EXPONENT | '.' ([0-9])+ EXPONENT | ([0-9])+ EXPONENT
-  (let ((position start)
-        (string-length (length string)))
+  (let ((position start))
     (flet ((scan-numbers ()
              (/= (the fixnum position)
                  (loop while (and (< position string-length)
@@ -81,6 +80,53 @@ failure."
              (scan-numbers)
              position))))))
 
+(defun scan-double-positive (string start)
+  "Scans for DOUBLE_POSITIVE."
+  (let ((string-length (length string)))
+    (when (and (< start string-length)
+               (char= (elt string start) #\+))
+      (scan-double string (1+ start) string-length))))
+
+(defun scan-double-negative (string start)
+  "Scans for DOUBLE_NEGATIVE."
+  (let ((string-length (length string)))
+    (when (and (< start string-length)
+               (char= (elt string start) #\-))
+      (scan-double string (1+ start) string-length))))
+
+(defun scan-decimal (string start &optional (string-length (length string)))
+  "Scans for DECIMAL."
+  ;; DECIMAL ::= [0-9]* '.' [0-9]+
+  (let ((position start))
+    (flet ((scan-numbers ()
+             (/= (the fixnum position)
+                 (loop while (and (< position string-length)
+                                  (char<= #\0 (elt string position) #\9))
+                       do
+                          (incf (the fixnum position))
+                       finally (return position))))
+           (scan-dot ()
+             (when (and (< position string-length)
+                        (char= #\. (elt string position)))
+               (incf position))))
+      (scan-numbers) ; optional
+      (and (scan-dot)
+           (scan-numbers)))))
+
+(defun scan-decimal-positive (string start)
+  "Scans for DECIMAL_POSITIVE."
+  (let ((string-length (length string)))
+    (when (and (< start string-length)
+               (char= (elt string start) #\+))
+      (scan-decimal string (1+ start) string-length))))
+
+(defun scan-decimal-negative (string start)
+  "Scans for DECIMAL_NEGATIVE."
+  (let ((string-length (length string)))
+    (when (and (< start string-length)
+               (char= (elt string start) #\-))
+      (scan-decimal string (1+ start) string-length))))
+
 (flet ((scan-string-literal-long (quote-char string start)
          ;; STRING_LITERAL_LONG1 ::= "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
          ;; ECHAR ::= '\' [tbnrf\"']
@@ -110,7 +156,7 @@ failure."
                              (incf position 1)))
                         ((char= char #.(elt "\\" 0))
                          (if (and (< (1+ position) string-length)
-                                  (let ((next-char (elt string (+ 2 position))))
+                                  (let ((next-char (elt string (1+ position))))
                                     (or (char= next-char #\n)
                                         (char= next-char #\")
                                         (char= next-char quote-char)
@@ -128,6 +174,50 @@ failure."
   (defun scan-string-literal-long-2 (string start)
     "Scans a string to check if it's a literal wrapped in triple double quotes."
     (scan-string-literal-long #\" string start)))
+
+(flet ((scan-single-char-quoted-string (string start delimiter-char)
+         ;; STRING_LITERAL1 ::= "'" ( ([^#x27#x5C#xA#xD]) | ECHAR )* "'"
+         ;; in which #27 is #\'
+         (let ((position start)
+               (string-length (length string)))
+           ;; check opening char
+           (when (and (< position string-length)
+                      (char= delimiter-char (elt string position)))
+             (incf position)
+             ;; check inner characters
+             (loop
+               while (< position string-length)
+               for char = (elt string position)
+               if (char= char delimiter-char)
+                 do (return position)
+               else
+                 do (cond ((or (char= #.(hex-char "5C") char)
+                               (char= #.(hex-char "A") char)
+                               (char= #.(hex-char "D") char))
+                           (return nil))
+                          ((char= #\\ char)
+                           (if (< (1+ position) string-length)
+                               (let ((next-char (elt string (1+ position))))
+                                 (if (or (char= #\t next-char)
+                                         (char= #\' next-char)
+                                         (char= #\" next-char)
+                                         (char= #\b next-char)
+                                         (char= #\n next-char)
+                                         (char= #\r next-char)
+                                         (char= #\f next-char)
+                                         (char= #\\ next-char))
+                                     (incf position 2)
+                                     (return nil)))
+                               (return nil)))
+                          (t (incf position))))
+             ;; check closing character
+             (when (and (< position string-length)
+                        (char= delimiter-char (elt string position)))
+               (1+ position))))))
+  (defun scan-string-literal1 (string start)
+    (scan-single-char-quoted-string string start #\'))
+  (defun scan-string-literal2 (string start)
+    (scan-single-char-quoted-string string start #\")))
 
 (defun scan-integer (string start &optional (string-length (length string)))
   "Scans a string to check whether it's an INTEGER."
@@ -218,14 +308,16 @@ failure."
                                          (< (1+ position) string-length))
                               do (incf position))
                         t))
-                    (last-scanned-is-not-dot ()
-                      ;; we know at least one PN_CHARS_BASE was read so we can jump one back
-                      (char/= (elt string (1- position))
-                              #\.)))
+                    (reverse-until-last-scanned-is-not-dot ()
+                      ;; we know at least one PN_CHARS_BASE was read so we can jump back
+                      (loop for char = (elt string (1- position))
+                            while (char= char #\.)
+                            do (decf position))
+                      position))
                (and
                 (scan-one-pn-chars-base)
                 (scan-pn-chars-and-dot)
-                (last-scanned-is-not-dot))))
+                (reverse-until-last-scanned-is-not-dot))))
            (scan-colon ()
              (when (and (< position string-length)
                         (char= (elt string position) #\:))
@@ -235,12 +327,96 @@ failure."
         (setf position start))
       (scan-colon))))
 
-(defun tree-scan-pname-ns (string start)
+(flet ((scan-varname (string position string-length)
+         ;; VARNAME ::= ( PN_CHARS_U | [0-9] ) ( PN_CHARS_U | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040] )*
+         ;; PN_CHARS_U ::= PN_CHARS_BASE | '_'
+         ;; PN_CHAR_BASE ::= [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+
+         ;; PN_CHAR_BASE
+         ;; (#\A . #\Z)
+         ;; (#\a . #\z)
+         ;; ("00C0" . "00D6")
+         ;; ("00D8" . "00F6")
+         ;; ("00F8" . "02FF")
+         ;; ("0370" . "037D")
+         ;; ("037F" . "1FFF")
+         ;; ("200C" . "200D")
+         ;; ("2070" . "218F")
+         ;; ("2C00" . "2FEF")
+         ;; ("3001" . "D7FF")
+         ;; ("F900" . "FDCF")
+         ;; ("FDF0" . "FFFD")
+         ;; ("10000" . "EFFFF")
+         (flet ((pn-chars-u-or-number ()
+                  (let ((char (elt string position))) ; validity happened in scan-var*
+                     (when (if (char<= char #\z)
+                              (support:match-tree-search (char)
+                                (#\A . #\Z)
+                                (#\a . #\z)
+                                (#\_ . #\_)
+                                (#\0 . #\9))
+                              (support:match-tree-search (char)
+                                ("00C0" . "00D6")
+                                ("00D8" . "00F6")
+                                ("00F8" . "02FF")
+                                ("0370" . "037D")
+                                ("037F" . "1FFF")
+                                ("200C" . "200D")
+                                ("2070" . "218F")
+                                ("2C00" . "2FEF")
+                                ("3001" . "D7FF")
+                                ("F900" . "FDCF")
+                                ("FDF0" . "FFFD")
+                                ("10000" . "EFFFF")))
+                      (incf position))))
+                (some-pn-chars-u-and-extra ()
+                  (flet ((accept ()
+                           (let ((char (elt string position))) ; validity happened in scan-var*
+                             (if (char<= char #\z)
+                                 (support:match-tree-search (char)
+                                   (#\A . #\Z)
+                                   (#\a . #\z)
+                                   (#\_ . #\_)
+                                   (#\0 . #\9))
+                                 (support:match-tree-search (char)
+                                   ("00C0" . "00D6")
+                                   ("00D8" . "00F6")
+                                   ("00F8" . "02FF")
+                                   ("0370" . "037D")
+                                   ("037F" . "1FFF")
+                                   ("200C" . "200D")
+                                   ("2070" . "218F")
+                                   ("2C00" . "2FEF")
+                                   ("3001" . "D7FF")
+                                   ("F900" . "FDCF")
+                                   ("FDF0" . "FFFD")
+                                   ("10000" . "EFFFF")
+                                   ;; up is ranges of PN_CHARS_U, below are extra ranges
+                                   ("B7" . "B7")
+                                   ("0300" . "036F")
+                                   ("203F" . "2040"))))))
+                    (loop while (and (< position string-length)
+                                     (accept))
+                          do (incf position)))))
+           (when (pn-chars-u-or-number)
+             (some-pn-chars-u-and-extra)
+             position))))
+  (defun scan-var1 (string start)
+    (let ((string-length (length string)))
+      (when (and (< (+ start 2) string-length)
+                 (char= (elt string start) #\?))
+        (scan-varname string (1+ start) string-length))))
+  (defun scan-var2 (string start)
+    (let ((string-length (length string)))
+      (when (and (< (+ start 2) string-length)
+                 (char= (elt string start) #\$))
+        (scan-varname string (1+ start) string-length)))))
+
+(defun tree-scan-pname-ns (string start &optional (string-length (length string)))
   "Scans a string to check whether it's a PN_PREFIX."
   ;; PN_PREFIX ::= PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
   ;; PNAME_NS
-  (let ((position start)
-        (string-length (length string)))
+  (let ((position start))
     (flet ((scan-pn-prefix ()
              ;; 1. scan PN_CHARS_BASE
              ;; 2. scan PN_CHARS + .
@@ -269,12 +445,12 @@ failure."
                         (when accepted
                           (incf position))))
                     (scan-pn-chars-and-dot ()
-                      ;; "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]"
+                      ;; "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040.-]"
                       (flet ((accept-current-p ()
                                (let* ((char (elt string position)))
                                  (if (char<= #\z)
                                      (support:match-tree-search (char)
-                                       (#\A . #\Z) (#\_ . #\_) (#\- . #\-) (#\0 . #\9) (#\a . #\z))
+                                       (#\A . #\Z) (#\_ . #\_) (#\- . #\-) (#\0 . #\9) (#\a . #\z) (#\. . #\.))
                                      (support:match-tree-search (char)
                                        ("00C0" . "00D6")
                                        ("00D8" . "00F6")
@@ -295,14 +471,16 @@ failure."
                                          (< (1+ position) string-length))
                               do (incf position))
                         t))
-                    (last-scanned-is-not-dot ()
-                      ;; we know at least one PN_CHARS_BASE was read so we can jump one back
-                      (char/= (elt string (1- position))
-                              #\.)))
+                    (reverse-until-last-scanned-is-not-dot ()
+                      ;; we know at least one PN_CHARS_BASE was read so we can jump back
+                      (loop for char = (elt string (1- position))
+                            while (char= char #\.)
+                            do (decf position))
+                      position))
                (and
                 (scan-one-pn-chars-base)
                 (scan-pn-chars-and-dot)
-                (last-scanned-is-not-dot))))
+                (reverse-until-last-scanned-is-not-dot))))
            (scan-colon ()
              (when (and (< position string-length)
                         (char= (elt string position) #\:))
@@ -310,6 +488,241 @@ failure."
       (unless (scan-pn-prefix)
         (setf position start))
       (scan-colon))))
+
+(defun tree-scan-pname-ln (string start)
+  (let* ((string-length (length string))
+         (position (tree-scan-pname-ns string start string-length)))
+    (declare (type fixnum position string-length))
+    (when position
+      ;; (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
+      (labels ((is-hex (char)
+                 (support:match-tree-search (char)
+                   (#\0 . #\9)
+                   (#\a . #\f)
+                   (#\A . #\F)))
+               (scan-plx (start-char)
+                 (cond ((and (char= #\% start-char)
+                             (< (+ 2 position) string-length))
+                        (when (and (is-hex (elt string (+ 1 position)))
+                                   (is-hex (elt string (+ 2 position))))
+                          (incf position 3)))
+                       ((and (char= #\\ start-char)
+                             (< (1+ position) string-length))
+                        (let ((char (elt string (1+ position))))
+                          (when (support:match-tree-search (char)
+                                  ;; combined list based on allowed characters
+                                  (#\! . #\!)
+                                  (#\# . #\/)
+                                  (#\; . #\;)
+                                  (#\= . #\=)
+                                  (#\? . #\?)
+                                  (#\_ . #\_)
+                                  (#\~ . #\~))
+                            (incf position 2))))
+                       (t nil)))
+               (scan-first-character ()
+                 ;; (PN_CHARS_U | ':' | [0-9] | PLX )
+                 (let ((char (elt string position))) ; validity happened in scan-var*
+                   (if (char<= char #\z)
+                       (if (support:match-tree-search (char)
+                             (#\A . #\Z)
+                             (#\a . #\z)
+                             (#\_ . #\_)
+                             (#\0 . #\9)
+                             (#\: . #\:))
+                           (incf position)
+                           (scan-plx char))
+                       (when (support:match-tree-search (char)
+                               ("00C0" . "00D6")
+                               ("00D8" . "00F6")
+                               ("00F8" . "02FF")
+                               ("0370" . "037D")
+                               ("037F" . "1FFF")
+                               ("200C" . "200D")
+                               ("2070" . "218F")
+                               ("2C00" . "2FEF")
+                               ("3001" . "D7FF")
+                               ("F900" . "FDCF")
+                               ("FDF0" . "FFFD")
+                               ("10000" . "EFFFF"))
+                         (incf position)))))
+               (scan-many-middle-characters ()
+                 ;; ((PN_CHARS | '.' | ':' | PLX)*
+                 (flet ((valid ()
+                          (let ((char (elt string position))) ; validity happened in scan-var*
+                            (if (char<= char #\z)
+                                (if (support:match-tree-search (char)
+                                      (#\A . #\Z)
+                                      (#\a . #\z)
+                                      (#\_ . #\_)
+                                      (#\- . #\-)
+                                      (#\0 . #\9)
+                                      (#\: . #\:)
+                                      (#\. . #\.))
+                                    (incf position)
+                                    (scan-plx char))
+                                (when (support:match-tree-search (char)
+                                        ("00C0" . "00D6")
+                                        ("00D8" . "00F6")
+                                        ("00F8" . "02FF")
+                                        ("0370" . "037D")
+                                        ("037F" . "1FFF")
+                                        ("200C" . "200D")
+                                        ("2070" . "218F")
+                                        ("2C00" . "2FEF")
+                                        ("3001" . "D7FF")
+                                        ("F900" . "FDCF")
+                                        ("FDF0" . "FFFD")
+                                        ("10000" . "EFFFF")
+                                        ;; above is extended range for PN_CHARS_BASE, below is the extra for PN_CHARS
+                                        ("00B7" . "00B7")
+                                        ("0300" . "036F")
+                                        ("203F" . "2040"))
+                                  (incf position))))))
+                   (loop while (and (< position string-length)
+                                    (valid)))
+                   position)) ; we read one too far
+               (reverse-until-last-scanned-is-not-dot ()
+                 ;; we know at least one non-dot was read so we can jump back
+                 (loop for char = (elt string (1- position))
+                       while (char= char #\.)
+                       do (decf position))
+                 position))
+        (and (scan-first-character)
+             (scan-many-middle-characters)
+             (reverse-until-last-scanned-is-not-dot))))))
+
+(defun tree-scan-blank-node-label (string start)
+  "Scans a string to theck whether it's a BLANK_NODE_LABEL."
+  ;; BLANK_NODE_LABEL ::= _:' ( PN_CHARS_U | [0-9] ) ((PN_CHARS|'.')* PN_CHARS )?
+  ;; PN_CHARS := PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
+  ;; PN_CHARS_BASE ::= [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+  ;; PN_CHARS_U ::= PN_CHARS_BASE | '_'
+  (let ((position start)
+        (string-length (length string))
+        (lowest-valid-position (+ 2 start)))
+    (flet ((scan-underscore-colon ()
+             (when (and (< lowest-valid-position string-length) ; we need at least one character after _:
+                        (char= (elt string position) #\_)
+                        (char= (elt string (1+ position)) #\:))
+               (incf position 2)))
+           (scan-chars-u-or-number ()
+             ;; [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+             ;; '_'
+             ;; [0-9]
+             (when (let ((char (elt string position))) ; length is checked higher up
+                     (if (char<= #\z)
+                         (support:match-tree-search (char)
+                           (#\A . #\Z)
+                           (#\a . #\z)
+                           (#\0 . #\9)
+                           (#\_ . #\_))
+                         (support:match-tree-search (char)
+                           ("00C0" . "00D6")
+                           ("00D8" . "00F6")
+                           ("00F8" . "02FF")
+                           ("0370" . "037D")
+                           ("037F" . "1FFF")
+                           ("200C" . "200D")
+                           ("2070" . "218F")
+                           ("2C00" . "2FEF")
+                           ("3001" . "D7FF")
+                           ("F900" . "FDCF")
+                           ("FDF0" . "FFFD")
+                           ("10000" . "EFFFF"))))
+               (incf position)))
+           (scan-while-pn-chars-and-dot ()
+             ;; "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]"
+             (flet ((accept-current-p ()
+                      (let* ((char (elt string position)))
+                        (if (char<= #\z)
+                            (support:match-tree-search (char)
+                              (#\A . #\Z) (#\_ . #\_) (#\- . #\-) (#\0 . #\9) (#\a . #\z) (#\. . #\.))
+                            (support:match-tree-search (char)
+                              ("00C0" . "00D6")
+                              ("00D8" . "00F6")
+                              ("00F8" . "02FF")
+                              ("0370" . "037D")
+                              ("037F" . "1FFF")
+                              ("200C" . "200D")
+                              ("2070" . "218F")
+                              ("2C00" . "2FEF")
+                              ("3001" . "D7FF")
+                              ("F900" . "FDCF")
+                              ("FDF0" . "FFFD")
+                              ("10000" . "EFFFF")
+                              ("00B7" . "00B7")
+                              ("0300" . "036F")
+                              ("203F" . "2040"))))))
+               (loop while (and (accept-current-p)
+                                (< (1+ position) string-length))
+                     do (incf position))
+               t)))
+      ;; The EBNF shows that we should first scan far _:, after that
+      ;; there should be one ( PN_CHARS_U | [0-9] ) followed by many
+      ;; (PN_CHARS | .) and then move backwards if we'd have scanned a
+      ;; '.'.  There may be cases where the . is the next token.
+      (when (and (scan-underscore-colon)
+                 (scan-chars-u-or-number))
+        ;; now we can scan as many chars-and-dot, and then move
+        ;; backwards for each dot (which we *know* we will encounter
+        ;; because the first after _: cannot be a dot.
+        (scan-while-pn-chars-and-dot)
+        (loop for char = (elt string (1- position))
+              while (char= char #\.)
+              do (decf position))
+        position))))
+
+(flet ((scan-wrapped-whitespace (string start left-char right-char)
+         (let ((string-length (length string))
+               (position start))
+           (when (and (< position (length string))
+                      (char= (elt string position) left-char))
+             (incf position)
+             (loop while (and (< position string-length)
+                              (let ((char (elt string position)))
+                                (or (char= char #.(support:hex-char "20"))
+                                    (char= char #.(support:hex-char "D"))
+                                    (char= char #.(support:hex-char "A"))
+                                    (char= char #.(support:hex-char "9")))))
+                   do (incf position))
+             (incf position)
+             (when (char= (elt string position) right-char)
+               (1+ position))))))
+  (defun scan-nil (string start)
+    (scan-wrapped-whitespace string start #\( #\)))
+  (defun scan-anon (string start)
+    (scan-wrapped-whitespace string start #\[ #\])))
+
+(defun scan-whitespace (string start)
+  (let ((string-length (length string))
+        (position start))
+    (if (< start (length string))
+        (loop
+          while (< position string-length)
+          for char = (elt string position)
+          do
+             (cond ((or (char= char #.(support:hex-char "20"))
+                        (char= char #.(support:hex-char "D"))
+                        (char= char #.(support:hex-char "A"))
+                        (char= char #.(support:hex-char "9")))
+                    (incf position))
+                   ((char= char #\#)
+                    ;; read until newline
+
+                    ;; We can scan for only newline as both linux as
+                    ;; windows have that on their newline syntax.  This
+                    ;; is the last with CRLF (windows) and the only one
+                    ;; for Linux (LF) and the character is most
+                    ;; commonly written as #\Newline.
+                    (incf position)
+                    (loop
+                      until (or (= position string-length)
+                                (char= (elt string position) #\Newline))
+                      do
+                         (incf position)))
+                   (t (return position))))
+        start)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; SPARQL terminal syntax
@@ -537,6 +950,32 @@ failure."
            (scan-string-literal-long-1 string start))
           ((eq token 'sparql-bnf::|STRING_LITERAL_LONG2|)
            (scan-string-literal-long-2 string start))
+          ((eq token 'sparql-bnf::|DECIMAL|)
+           (scan-decimal string start))
+          ((eq token 'sparql-bnf::|BLANK_NODE_LABEL|)
+           (tree-scan-blank-node-label string start))
+          ((eq token 'sparql-bnf::|VAR1|)
+           (scan-var1 string start))
+          ((eq token 'sparql-bnf::|VAR2|)
+           (scan-var2 string start))
+          ((eq token 'sparql-bnf::|PNAME_LN|)
+           (tree-scan-pname-ln string start))
+          ((eq token 'sparql-bnf::|NIL|)
+           (scan-nil string start))
+          ((eq token 'sparql-bnf::|ANON|)
+           (scan-anon string start))
+          ((eq token 'sparql-bnf::|DECIMAL_POSITIVE|)
+           (scan-decimal-positive string start))
+          ((eq token 'sparql-bnf::|DECIMAL_NEGATIVE|)
+           (scan-decimal-negative string start))
+          ((eq token 'sparql-bnf::|DOUBLE_POSITIVE|)
+           (scan-decimal-positive string start))
+          ((eq token 'sparql-bnf::|DOUBLE_NEGATIVE|)
+           (scan-decimal-negative string start))
+          ((eq token 'sparql-bnf::|STRING_LITERAL1|)
+           (scan-string-literal1 string start))
+          ((eq token 'sparql-bnf::|STRING_LITERAL2|)
+           (scan-string-literal2 string start))
           (t (alexandria:if-let
                  ((scanner (typecase token
                              (string (get-known-word-scanner token))

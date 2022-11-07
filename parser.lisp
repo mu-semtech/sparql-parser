@@ -230,7 +230,12 @@ symbol.  It is important when coping with symbols that may be empty."
         when (and (listp props)
                   (eq (first props) key))
           do (return-from ebnf-rule-values-for
-               (values (rest props) t)))
+               (values (mapcar (lambda (thing)
+                                 (if (typep thing 'string)
+                                     (coerce thing 'base-string)
+                                     thing))
+                               (rest props))
+                       t)))
   (values nil nil))
 
 (defun ebnf-rule-first (rule)
@@ -347,9 +352,10 @@ symbol.  It is important when coping with symbols that may be empty."
                     (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
 
 ;; eg: (defparameter *transition-table* (construct-transition-table-from-parsed-bnf (read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
+(defparameter *transition-table* (construct-transition-table-from-parsed-bnf (read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
 
-(defparameter *transition-table* (construct-transition-table *rules*)
-  "Transition table [stack top, next symbol] => next rule")
+;; (defparameter *transition-table* (construct-transition-table *rules*)
+;;   "Transition table [stack top, next symbol] => next rule")
 
 ;;;;;;;;;;;;;;;;;;
 ;;;; Print helpers
@@ -405,6 +411,8 @@ symbol.  It is important when coping with symbols that may be empty."
 ;; (defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
 ;;   "Reusable scanner for whitespace between tokens.")
 
+(defparameter *use-dedicated-whitespace-scanner* t)
+
 (let ((scanner (cl-ppcre:create-scanner
                            "^(\\s*(#[^
 ]*
@@ -419,12 +427,14 @@ string.
 
 START may be after the length of the current string, in this case START
 is returned."
-   (if (< start (length string))
-       (multiple-value-bind (start end)
-           (cl-ppcre:scan scanner string :start start)
-         (declare (ignore start))
-         end)
-       start)))
+   (if *use-dedicated-whitespace-scanner*
+       (sparql-terminals:scan-whitespace string start)
+       (if (< start (length string))
+           (multiple-value-bind (start end)
+               (cl-ppcre:scan scanner string :start start)
+             (declare (ignore start))
+             end)
+           start))))
 
 (defun scan-token (tokens start string)
   "Searches best matching token of TOKENS at START in STRING.
