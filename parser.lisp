@@ -402,8 +402,8 @@ symbol.  It is important when coping with symbols that may be empty."
       (cl-ppcre:create-scanner (concatenate 'string "^" token))
       (getf *token-parsers* token)))
 
-(defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
-  "Reusable scanner for whitespace between tokens.")
+;; (defconstant +whitespace-scanner+ (cl-ppcre:create-scanner "^(\\s*(#[^\n]*\n)?)*" :multi-line-mode t)
+;;   "Reusable scanner for whitespace between tokens.")
 
 (let ((scanner (cl-ppcre:create-scanner
                            "^(\\s*(#[^
