@@ -1,10 +1,29 @@
 (in-package :sparql-terminals)
 
+;;;; Sparql terminals
+;;;;
+;;;; this file contains the terminals of the SPARQL language and a way
+;;;; of parsing the terminals.
+;;;;
+;;;; this library was optimized to understand whether a Lisp based
+;;;; variant would be sufficiently fast in the interpretation of the
+;;;; queries or whether it would be too slow.  for this many parsers
+;;;; have to approaches available: a regular expression and hand-rolled
+;;;; interpretation.  further optimizations seem possible but the
+;;;; approach here has shown sufficient promise to verify the desired
+;;;; performance.
+;;;;
+;;;; the code in this library could be cleaned up in that it contains
+;;;; duplicate code.  it could be feasible to implement this code with
+;;;; more limited base constructs and to inline the code.  the approach
+;;;; visible here is sufficient for what we intend to verify.
+
 ;; (declaim (optimize (speed 0) (safety 3) (debug 3)))
 (declaim (optimize (speed 3) (safety 0) (debug 0)))
 
 (declaim (ftype (function (simple-string fixnum) (or null fixnum)) scan-uri scan-pname-ns tree-scan-pname-ln tree-scan-blank-node-label scan-double-negative scan-double-positive scan-decimal-negative scan-decimal-positive scan-integer-positive scan-integer-negative scan-string-literal-long-1 scan-whitespace scan-var1 scan-var2 scan-nil scan-anon scan-string-literal1 scan-string-literal2))
 (declaim (ftype (function (simple-string fixnum &optional fixnum) (or null fixnum)) scan-integer tree-scan-pname-ns scan-double scan-decimal))
+
 (defun scan-uri (string start)
   "Scans a string to check whether it's a URI or not."
   (let ((position start)
