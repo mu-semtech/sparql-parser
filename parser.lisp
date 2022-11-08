@@ -551,7 +551,7 @@ as the starting point in STRING."
              (setf *current-token* nil))
            (error "Error during parsing: Token ~A does not match ~A." next-token stack-top)))
       (t
-       (alexandria:if-let ((stack-transitions (get-stack-transition *transition-table* stack-top)))
+       (alexandria:if-let ((stack-transitions (getf *transition-table* stack-top)))
          (alexandria:if-let ((rule (get-stack-transition stack-transitions next-token)))
            (let ((stack-insertion (mapcar (lambda (term) (make-match :term term))
                                           (rule-expansion rule))))
