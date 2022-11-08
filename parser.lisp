@@ -565,7 +565,25 @@ as the starting point in STRING."
     nil ; indicates another step exists
     ))
 
-(defun parse-string (string &key (max-steps 10000) (print-intermediate-states t) (print-solution t))
+(defun ebnf-simplify (match)
+  (labels ((list-simplified-match (target)
+             (cond ((typep target 'scanned-token)
+                    (list target))
+                   ((typep (match-term target) 'string)
+                    (list target))
+                   ((char= #\_ (char (symbol-name (match-term target)) 0))
+                    ;; can be expanded
+                    (apply #'append (mapcar #'list-simplified-match (match-submatches target))))
+                   (t
+                    ;; a regular term
+                    (list (prog1 target
+                            (setf (match-submatches target)
+                                  (apply #'append (mapcar #'list-simplified-match (match-submatches target))))))))))
+    (setf (match-submatches match)
+          (apply #'append (mapcar #'list-simplified-match (match-submatches match))))
+    match))
+
+(defun parse-string (string &key (max-steps 10000) (print-intermediate-states t) (print-solution t) (as-ebnf t))
   "Parses a set of tokens."
   (when print-intermediate-states
     (format t "~&===STACK START===~%")
@@ -576,6 +594,8 @@ as the starting point in STRING."
              (format t "~&~%===PARSING STEP ~A===~%" i)
              (print-state))
         until (parse-step))
+  (when as-ebnf
+    (setf *match-tree* (ebnf-simplify *match-tree*)))
   (when print-solution
     (format t "~&===RESULT===~%")
     (print-match *match-tree* :rulep nil)))

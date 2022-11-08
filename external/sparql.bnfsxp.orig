@@ -18,21 +18,7 @@
    "DELETE WHERE" "DROP" "INSERT" "INSERT DATA" "LOAD" "MOVE" "PREFIX" "WITH"
    _eps )
   (seq Update))
- ;; (rule Prologue "4"
- ;;  (first "BASE" "PREFIX" _eps)
- ;;  (follow "ADD" "ASK" "CLEAR" "CONSTRUCT" "COPY" "CREATE" "DELETE"
- ;;   "DELETE DATA" "DELETE WHERE" "DESCRIBE" "DROP" "INSERT" "INSERT DATA" "LOAD"
- ;;   "MOVE" "SELECT" "WITH" )
- ;;  (cleanup star)
- ;;  (alt _empty _Prologue_2))
  (rule Prologue "4"
-  (first "BASE" "PREFIX" _eps)
-  (follow "ADD" "ASK" "CLEAR" "CONSTRUCT" "COPY" "CREATE" "DELETE"
-   "DELETE DATA" "DELETE WHERE" "DESCRIBE" "DROP" "INSERT" "INSERT DATA" "LOAD"
-   "MOVE" "SELECT" "WITH" )
-  (cleanup star)
-  (alt _empty _Prologue_2B))
- (rule _Prologue_2B "4B"
   (first "BASE" "PREFIX" _eps)
   (follow "ADD" "ASK" "CLEAR" "CONSTRUCT" "COPY" "CREATE" "DELETE"
    "DELETE DATA" "DELETE WHERE" "DESCRIBE" "DROP" "INSERT" "INSERT DATA" "LOAD"
@@ -45,7 +31,7 @@
    "DELETE DATA" "DELETE WHERE" "DESCRIBE" "DROP" "INSERT" "INSERT DATA" "LOAD"
    "MOVE" "SELECT" "WITH" )
   (cleanup merge)
-  (seq _Prologue_1 _Prologue_2B))
+  (seq _Prologue_1 Prologue))
  (rule _Prologue_1 "4.1"
   (first "BASE" "PREFIX")
   (follow "ADD" "ASK" "BASE" "CLEAR" "CONSTRUCT" "COPY" "CREATE" "DELETE"
