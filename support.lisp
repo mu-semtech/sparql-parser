@@ -17,7 +17,7 @@
   "Puts in a break statement at the start and end of the body."
   (let ((result (gensym)))
     `(progn
-       (break "Runnig ~A~&~A" ,name ',body)
+       (break "Running ~A~&~A" ,name ',body)
        (let ((,result
                (multiple-value-list (progn ,@body))))
          (break "Results from ~A: ~A~& ran ~A" ',name ,result ',body)
@@ -68,3 +68,18 @@
                            ;; we are in right
                            ,(emit right (cons bound known-lower-bounds) known-upper-bounds)))))))
       (emit sorted-ranges nil nil))))
+
+(defun read-bnfsexp-from-file (path)
+  "Reads a bnf sxp file file frrom PATH."
+  (let ((*package* (find-package :sparql-bnf))
+        (*readtable* (let ((rt (copy-readtable)))
+                       (set-dispatch-macro-character
+                        #\# #\t
+                        (lambda (s c n)
+                          (declare (ignore s c n))
+                          t)
+                        rt)
+                       (setf (readtable-case rt) :preserve)
+                       rt)))
+    (with-open-file (input path :direction :input)
+      (read input))))

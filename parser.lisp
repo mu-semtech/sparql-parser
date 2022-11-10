@@ -279,20 +279,6 @@ symbol.  It is important when coping with symbols that may be empty."
                               append (list symbol (empty-rule-for-rule-name rule-name rules)))
                       predicted))))))
 
-(defun read-bnfsexp-from-file (path)
-  "Reads a bnf sxp file file frrom PATH."
-  (let ((*package* (find-package :sparql-bnf))
-        (*readtable* (let ((rt (copy-readtable)))
-                       (set-dispatch-macro-character
-                        #\# #\t
-                        (lambda (s c n)
-                          (declare (ignore s c n))
-                          t))
-                       (setf (readtable-case rt) :preserve)
-                       rt)))
-    (with-open-file (input path :direction :input)
-      (read input))))
-
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
   (let ((empty-rule (make-rule :name 'sparql-bnf:|_empty| :expansion nil)))
@@ -338,21 +324,11 @@ symbol.  It is important when coping with symbols that may be empty."
                                                                 :expansion (list (ebnf-rule-name ebnf-child-rule)))))
                                     (loop for key in (ebnf-rule-first ebnf-child-rule)
                                           unless (eq key 'sparql-bnf:|_eps|)
-                                          append (list key child-rule)))
-                                  ))
-                           ;; if 
-                           ;;   append 
-                           ;; else
-                           ;;   append (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
-                           ;;                 (child-rule (make-rule :name rule-name
-                           ;;                                        :expansion (list (ebnf-rule-name ebnf-child-rule)))))
-                           ;;            (loop for key in (ebnf-rule-first ebnf-child-rule)
-                           ;;                  append (list key child-rule)))
-                           ))
+                                          append (list key child-rule)))))))
                     (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
 
 ;; eg: (defparameter *transition-table* (construct-transition-table-from-parsed-bnf (read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
-(defparameter *transition-table* (construct-transition-table-from-parsed-bnf (read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
+(defparameter *transition-table* (construct-transition-table-from-parsed-bnf (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
 
 ;; (defparameter *transition-table* (construct-transition-table *rules*)
 ;;   "Transition table [stack top, next symbol] => next rule")
