@@ -584,4 +584,5 @@ as the starting point in STRING."
         (apply #'sparql-parser::parse-string string args))
     (simple-error ()
       (let ((sparql-parser::*start-symbol* 'sparql-bnf::|UpdateUnit|))
-        (apply #'sparql-parser::parse-string string args)))))
+        (apply #'sparql-parser::parse-string string args))))
+  *match-tree*)

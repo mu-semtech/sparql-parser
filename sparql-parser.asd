@@ -12,4 +12,5 @@
                (:file "support/tree-db")
                (:file "sparql-terminals")
                (:file "parser")
-               (:file "generator")))
+               (:file "generator")
+               (:file "manipulation")))
