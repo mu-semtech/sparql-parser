@@ -9,8 +9,6 @@
 ;;;; consistently select "the right" element by traversing the EBNF
 ;;;; together with the AST.
 
-(defparameter *sparql-ebnf* (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.ebnfsxp"))
-
 (defun ebnf-rule-name (rule)
   "Returns the name of the ebnf-rule."
   (second rule))
@@ -19,9 +17,19 @@
   "Expansion for RULE."
   (fourth rule))
 
+(defun ebnf-rule-index (rule)
+  "Yields a number indicating the index for the EBNF rule."
+  (parse-integer (third rule)))
+
+(defparameter *sparql-ebnf* (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.ebnfsxp"))
+
+(defparameter *sparql-ebnf-hash*
+  (alexandria:alist-hash-table (mapcar (lambda (rule) (cons (ebnf-rule-name rule) rule)) *sparql-ebnf*)))
+
 (defun find-rule (symbol)
   "Finds rule with rule-name being SYMBOL."
-  (find symbol *sparql-ebnf* :key #'ebnf-rule-name))
+  ;; (find symbol *sparql-ebnf* :key #'ebnf-rule-name)
+  (gethash symbol *sparql-ebnf-hash*))
 
 (defun is-valid (match &optional (rule (find-rule (sparql-parser:match-term match))))
   "Verifies MATCH using EBNF.
