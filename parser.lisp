@@ -559,7 +559,7 @@ as the starting point in STRING."
           (apply #'append (mapcar #'list-simplified-match (match-submatches match))))
     match))
 
-(defun parse-string (string &key (max-steps 10000) (print-intermediate-states t) (print-solution t) (as-ebnf t))
+(defun parse-string (string &key (max-steps 10000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
   "Parses a set of tokens."
   (when print-intermediate-states
     (format t "~&===STACK START===~%")
@@ -576,3 +576,12 @@ as the starting point in STRING."
     (format t "~&===RESULT===~%")
     (print-match *match-tree* :rulep nil)))
 
+(defun parse-sparql-string (string &rest args &key (max-steps 10000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
+  "Parses STRING as a SPARQL string either a QueryUnit or an UpdateUnit."
+  (declare (ignore max-steps print-intermediate-states print-solution as-ebnf))
+  (handler-case
+      (let ((sparql-parser::*start-symbol* 'sparql-bnf::|QueryUnit|))
+        (apply #'sparql-parser::parse-string string args))
+    (simple-error ()
+      (let ((sparql-parser::*start-symbol* 'sparql-bnf::|UpdateUnit|))
+        (apply #'sparql-parser::parse-string string args)))))
