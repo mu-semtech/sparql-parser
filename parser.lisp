@@ -21,6 +21,7 @@
                                         ; the result 0 would mean no
                                         ; characters are read to match
                                         ; the token.
+  (string nil :type (or symbol string))  ; optional known string representation
   (token (error "Must supply matched token") :type (or symbol string)))
 
 (defun terminalp (thing)

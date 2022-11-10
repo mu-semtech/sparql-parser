@@ -19,7 +19,7 @@
 
 (defpackage #:sparql-parser
   (:use :common-lisp)
-  (:export #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-token #:terminalp)
+  (:export #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:terminalp)
   (:export #:parse-sparql-string))
 
 (defpackage #:sparql-generator

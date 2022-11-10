@@ -44,8 +44,9 @@
                                                                                              :term 'sparql-bnf::|IRIREF|
                                                                                              :submatches
                                                                                              (list (sparql-parser::make-scanned-token
-                                                                                                    :start 0 :end 5 :token ; TODO: utter nonsense
-                                                                                                    'sparql-bnf::|IRIREF|))))))))))))))
+                                                                                                    :start 0 :end 0
+                                                                                                    :string graph-string
+                                                                                                    :token 'sparql-bnf::|IRIREF|))))))))))))))
     (labels ((traverse (match)
                (when (sparql-parser:match-p match)
                  (when (eq (sparql-parser:match-term match) 'sparql-bnf::|SelectQuery|)
