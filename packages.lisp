@@ -28,3 +28,9 @@
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp))
+
+(defpackage #:server
+  (:use :common-lisp))
+
+(defpackage #:client
+  (:use :common-lisp))

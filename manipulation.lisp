@@ -21,6 +21,18 @@
     (mapcar #'remove-dataset-clauses (sparql-parser:match-submatches match)))
   match)
 
+(defun remove-graph-graph-patterns (match)
+  "Converts QuadsNotTriples into TriplesTemplate."
+  (when (and (sparql-parser:match-p match))
+    (when (eq (sparql-parser:match-term match) 'sparql-bnf::|GraphGraphPattern|)
+     ;; GraphGraphPattern ::= 'GRAPH' VarOrIri GroupGraphPattern
+     ;; GroupOrUnionGraphPatterrn ::= GroupGraphPattern ( 'UNION' GroupGraphPattern )*
+      (setf (sparql-parser:match-term match) 'sparql-bnf::|GroupOrUnionGraphPattern|)
+      (setf (sparql-parser:match-submatches match)
+            (cddr (sparql-parser:match-submatches match))))
+    (mapcar #'remove-graph-graph-patterns (sparql-parser:match-submatches match)))
+  match)
+
 (defun add-from-graphs (match graphs)
   "Adds a series of graphs as the FROM graphs for MATCH."
   (let ((dataset-clauses
