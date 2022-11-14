@@ -1,8 +1,7 @@
 (in-package #:server)
 
-(defparameter *woo-env* nil)
-
 (defun extract-query-string (env content-type)
+  "Extracts query string from the request when content-type is given."
   (let ((arr (make-array (getf env :content-length) :element-type 'flex:octet)))
     (read-sequence arr (getf env :raw-body))
     (let ((body-string (flex:octets-to-string arr)))
@@ -13,40 +12,35 @@
                                                   (assoc "update" params :test #'equal))))
                     'base-string))))))
 
-(defun parse-query (query)
-  (sparql-parser:parse-sparql-string query))
-
 (defun manipulate-query (match)
-  (sparql-manipulation::add-from-graphs
-   (sparql-manipulation::remove-graph-graph-patterns
-    (sparql-manipulation::remove-dataset-clauses match))
-   (list "<http://mu.semte.ch/graphs/public>")))
+  "Manipulates the requested query for current access rights."
+  (-> match
+    (remove-dataset-clauses)
+    (remove-graph-graph-patterns)
+    (add-from-graphs (list "<http://mu.semte.ch/graphs/public>"))))
 
 (defun generate-query (match)
-  (sparql-generator:is-valid match)
-  (sparql-generator:write-valid match))
+  "Generates the query string from the updated match."
+  (if (sparql-generator:is-valid match)
+      (sparql-generator:write-valid match)
+      (error "Match is invalid ~A" match)))
 
 (defun acceptor (env)
   ;; (declare (ignore env))
   ;; '(200 (:content-type "application/sparql-results+json") ("HELLO HELLO HELLO"))
-  (let ((sparql-parser::*stack* nil)
-        (sparql-parser::*scanning-string* nil)
-        (sparql-parser::*match-tree* nil)
-        (sparql-parser::*current-token* nil)
-        (sparql-parser::*next-char-idx* 0)
-        (headers (getf env :headers)))
+  (let ((headers (getf env :headers)))
     (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
                         :mu-session-id (gethash "mu-session-id" headers)
                         :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers))
-      (let* ((query (extract-query-string env (gethash "content-type" headers)))
-             (updated-query (funcall (alexandria:compose #'generate-query
-                                                         #'manipulate-query
-                                                         #'parse-query)
-                                     query))
-             (response (client::query updated-query)))
-        `(200
-          (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
-          (,response))))))
+      (with-parser-setup
+        (let ((response
+                (client::query
+                 (generate-query
+                  (manipulate-query
+                   (parse-sparql-string (extract-query-string env (gethash "content-type" headers))))))))
+          `(200
+            (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
+            (,response)))))))
 
 (defun boot (&key (port 8080) (worker-count 32))
   (bordeaux-threads:make-thread

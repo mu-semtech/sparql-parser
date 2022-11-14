@@ -9,6 +9,7 @@
                    :method :post
                    :content string
                    :use-connection-pool nil
+                   :keep-alive nil
                    :force-string t
                    :headers `(("content-type" . "application/sparql-update")
                               ("accept" . "application/sparql-results+json")

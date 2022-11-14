@@ -587,3 +587,15 @@ as the starting point in STRING."
       (let ((sparql-parser::*start-symbol* 'sparql-bnf::|UpdateUnit|))
         (apply #'sparql-parser::parse-string string args))))
   *match-tree*)
+
+(defmacro with-parser-setup (&body body)
+  "Executes  body within the parser setup scope."
+  ;; This macro could be removed if/when we convert other functions to
+  ;; make less use of the special variables and more use of passed on
+  ;; properties.  Benchmarks should indicate the validity of said case.
+  `(let ((*stack* nil)
+         (*scanning-string* nil)
+         (*match-tree* nil)
+         (*current-token* nil)
+         (*next-char-idx* 0))
+     ,@body))
