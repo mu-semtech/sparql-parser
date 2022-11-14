@@ -1,9 +1,6 @@
 (in-package #:server)
 
 (defparameter *woo-env* nil)
-(defparameter *mu-auth-allowed-groups* nil)
-(defparameter *mu-call-id* nil)
-(defparameter *mu-session-id* nil)
 
 (defun extract-query-string (env content-type)
   (let ((arr (make-array (getf env :content-length) :element-type 'flex:octet)))
@@ -38,10 +35,9 @@
         (sparql-parser::*current-token* nil)
         (sparql-parser::*next-char-idx* 0)
         (headers (getf env :headers)))
-    (let ((*mu-auth-allowed-groups* (gethash "mu-auth-allowed-groups" headers))
-          (*mu-call-id* (gethash "mu-call-id" headers))
-          (*mu-session-id* (gethash "mu-session-id" headers)))
-      (setf *woo-env* env)
+    (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
+                        :mu-session-id (gethash "mu-session-id" headers)
+                        :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers))
       (let* ((query (extract-query-string env (gethash "content-type" headers)))
              (updated-query (funcall (alexandria:compose #'generate-query
                                                          #'manipulate-query
@@ -49,7 +45,7 @@
                                      query))
              (response (client::query updated-query)))
         `(200
-          (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,*mu-auth-allowed-groups*)
+          (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
           (,response))))))
 
 (defun boot (&key (port 8080) (worker-count 32))

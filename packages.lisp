@@ -29,8 +29,13 @@
 (defpackage #:sparql-manipulation
   (:use :common-lisp))
 
+;; Server and client
+(defpackage #:connection-globals
+  (:use :common-lisp)
+  (:export #:mu-call-id #:mu-session-id #:mu-auth-allowed-groups #:with-call-context))
+
 (defpackage #:server
-  (:use :common-lisp))
+  (:use :common-lisp #:connection-globals))
 
 (defpackage #:client
-  (:use :common-lisp))
+  (:use :common-lisp #:connection-globals))

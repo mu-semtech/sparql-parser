@@ -12,7 +12,7 @@
                    :force-string t
                    :headers `(("content-type" . "application/sparql-update")
                               ("accept" . "application/sparql-results+json")
-                              ("mu-call-id" . ,server::*mu-call-id*)
-                              ("mu-session-id" . ,server::*mu-session-id*)))
+                              ("mu-call-id" . ,(mu-call-id))
+                              ("mu-session-id" . ,(mu-session-id))))
     (declare (ignore code headers))
     body))
