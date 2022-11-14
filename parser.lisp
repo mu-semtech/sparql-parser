@@ -38,23 +38,9 @@ We accept strings and uppercase symbols as terminals."
 
 (defconstant +END+ 'sparql-bnf:|_eof| ;; :end-eof
              "Last token to be processed.")
-(defconstant +EMPTY+ :empty-statement "Indicates a statement which carries no content")
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Stub language rules
-
-(defparameter *rules*
-  (mapcar (lambda (specification)
-            (destructuring-bind (name &rest expansion) specification
-              (make-rule :name name :expansion expansion)))
-          `((:|statement| "if" :|expression| "then" :|statement| "else" :|statement|)
-            (:|statement| "while" :|expression| "do" :|statement|)
-            (:|statement| "begin" :|statements| "end")
-            (:|statements| :|statement| ";" :|statements|)
-            (:|statements|)
-            (:|expression| ID)))
-  "All known rules")
 
 (defparameter *start-symbol* 'sparql-bnf::|UpdateUnit|
   "The symbol used to start processing.")
@@ -63,155 +49,6 @@ We accept strings and uppercase symbols as terminals."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Construction of transition table
-
-(defun find-rules (rule-name)
-  "Finds all rules with name RULE-NAME."
-  (remove-if-not (alexandria:curry #'eq rule-name)
-                 *rules*
-                 :key #'rule-name))
-
-(defun rule-may-be-empty (rule-name)
-  "Yields non-nill iff the syntax rule with name RULE-NAME may have an empty result."
-  (some (alexandria:compose #'null #'rule-expansion)
-        (find-rules rule-name)))
-
-(defun predict-set-for-symbol (symbol rules)
-  "Calculate the predict set for SYMBOL in RULES."
-  (loop for rule in rules
-        when (eq (rule-name rule) symbol)
-          append (predict-set-for-rule rule)))
-
-(defun multi-sorted-keyword-union (&rest lists)
-  "Unions multiple lists together."
-  (remove-duplicates
-   (sort (loop for list in lists
-               for result = list then (union result list)
-               finally (return result))
-         #'string<
-         :key (lambda (thing) (if (symbolp thing) (symbol-name thing) thing)))))
-
-(defun group-by (items &key (key #'identity) (test #'eq) (value #'identity))
-  "Groups supplied items by the given property."
-  (loop for item in items
-        for item-key = (funcall key item)
-        for foundp = nil
-        for item-value = (funcall value item)
-        for grouped-list = nil
-          then (loop for (list-key . values) in grouped-list
-                     if (funcall test item-key list-key)
-                       collect (prog1
-                                   `(,list-key ,item-value ,@values)
-                                 (setf foundp t))
-                     else
-                       collect (cons list-key values))
-        unless foundp
-          do (setf grouped-list `((,item-key ,item-value) ,@grouped-list))
-        finally (return grouped-list)))
-
-(defun predict-sets (rules)
-  "Constructs the predict sets for each non-terminal.
-
-The first key is the state under inspection (IE the name of the rule).
-The second property is the next token on the stack.  The third item is
-the rule to be selected in said case."
-  (let ((predict-sets (tree-db:create)))
-    (loop
-      for previous-predict-sets = (tree-db:copy predict-sets)
-      do
-         (loop for rule in rules
-               for name = (rule-name rule)
-               for expansion = (rule-expansion rule)
-               for first-expansion = (first expansion)
-               do
-                  (cond ((not expansion) nil)
-                        ((terminalp first-expansion)
-                         ;; if it is a primitive, this is the rule to select for the primitive value
-                         (setf (tree-db:val predict-sets (list name first-expansion))
-                               rule))
-                        (t
-                         ;; it is not a terminal, hence all known solutions for
-                         ;; the child element should be our solutions
-                         (loop for (start-state primitive other-rule)
-                                 in (tree-db:keys-at predict-sets (list first-expansion))
-                               do
-                                  ;; we set the rule detected above to be
-                                  ;; selected for this primitive further
-                                  ;; down the line.
-                                  (setf (tree-db:val predict-sets (list name primitive))
-                                        rule)))))
-      until (tree-db:equal predict-sets previous-predict-sets))
-    predict-sets))
-
-(defun starts-sets (rules)
-  "Constructs the next sets for each non-terminal"
-  (loop for (rule-name . known-terminals)
-          in (group-by (tree-db:all-keys (predict-sets rules)) :key #'car :value #'second)
-        append (list rule-name
-                     (loop for (terminal) on known-terminals by #'cddr
-                           collect terminal))))
-
-(defun next-set (rules)
-  "Constructs the next set for each term of RULES.
-
-The NEXT symbols are the symbols which may appear after the current
-symbol.  It is important when coping with symbols that may be empty."
-  ;; something is in the predict set for rule A if
-  ;;
-  ;; 1. it is in the start set of the thing following rule,
-  ;;
-  ;; 2. if something B elementOf predict set of rule A and B may be
-  ;; null, then anything in the predict set of B is in the predict set.
-  (let ((next-sets nil)
-        (previous-next-sets nil)
-        (starts-sets (starts-sets rules)))
-    (loop
-      do
-         (setf previous-next-sets (copy-tree next-sets))
-         (loop for rule in rules
-               for name = (rule-name rule)
-               for expansion = (rule-expansion rule)
-               do
-                  (loop for (first next rest) on expansion
-                        do
-                           (unless (terminalp first)
-                             (let* ((next-assoc-sets-of-first (or (assoc first next-sets)
-                                                                  (let ((cell (cons first nil)))
-                                                                    (push cell next-sets)
-                                                                    cell)))
-                                    (next-sets-of-first (cdr next-assoc-sets-of-first))
-                                    (starts-sets-of-first (getf starts-sets first)))
-                               (cond ((terminalp next)
-                                      (setf (cdr next-assoc-sets-of-first)
-                                            (multi-sorted-keyword-union
-                                             (and next (list next))
-                                             next-sets-of-first
-                                             starts-sets-of-first)))
-                                     ((rule-may-be-empty first)
-                                      (let ((next-sets-of-next (cdr (or (assoc (rule-name next) next-sets) (cons nil nil)))))
-                                        (setf (cdr next-assoc-sets-of-first)
-                                              (multi-sorted-keyword-union
-                                               starts-sets-of-first
-                                               next-sets-of-first
-                                               next-sets-of-next))))
-                                     (t ; rule not empty and next not terminal
-                                      (let ((next-sets-of-next (cdr (or (assoc (rule-name next) next-sets) (cons nil nil)))))
-                                        (setf (cdr next-assoc-sets-of-first)
-                                              (multi-sorted-keyword-union
-                                               next-sets-of-first
-                                               starts-sets-of-first
-                                               next-sets-of-next)))))))))
-      until (alexandria:set-equal next-sets previous-next-sets
-                                  :test (lambda (a b)
-                                          (and (eq (car a) (car b))
-                                               (alexandria:set-equal (cdr a) (cdr b))))))
-    (loop for (statement . properties) in next-sets
-          append (list statement properties))))
-
-(defun empty-rule-for-rule-name (rule-name rules)
-  "Returns the empty rule for RULE-NAME in RULES or NIL if not found."
-  (find-if (lambda (rule) (and (eq (rule-name rule) rule-name)
-                               (null (rule-expansion rule))))
-           rules))
 
 (defun ebnf-rule-name (rule)
   "Name of the EBNF rule."
@@ -258,27 +95,6 @@ symbol.  It is important when coping with symbols that may be empty."
 (defun ebnf-rule-search (rules key)
   "Searches a list of BNF rules for the given rule name."
   (find key rules :key #'second))
-
-(defun construct-transition-table (rules)
-  "Constructs the transition table for RULES."
-  (let* ((next-set (next-set rules))
-         (predict-sets (predict-sets rules)))
-    (loop for (rule-name . rules) in (group-by rules :key #'rule-name)
-          append
-          (list rule-name
-                (let ((predicted
-                        (loop for (rule-name primitive)
-                                in (tree-db:keys-at predict-sets (list rule-name))
-                              for rule = (tree-db:val predict-sets (list rule-name primitive))
-                              append (list primitive rule))))
-                  (if (rule-may-be-empty rule-name)
-                      (loop for symbol in (getf next-set rule-name)
-                            for current-prediction = (getf predicted symbol)
-                            if current-prediction
-                              append (list symbol current-prediction)
-                            else
-                              append (list symbol (empty-rule-for-rule-name rule-name rules)))
-                      predicted))))))
 
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
@@ -328,11 +144,9 @@ symbol.  It is important when coping with symbols that may be empty."
                                           append (list key child-rule)))))))
                     (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
 
-;; eg: (defparameter *transition-table* (construct-transition-table-from-parsed-bnf (read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
-(defparameter *transition-table* (construct-transition-table-from-parsed-bnf (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
+(defparameter *transition-table*
+  (construct-transition-table-from-parsed-bnf (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
 
-;; (defparameter *transition-table* (construct-transition-table *rules*)
-;;   "Transition table [stack top, next symbol] => next rule")
 
 ;;;;;;;;;;;;;;;;;;
 ;;;; Print helpers
@@ -392,13 +206,12 @@ symbol.  It is important when coping with symbols that may be empty."
 
 (defparameter *use-dedicated-whitespace-scanner* t)
 
-(let ((scanner (cl-ppcre:create-scanner
-                           "^(\\s*(#[^
+(let ((scanner (cl-ppcre:create-scanner "^(\\s*(#[^
 ]*
 )?)*"
-                           :multi-line-mode t)))
- (defun scan-whitespace (start string)
-   "Scans for any whitespace or comments from START.
+                                        :multi-line-mode t)))
+  (defun scan-whitespace (start string)
+    "Scans for any whitespace or comments from START.
 
 The result is the next position to start reading from.  If the string is
 only whitespace, this will be one character further than the current
@@ -406,14 +219,14 @@ string.
 
 START may be after the length of the current string, in this case START
 is returned."
-   (if *use-dedicated-whitespace-scanner*
-       (sparql-terminals:scan-whitespace string start)
-       (if (< start (length string))
-           (multiple-value-bind (start end)
-               (cl-ppcre:scan scanner string :start start)
-             (declare (ignore start))
-             end)
-           start))))
+    (if *use-dedicated-whitespace-scanner*
+        (sparql-terminals:scan-whitespace string start)
+        (if (< start (length string))
+            (multiple-value-bind (start end)
+                (cl-ppcre:scan scanner string :start start)
+              (declare (ignore start))
+              end)
+            start))))
 
 (defun scan-token (tokens start string)
   "Searches best matching token of TOKENS at START in STRING.
