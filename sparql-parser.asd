@@ -14,5 +14,5 @@
                (:file "parser")
                (:file "generator")
                (:file "manipulation")
-               (:file "server")
-               (:file "client")))
+               (:file "connection/server")
+               (:file "connection/client")))
