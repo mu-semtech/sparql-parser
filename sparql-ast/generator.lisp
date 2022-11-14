@@ -21,7 +21,7 @@
   "Yields a number indicating the index for the EBNF rule."
   (parse-integer (third rule)))
 
-(defparameter *sparql-ebnf* (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.ebnfsxp"))
+(defparameter *sparql-ebnf* (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.ebnfsxp"))
 
 (defparameter *sparql-ebnf-hash*
   (alexandria:alist-hash-table (mapcar (lambda (rule) (cons (ebnf-rule-name rule) rule)) *sparql-ebnf*)))
@@ -58,7 +58,7 @@ which element was expected to be valid but was not."
                  (cond
                    ((subrule-p expansion)
                     (case (first expansion)
-                      (ebnf:|seq|
+                      (ebnf:seq
                        ;; match each token, return nil if we can't match the full
                        ;; sequence, pop tokens when they match.
                        ;; (rest expansion)
@@ -84,19 +84,19 @@ which element was expected to be valid but was not."
                                              (no-solution-found)))
                                         (t (no-solution-found)))))
                        t)
-                      (ebnf:|alt|
+                      (ebnf:alt
                        ;; try any of the alternatives
                        (if (some (alexandria:rcurry #'pick-tokens t) (rest expansion))
                            t
                            (no-solution-found)))
-                      (ebnf:|star|
+                      (ebnf:star
                        ;; keep picking solutions
                        (prog1 t
                          (loop
                            for tokens-cons = available-tokens
                            while (and (pick-tokens (second expansion) t)
                                       (not (eq tokens-cons available-tokens))))))
-                      (ebnf:|plus|
+                      (ebnf:plus
                        ;; pick one solution, then keep picking
                        (if (pick-tokens (second expansion) optional-p)
                            (prog1 t
@@ -106,7 +106,7 @@ which element was expected to be valid but was not."
                                           ;; available-tokens changed
                                           (not (eq tokens-cons available-tokens)))))
                            (no-solution-found)))
-                      (ebnf:|opt|
+                      (ebnf:opt
                        (prog1 t
                          (pick-tokens (second expansion) t)))
                       (otherwise (error "Found ~A which is not understood for expansion." (first expansion)))))

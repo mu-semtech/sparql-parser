@@ -69,17 +69,3 @@
                            ,(emit right (cons bound known-lower-bounds) known-upper-bounds)))))))
       (emit sorted-ranges nil nil))))
 
-(defun read-bnfsexp-from-file (path)
-  "Reads a bnf sxp file file frrom PATH."
-  (let ((*package* (find-package :ebnf))
-        (*readtable* (let ((rt (copy-readtable)))
-                       (set-dispatch-macro-character
-                        #\# #\t
-                        (lambda (s c n)
-                          (declare (ignore s c n))
-                          t)
-                        rt)
-                       (setf (readtable-case rt) :preserve)
-                       rt)))
-    (with-open-file (input path :direction :input)
-      (read input))))

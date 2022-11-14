@@ -60,7 +60,7 @@ We accept strings and uppercase symbols as terminals."
 
 (defun ebnf-rule-terminal-p (rule)
   "Returns truethy iff the rule is a terminal specification."
-  (eq (ebnf-rule-type rule) 'ebnf:|terminal|))
+  (eq (ebnf-rule-type rule) 'ebnf:terminal))
 
 (defun ebnf-rule-values-for (rule key)
   "Gets values for KEY in RULE."
@@ -78,19 +78,19 @@ We accept strings and uppercase symbols as terminals."
 
 (defun ebnf-rule-first (rule)
   "Get first set of RULE."
-  (ebnf-rule-values-for rule 'ebnf:|first|))
+  (ebnf-rule-values-for rule 'ebnf:first))
 
 (defun ebnf-rule-follow (rule)
   "Get first set of RULE."
-  (ebnf-rule-values-for rule 'ebnf:|follow|))
+  (ebnf-rule-values-for rule 'ebnf:follow))
 
 (defun ebnf-rule-expansion (rule)
   "Returns the rule expansion for RULE."
   (multiple-value-bind (seq seqp)
-      (ebnf-rule-values-for rule 'ebnf:|seq|)
+      (ebnf-rule-values-for rule 'ebnf:seq)
     (if seqp
-        (cons 'ebnf:|seq| seq)
-        (cons 'ebnf:|alt| (ebnf-rule-values-for rule 'ebnf:|alt|)))))
+        (cons 'ebnf:seq seq)
+        (cons 'ebnf:alt (ebnf-rule-values-for rule 'ebnf:alt)))))
 
 (defun ebnf-rule-search (rules key)
   "Searches a list of BNF rules for the given rule name."
@@ -112,7 +112,7 @@ We accept strings and uppercase symbols as terminals."
       unless (ebnf-rule-terminal-p rule)
         append
         (list (ebnf-rule-name rule)
-              (cond ((eq rule-expansion-type 'ebnf:|seq|)
+              (cond ((eq rule-expansion-type 'ebnf:seq)
                      ;; sequence
                      (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
                             (predicted (loop for first in rule-first-options
@@ -122,7 +122,7 @@ We accept strings and uppercase symbols as terminals."
                                             (loop for follow in rule-follow
                                                   append (list follow rule)))))
                        (concatenate 'list predicted empty-follow)))
-                    ((eq rule-expansion-type 'ebnf:|alt|)
+                    ((eq rule-expansion-type 'ebnf:alt)
                      ;; alternatives
                      ;;
                      ;; although this will result in duplicate rules,
@@ -145,7 +145,7 @@ We accept strings and uppercase symbols as terminals."
                     (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
 
 (defparameter *transition-table*
-  (construct-transition-table-from-parsed-bnf (support:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
+  (construct-transition-table-from-parsed-bnf (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
 
 
 ;;;;;;;;;;;;;;;;;;

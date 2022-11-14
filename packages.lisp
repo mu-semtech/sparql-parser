@@ -7,10 +7,12 @@
 
 (defpackage :support
   (:use :common-lisp)
-  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search #:read-bnfsexp-from-file))
+  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search))
 
 (defpackage :ebnf
-  (:export #:|rule| #:|terminal| #:|first| #:|follow| #:|seq| #:|alt| #:|_eof| #:|_eps| #:|_empty| #:|opt| #:|plus| #:|star|))
+  (:use :common-lisp)
+  (:export #:rule #:terminal #:first #:follow #:seq #:alt #:|_eof| #:|_eps| #:|_empty| #:opt #:plus #:star
+           #:read-bnfsexp-from-file))
 
 (defpackage :sparql-terminals
   (:use :common-lisp)
