@@ -348,9 +348,11 @@ symbol.  It is important when coping with symbols that may be empty."
             (scanned-token-token scanned-token)
             (scanned-token-start scanned-token)
             (scanned-token-end scanned-token)
-            (subseq *scanning-string*
-                    (scanned-token-start scanned-token)
-                    (scanned-token-end scanned-token)))))
+            (when (and *scanning-string*
+                       (< (scanned-token-end scanned-token) (length *scanning-string*)))
+              (subseq *scanning-string*
+                      (scanned-token-start scanned-token)
+                      (scanned-token-end scanned-token))))))
 
 (defun print-match (match &key (stream *standard-output*) (rulep t) (indentation-width 0))
   "Prints the match tree in a clean manner"
