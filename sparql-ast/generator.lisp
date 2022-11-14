@@ -58,7 +58,7 @@ which element was expected to be valid but was not."
                  (cond
                    ((subrule-p expansion)
                     (case (first expansion)
-                      (sparql-bnf:|seq|
+                      (ebnf:|seq|
                        ;; match each token, return nil if we can't match the full
                        ;; sequence, pop tokens when they match.
                        ;; (rest expansion)
@@ -84,19 +84,19 @@ which element was expected to be valid but was not."
                                              (no-solution-found)))
                                         (t (no-solution-found)))))
                        t)
-                      (sparql-bnf:|alt|
+                      (ebnf:|alt|
                        ;; try any of the alternatives
                        (if (some (alexandria:rcurry #'pick-tokens t) (rest expansion))
                            t
                            (no-solution-found)))
-                      (sparql-bnf:|star|
+                      (ebnf:|star|
                        ;; keep picking solutions
                        (prog1 t
                          (loop
                            for tokens-cons = available-tokens
                            while (and (pick-tokens (second expansion) t)
                                       (not (eq tokens-cons available-tokens))))))
-                      (sparql-bnf:|plus|
+                      (ebnf:|plus|
                        ;; pick one solution, then keep picking
                        (if (pick-tokens (second expansion) optional-p)
                            (prog1 t
@@ -106,7 +106,7 @@ which element was expected to be valid but was not."
                                           ;; available-tokens changed
                                           (not (eq tokens-cons available-tokens)))))
                            (no-solution-found)))
-                      (sparql-bnf:|opt|
+                      (ebnf:|opt|
                        (prog1 t
                          (pick-tokens (second expansion) t)))
                       (otherwise (error "Found ~A which is not understood for expansion." (first expansion)))))

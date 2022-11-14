@@ -36,15 +36,15 @@ We accept strings and uppercase symbols as terminals."
 ;;;;;;;;;;;;;;
 ;;;; Constants
 
-(defconstant +END+ 'sparql-bnf:|_eof| ;; :end-eof
+(defconstant +END+ 'ebnf:|_eof| ;; :end-eof
              "Last token to be processed.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Stub language rules
 
-(defparameter *start-symbol* 'sparql-bnf::|UpdateUnit|
+(defparameter *start-symbol* 'ebnf::|UpdateUnit|
   "The symbol used to start processing.")
-;; (defparameter *start-symbol* 'sparql-bnf::|QueryUnit|
+;; (defparameter *start-symbol* 'ebnf::|QueryUnit|
 ;;   "The symbol used to start processing.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -60,7 +60,7 @@ We accept strings and uppercase symbols as terminals."
 
 (defun ebnf-rule-terminal-p (rule)
   "Returns truethy iff the rule is a terminal specification."
-  (eq (ebnf-rule-type rule) 'sparql-bnf:|terminal|))
+  (eq (ebnf-rule-type rule) 'ebnf:|terminal|))
 
 (defun ebnf-rule-values-for (rule key)
   "Gets values for KEY in RULE."
@@ -78,19 +78,19 @@ We accept strings and uppercase symbols as terminals."
 
 (defun ebnf-rule-first (rule)
   "Get first set of RULE."
-  (ebnf-rule-values-for rule 'sparql-bnf:|first|))
+  (ebnf-rule-values-for rule 'ebnf:|first|))
 
 (defun ebnf-rule-follow (rule)
   "Get first set of RULE."
-  (ebnf-rule-values-for rule 'sparql-bnf:|follow|))
+  (ebnf-rule-values-for rule 'ebnf:|follow|))
 
 (defun ebnf-rule-expansion (rule)
   "Returns the rule expansion for RULE."
   (multiple-value-bind (seq seqp)
-      (ebnf-rule-values-for rule 'sparql-bnf:|seq|)
+      (ebnf-rule-values-for rule 'ebnf:|seq|)
     (if seqp
-        (cons 'sparql-bnf:|seq| seq)
-        (cons 'sparql-bnf:|alt| (ebnf-rule-values-for rule 'sparql-bnf:|alt|)))))
+        (cons 'ebnf:|seq| seq)
+        (cons 'ebnf:|alt| (ebnf-rule-values-for rule 'ebnf:|alt|)))))
 
 (defun ebnf-rule-search (rules key)
   "Searches a list of BNF rules for the given rule name."
@@ -98,7 +98,7 @@ We accept strings and uppercase symbols as terminals."
 
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
-  (let ((empty-rule (make-rule :name 'sparql-bnf:|_empty| :expansion nil)))
+  (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
     (loop
       for rule in parsed-bnf
       for rule-name = (ebnf-rule-name rule)
@@ -106,13 +106,13 @@ We accept strings and uppercase symbols as terminals."
       for rule-expansion-type = (first rule-expansion)
       for rule-expansion-options = (rest rule-expansion)
       for rule-first-all = (ebnf-rule-first rule)
-      for rule-first-includes-empty-p = (some (lambda (k) (eq k 'sparql-bnf:|_eps|)) rule-first-all)
-      for rule-first-options = (remove-if (lambda (k) (eq k 'sparql-bnf:|_eps|)) rule-first-all)
+      for rule-first-includes-empty-p = (some (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
+      for rule-first-options = (remove-if (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
       for rule-follow = (ebnf-rule-follow rule)
       unless (ebnf-rule-terminal-p rule)
         append
         (list (ebnf-rule-name rule)
-              (cond ((eq rule-expansion-type 'sparql-bnf:|seq|)
+              (cond ((eq rule-expansion-type 'ebnf:|seq|)
                      ;; sequence
                      (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
                             (predicted (loop for first in rule-first-options
@@ -122,15 +122,15 @@ We accept strings and uppercase symbols as terminals."
                                             (loop for follow in rule-follow
                                                   append (list follow rule)))))
                        (concatenate 'list predicted empty-follow)))
-                    ((eq rule-expansion-type 'sparql-bnf:|alt|)
+                    ((eq rule-expansion-type 'ebnf:|alt|)
                      ;; alternatives
                      ;;
                      ;; although this will result in duplicate rules,
                      ;; we are generating rules on the fly here.
                      (loop for option in rule-expansion-options
                            append
-                           (cond ((eq option 'sparql-bnf:|_empty|)
-                                  (loop for key in (cons 'sparql-bnf:|_eof| rule-follow)
+                           (cond ((eq option 'ebnf:|_empty|)
+                                  (loop for key in (cons 'ebnf:|_eof| rule-follow)
                                         append (list key empty-rule)))
                                  ((terminalp option)
                                   (list option (make-rule :name rule-name
@@ -140,7 +140,7 @@ We accept strings and uppercase symbols as terminals."
                                          (child-rule (make-rule :name rule-name
                                                                 :expansion (list (ebnf-rule-name ebnf-child-rule)))))
                                     (loop for key in (ebnf-rule-first ebnf-child-rule)
-                                          unless (eq key 'sparql-bnf:|_eps|)
+                                          unless (eq key 'ebnf:|_eps|)
                                           append (list key child-rule)))))))
                     (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
 
@@ -396,10 +396,10 @@ as the starting point in STRING."
   "Parses STRING as a SPARQL string either a QueryUnit or an UpdateUnit."
   (declare (ignore max-steps print-intermediate-states print-solution as-ebnf))
   (handler-case
-      (let ((sparql-parser::*start-symbol* 'sparql-bnf::|QueryUnit|))
+      (let ((sparql-parser::*start-symbol* 'ebnf::|QueryUnit|))
         (apply #'sparql-parser::parse-string string args))
     (simple-error ()
-      (let ((sparql-parser::*start-symbol* 'sparql-bnf::|UpdateUnit|))
+      (let ((sparql-parser::*start-symbol* 'ebnf::|UpdateUnit|))
         (apply #'sparql-parser::parse-string string args))))
   *match-tree*)
 

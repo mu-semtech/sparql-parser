@@ -9,7 +9,7 @@
   (:use :common-lisp)
   (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search #:read-bnfsexp-from-file))
 
-(defpackage :sparql-bnf
+(defpackage :ebnf
   (:export #:|rule| #:|terminal| #:|first| #:|follow| #:|seq| #:|alt| #:|_eof| #:|_eps| #:|_empty| #:|opt| #:|plus| #:|star|))
 
 (defpackage :sparql-terminals

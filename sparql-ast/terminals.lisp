@@ -749,80 +749,80 @@ failure."
 ;;;; Scanners for SPARQL's terminal syntax
 
 (defparameter *raw-syntax-strings-full*
-  `((sparql-bnf::|PN_LOCAL_ESC| . "\\\\[_~.\\-!$&'()*+,;=/?#@%]")
-    (sparql-bnf::|HEX| . "[0-9A-Fa-f]")
-    (sparql-bnf::|PERCENT| . "%[0-9A-Fa-f][0-9A-Fa-f]")
-    (sparql-bnf::|PLX| . "(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])")
-    (sparql-bnf::|PN_LOCAL| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?"  ) ; :PN_LOCAL . (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
-    (sparql-bnf::|PN_PREFIX| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-.])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?") ; :PN_PREFIX . PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
-    (sparql-bnf::|PN_CHARS| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]") ; :PN_CHARS . PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
-    (sparql-bnf::|VARNAME| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040]*") ; :VARNAME . ( PN_CHARS_U | [0-9] ) ( PN_CHARS_U | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040] )*
-    (sparql-bnf::|PN_CHARS_U| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_]") ; :PN_CHARS_U . PN_CHARS_BASE | '_'
-    (sparql-bnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
-    (sparql-bnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
-    (sparql-bnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
-    (sparql-bnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
-    (sparql-bnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
-    (sparql-bnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
-    (sparql-bnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
-    (sparql-bnf::|STRING_LITERAL2| . "\"(([^#x22#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*\"") ; :STRING_LITERAL2 . '"' ( ([^#x22#x5C#xA#xD]) | ECHAR )* '"'
-    (sparql-bnf::|STRING_LITERAL1| . "'(([^#x27#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*'") ; :STRING_LITERAL1 . "'" ( ([^#x27#x5C#xA#xD]) | ECHAR )* "'"
-    (sparql-bnf::|EXPONENT| . "[eE][+-]?[0-9]+") ; :EXPONENT . [eE] [+-]? [0-9]+
-    (sparql-bnf::|DOUBLE_NEGATIVE| . "-([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)" ) ; :DOUBLE_NEGATIVE . '-' DOUBLE
-    (sparql-bnf::|DECIMAL_NEGATIVE| . "-[0-9]*\\.[0-9]+") ; :DECIMAL_NEGATIVE . '-' DECIMAL
-    (sparql-bnf::|INTEGER_NEGATIVE| . "-INTEGER") ; :INTEGER_NEGATIVE . '-' INTEGER
-    (sparql-bnf::|DOUBLE_POSITIVE| . "\\+([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)") ; :DOUBLE_POSITIVE . '+' DOUBLE
-    (sparql-bnf::|DECIMAL_POSITIVE| . "\\+[0-9]*\\.[0-9]+") ; :DECIMAL_POSITIVE . '+' DECIMAL
-    (sparql-bnf::|INTEGER_POSITIVE| . "\\+INTEGER") ; :INTEGER_POSITIVE . '+' INTEGER
-    (sparql-bnf::|DOUBLE| . "[0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+") ; :DOUBLE . [0-9]+ '.' [0-9]* EXPONENT | '.' ([0-9])+ EXPONENT | ([0-9])+ EXPONENT
-    (sparql-bnf::|DECIMAL| . "[0-9]*\\.[0-9]+") ; :DECIMAL . [0-9]* '.' [0-9]+
-    (sparql-bnf::|INTEGER| . "[0-9]+") ; :INTEGER . [0-9]+
-    (sparql-bnf::|LANGTAG| . "@[a-zA-Z]+(-[a-zA-Z0-9]+)*") ; :LANGTAG . '@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
-    (sparql-bnf::|VAR2| . "$[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040]*") ; :VAR2 . '$' VARNAME
-    (sparql-bnf::|VAR1| . "\\?[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040]*") ; :VAR1 . '?' VARNAME
-    (sparql-bnf::|BLANK_NODE_LABEL| . "_:[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9]([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040\\.-]*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?" ) ; :BLANK_NODE_LABEL . '_:' ( PN_CHARS_U | [0-9] ) ((PN_CHARS|'.')* PN_CHARS)?
-    (sparql-bnf::|PNAME_LN| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-.])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?)?:(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?)") ; :PNAME_LN . PNAME_NS PN_LOCAL
-    (sparql-bnf::|PNAME_NS| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-.])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?)?:") ; :PNAME_NS . PN_PREFIX? ':'
-    (sparql-bnf::|IRIREF| . "<([^<>\"{}|^`#x00-#x20])*>") ; :IRIREF . '<' ([^<>"{}|^`\]-[#x00-#x20])* '>'
+  `((ebnf::|PN_LOCAL_ESC| . "\\\\[_~.\\-!$&'()*+,;=/?#@%]")
+    (ebnf::|HEX| . "[0-9A-Fa-f]")
+    (ebnf::|PERCENT| . "%[0-9A-Fa-f][0-9A-Fa-f]")
+    (ebnf::|PLX| . "(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])")
+    (ebnf::|PN_LOCAL| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?"  ) ; :PN_LOCAL . (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
+    (ebnf::|PN_PREFIX| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-.])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?") ; :PN_PREFIX . PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
+    (ebnf::|PN_CHARS| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]") ; :PN_CHARS . PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
+    (ebnf::|VARNAME| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040]*") ; :VARNAME . ( PN_CHARS_U | [0-9] ) ( PN_CHARS_U | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040] )*
+    (ebnf::|PN_CHARS_U| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_]") ; :PN_CHARS_U . PN_CHARS_BASE | '_'
+    (ebnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+    (ebnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
+    (ebnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
+    (ebnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
+    (ebnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
+    (ebnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
+    (ebnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
+    (ebnf::|STRING_LITERAL2| . "\"(([^#x22#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*\"") ; :STRING_LITERAL2 . '"' ( ([^#x22#x5C#xA#xD]) | ECHAR )* '"'
+    (ebnf::|STRING_LITERAL1| . "'(([^#x27#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*'") ; :STRING_LITERAL1 . "'" ( ([^#x27#x5C#xA#xD]) | ECHAR )* "'"
+    (ebnf::|EXPONENT| . "[eE][+-]?[0-9]+") ; :EXPONENT . [eE] [+-]? [0-9]+
+    (ebnf::|DOUBLE_NEGATIVE| . "-([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)" ) ; :DOUBLE_NEGATIVE . '-' DOUBLE
+    (ebnf::|DECIMAL_NEGATIVE| . "-[0-9]*\\.[0-9]+") ; :DECIMAL_NEGATIVE . '-' DECIMAL
+    (ebnf::|INTEGER_NEGATIVE| . "-INTEGER") ; :INTEGER_NEGATIVE . '-' INTEGER
+    (ebnf::|DOUBLE_POSITIVE| . "\\+([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)") ; :DOUBLE_POSITIVE . '+' DOUBLE
+    (ebnf::|DECIMAL_POSITIVE| . "\\+[0-9]*\\.[0-9]+") ; :DECIMAL_POSITIVE . '+' DECIMAL
+    (ebnf::|INTEGER_POSITIVE| . "\\+INTEGER") ; :INTEGER_POSITIVE . '+' INTEGER
+    (ebnf::|DOUBLE| . "[0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+") ; :DOUBLE . [0-9]+ '.' [0-9]* EXPONENT | '.' ([0-9])+ EXPONENT | ([0-9])+ EXPONENT
+    (ebnf::|DECIMAL| . "[0-9]*\\.[0-9]+") ; :DECIMAL . [0-9]* '.' [0-9]+
+    (ebnf::|INTEGER| . "[0-9]+") ; :INTEGER . [0-9]+
+    (ebnf::|LANGTAG| . "@[a-zA-Z]+(-[a-zA-Z0-9]+)*") ; :LANGTAG . '@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
+    (ebnf::|VAR2| . "$[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040]*") ; :VAR2 . '$' VARNAME
+    (ebnf::|VAR1| . "\\?[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040]*") ; :VAR1 . '?' VARNAME
+    (ebnf::|BLANK_NODE_LABEL| . "_:[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9]([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040\\.-]*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?" ) ; :BLANK_NODE_LABEL . '_:' ( PN_CHARS_U | [0-9] ) ((PN_CHARS|'.')* PN_CHARS)?
+    (ebnf::|PNAME_LN| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-.])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?)?:(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?)") ; :PNAME_LN . PNAME_NS PN_LOCAL
+    (ebnf::|PNAME_NS| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-.])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF_0-9#x00B7#x0300-#x036F#x203F-#x2040-])?)?:") ; :PNAME_NS . PN_PREFIX? ':'
+    (ebnf::|IRIREF| . "<([^<>\"{}|^`#x00-#x20])*>") ; :IRIREF . '<' ([^<>"{}|^`\]-[#x00-#x20])* '>'
     )
   "The syntax strings in their raw embedded regex format.")
 
 (defparameter *raw-syntax-strings-simple*
-  `((sparql-bnf::|PN_LOCAL_ESC| . "\\\\[_~.\\-!$&'()*+,;=/?#@%]")
-    (sparql-bnf::|HEX| . "[0-9A-Fa-f]")
-    (sparql-bnf::|PERCENT| . "%[0-9A-Fa-f][0-9A-Fa-f]")
-    (sparql-bnf::|PLX| . "(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])")
-    (sparql-bnf::|PN_LOCAL| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?"  ) ; :PN_LOCAL . (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
-    (sparql-bnf::|PN_PREFIX| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?") ; :PN_PREFIX . PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
-    (sparql-bnf::|PN_CHARS| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]") ; :PN_CHARS . PN_CHARS_U | '-' | [0-9] | #x00B7 | [] | []
-    (sparql-bnf::|VARNAME| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VARNAME . ( PN_CHARS_U | [0-9] ) ( PN_CHARS_U | [0-9] | #x00B7 | [] | [] )*
-    (sparql-bnf::|PN_CHARS_U| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]") ; :PN_CHARS_U . PN_CHARS_BASE | '_'
-    (sparql-bnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
-    (sparql-bnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
-    (sparql-bnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
-    (sparql-bnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
-    (sparql-bnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
-    (sparql-bnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
-    (sparql-bnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
-    (sparql-bnf::|STRING_LITERAL2| . "\"(([^#x22#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*\"") ; :STRING_LITERAL2 . '"' ( ([^#x22#x5C#xA#xD]) | ECHAR )* '"'
-    (sparql-bnf::|STRING_LITERAL1| . "'(([^#x27#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*'") ; :STRING_LITERAL1 . "'" ( ([^#x27#x5C#xA#xD]) | ECHAR )* "'"
-    (sparql-bnf::|EXPONENT| . "[eE][+-]?[0-9]+") ; :EXPONENT . [eE] [+-]? [0-9]+
-    (sparql-bnf::|DOUBLE_NEGATIVE| . "-([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)" ) ; :DOUBLE_NEGATIVE . '-' DOUBLE
-    (sparql-bnf::|DECIMAL_NEGATIVE| . "-[0-9]*\\.[0-9]+") ; :DECIMAL_NEGATIVE . '-' DECIMAL
-    (sparql-bnf::|INTEGER_NEGATIVE| . "-INTEGER") ; :INTEGER_NEGATIVE . '-' INTEGER
-    (sparql-bnf::|DOUBLE_POSITIVE| . "\\+([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)") ; :DOUBLE_POSITIVE . '+' DOUBLE
-    (sparql-bnf::|DECIMAL_POSITIVE| . "\\+[0-9]*\\.[0-9]+") ; :DECIMAL_POSITIVE . '+' DECIMAL
-    (sparql-bnf::|INTEGER_POSITIVE| . "\\+INTEGER") ; :INTEGER_POSITIVE . '+' INTEGER
-    (sparql-bnf::|DOUBLE| . "[0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+") ; :DOUBLE . [0-9]+ '.' [0-9]* EXPONENT | '.' ([0-9])+ EXPONENT | ([0-9])+ EXPONENT
-    (sparql-bnf::|DECIMAL| . "[0-9]*\\.[0-9]+") ; :DECIMAL . [0-9]* '.' [0-9]+
-    (sparql-bnf::|INTEGER| . "[0-9]+") ; :INTEGER . [0-9]+
-    (sparql-bnf::|LANGTAG| . "@[a-zA-Z]+(-[a-zA-Z0-9]+)*") ; :LANGTAG . '@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
-    (sparql-bnf::|VAR2| . "$[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VAR2 . '$' VARNAME
-    (sparql-bnf::|VAR1| . "\\?[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VAR1 . '?' VARNAME
-    (sparql-bnf::|BLANK_NODE_LABEL| . "_:[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9]([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7\\.-]*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?" ) ; :BLANK_NODE_LABEL . '_:' ( PN_CHARS_U | [0-9] ) ((PN_CHARS|'.')* PN_CHARS)?
-    (sparql-bnf::|PNAME_LN| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?)?:(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?)") ; :PNAME_LN . PNAME_NS PN_LOCAL
-    (sparql-bnf::|PNAME_NS| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?)?:") ; :PNAME_NS . PN_PREFIX? ':'
-    (sparql-bnf::|IRIREF| . "<([^<>\"{}|^`#x00-#x20])*>") ; :IRIREF . '<' ([^<>"{}|^`\]-[#x00-#x20])* '>'
+  `((ebnf::|PN_LOCAL_ESC| . "\\\\[_~.\\-!$&'()*+,;=/?#@%]")
+    (ebnf::|HEX| . "[0-9A-Fa-f]")
+    (ebnf::|PERCENT| . "%[0-9A-Fa-f][0-9A-Fa-f]")
+    (ebnf::|PLX| . "(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])")
+    (ebnf::|PN_LOCAL| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?"  ) ; :PN_LOCAL . (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
+    (ebnf::|PN_PREFIX| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?") ; :PN_PREFIX . PN_CHARS_BASE ((PN_CHARS|'.')* PN_CHARS)?
+    (ebnf::|PN_CHARS| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]") ; :PN_CHARS . PN_CHARS_U | '-' | [0-9] | #x00B7 | [] | []
+    (ebnf::|VARNAME| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VARNAME . ( PN_CHARS_U | [0-9] ) ( PN_CHARS_U | [0-9] | #x00B7 | [] | [] )*
+    (ebnf::|PN_CHARS_U| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]") ; :PN_CHARS_U . PN_CHARS_BASE | '_'
+    (ebnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+    (ebnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
+    (ebnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
+    (ebnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
+    (ebnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
+    (ebnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
+    (ebnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
+    (ebnf::|STRING_LITERAL2| . "\"(([^#x22#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*\"") ; :STRING_LITERAL2 . '"' ( ([^#x22#x5C#xA#xD]) | ECHAR )* '"'
+    (ebnf::|STRING_LITERAL1| . "'(([^#x27#x5C#xA#xD])|\\\\[tbnrf\\\\\"'])*'") ; :STRING_LITERAL1 . "'" ( ([^#x27#x5C#xA#xD]) | ECHAR )* "'"
+    (ebnf::|EXPONENT| . "[eE][+-]?[0-9]+") ; :EXPONENT . [eE] [+-]? [0-9]+
+    (ebnf::|DOUBLE_NEGATIVE| . "-([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)" ) ; :DOUBLE_NEGATIVE . '-' DOUBLE
+    (ebnf::|DECIMAL_NEGATIVE| . "-[0-9]*\\.[0-9]+") ; :DECIMAL_NEGATIVE . '-' DECIMAL
+    (ebnf::|INTEGER_NEGATIVE| . "-INTEGER") ; :INTEGER_NEGATIVE . '-' INTEGER
+    (ebnf::|DOUBLE_POSITIVE| . "\\+([0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+)") ; :DOUBLE_POSITIVE . '+' DOUBLE
+    (ebnf::|DECIMAL_POSITIVE| . "\\+[0-9]*\\.[0-9]+") ; :DECIMAL_POSITIVE . '+' DECIMAL
+    (ebnf::|INTEGER_POSITIVE| . "\\+INTEGER") ; :INTEGER_POSITIVE . '+' INTEGER
+    (ebnf::|DOUBLE| . "[0-9]+\\.[0-9]*[eE][+-]?[0-9]+|\\.([0-9])+[eE][+-]?[0-9]+|([0-9])+[eE][+-]?[0-9]+") ; :DOUBLE . [0-9]+ '.' [0-9]* EXPONENT | '.' ([0-9])+ EXPONENT | ([0-9])+ EXPONENT
+    (ebnf::|DECIMAL| . "[0-9]*\\.[0-9]+") ; :DECIMAL . [0-9]* '.' [0-9]+
+    (ebnf::|INTEGER| . "[0-9]+") ; :INTEGER . [0-9]+
+    (ebnf::|LANGTAG| . "@[a-zA-Z]+(-[a-zA-Z0-9]+)*") ; :LANGTAG . '@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
+    (ebnf::|VAR2| . "$[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VAR2 . '$' VARNAME
+    (ebnf::|VAR1| . "\\?[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9][A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7]*") ; :VAR1 . '?' VARNAME
+    (ebnf::|BLANK_NODE_LABEL| . "_:[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9]([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7\\.-]*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?" ) ; :BLANK_NODE_LABEL . '_:' ( PN_CHARS_U | [0-9] ) ((PN_CHARS|'.')* PN_CHARS)?
+    (ebnf::|PNAME_LN| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?)?:(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_]|:|[0-9]|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))(([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|\\.|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%]))*([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-]|:|(%[0-9A-Fa-f][0-9A-Fa-f])|(\\\\[_~.\\-!$&'()*+,;=/?#@%])))?)") ; :PNAME_LN . PNAME_NS PN_LOCAL
+    (ebnf::|PNAME_NS| . "([A-Za-z#x00C0-#x00D6#x00D8-#x00F6](([A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7.-])*[A-Za-z#x00C0-#x00D6#x00D8-#x00F6_0-9#x00B7-])?)?:") ; :PNAME_NS . PN_PREFIX? ':'
+    (ebnf::|IRIREF| . "<([^<>\"{}|^`#x00-#x20])*>") ; :IRIREF . '<' ([^<>"{}|^`\]-[#x00-#x20])* '>'
     )
   "The syntax strings in their raw embedded regex format.")
 
@@ -950,50 +950,50 @@ failure."
   ;; (incf (gethash token *token-history* 0))
   (with-internal-runtime-processing (time-spent nil)
       ((incf (the fixnum (gethash token *token-history* 0)) time-spent))
-    (cond ((eq token 'sparql-bnf:|_eof|)
+    (cond ((eq token 'ebnf:|_eof|)
            (when (= start (length string))
              start))
-          ((eq token 'sparql-bnf::|IRIREF|)
+          ((eq token 'ebnf::|IRIREF|)
            (scan-uri string start))
-          ((eq token 'sparql-bnf::|PNAME_NS|)
+          ((eq token 'ebnf::|PNAME_NS|)
            (tree-scan-pname-ns string start))
-          ((eq token 'sparql-bnf::|DOUBLE|)
+          ((eq token 'ebnf::|DOUBLE|)
            (scan-double string start))
-          ((eq token 'sparql-bnf::|INTEGER|)
+          ((eq token 'ebnf::|INTEGER|)
            (scan-integer string start))
-          ((eq token 'sparql-bnf::|INTEGER_POSITIVE|)
+          ((eq token 'ebnf::|INTEGER_POSITIVE|)
            (scan-integer-positive string start))
-          ((eq token 'sparql-bnf::|INTEGER_NEGATIVE|)
+          ((eq token 'ebnf::|INTEGER_NEGATIVE|)
            (scan-integer-negative string start))
-          ((eq token 'sparql-bnf::|STRING_LITERAL_LONG1|)
+          ((eq token 'ebnf::|STRING_LITERAL_LONG1|)
            (scan-string-literal-long-1 string start))
-          ((eq token 'sparql-bnf::|STRING_LITERAL_LONG2|)
+          ((eq token 'ebnf::|STRING_LITERAL_LONG2|)
            (scan-string-literal-long-2 string start))
-          ((eq token 'sparql-bnf::|DECIMAL|)
+          ((eq token 'ebnf::|DECIMAL|)
            (scan-decimal string start))
-          ((eq token 'sparql-bnf::|BLANK_NODE_LABEL|)
+          ((eq token 'ebnf::|BLANK_NODE_LABEL|)
            (tree-scan-blank-node-label string start))
-          ((eq token 'sparql-bnf::|VAR1|)
+          ((eq token 'ebnf::|VAR1|)
            (scan-var1 string start))
-          ((eq token 'sparql-bnf::|VAR2|)
+          ((eq token 'ebnf::|VAR2|)
            (scan-var2 string start))
-          ((eq token 'sparql-bnf::|PNAME_LN|)
+          ((eq token 'ebnf::|PNAME_LN|)
            (tree-scan-pname-ln string start))
-          ((eq token 'sparql-bnf::|NIL|)
+          ((eq token 'ebnf::|NIL|)
            (scan-nil string start))
-          ((eq token 'sparql-bnf::|ANON|)
+          ((eq token 'ebnf::|ANON|)
            (scan-anon string start))
-          ((eq token 'sparql-bnf::|DECIMAL_POSITIVE|)
+          ((eq token 'ebnf::|DECIMAL_POSITIVE|)
            (scan-decimal-positive string start))
-          ((eq token 'sparql-bnf::|DECIMAL_NEGATIVE|)
+          ((eq token 'ebnf::|DECIMAL_NEGATIVE|)
            (scan-decimal-negative string start))
-          ((eq token 'sparql-bnf::|DOUBLE_POSITIVE|)
+          ((eq token 'ebnf::|DOUBLE_POSITIVE|)
            (scan-decimal-positive string start))
-          ((eq token 'sparql-bnf::|DOUBLE_NEGATIVE|)
+          ((eq token 'ebnf::|DOUBLE_NEGATIVE|)
            (scan-decimal-negative string start))
-          ((eq token 'sparql-bnf::|STRING_LITERAL1|)
+          ((eq token 'ebnf::|STRING_LITERAL1|)
            (scan-string-literal1 string start))
-          ((eq token 'sparql-bnf::|STRING_LITERAL2|)
+          ((eq token 'ebnf::|STRING_LITERAL2|)
            (scan-string-literal2 string start))
           (t (alexandria:if-let
                  ((scanner (typecase token

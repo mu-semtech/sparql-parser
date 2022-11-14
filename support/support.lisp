@@ -71,7 +71,7 @@
 
 (defun read-bnfsexp-from-file (path)
   "Reads a bnf sxp file file frrom PATH."
-  (let ((*package* (find-package :sparql-bnf))
+  (let ((*package* (find-package :ebnf))
         (*readtable* (let ((rt (copy-readtable)))
                        (set-dispatch-macro-character
                         #\# #\t

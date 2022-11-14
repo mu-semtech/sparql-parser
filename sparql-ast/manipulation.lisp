@@ -15,7 +15,7 @@
     (setf (sparql-parser:match-submatches match)
           (delete-if (lambda (submatch)
                        (and (sparql-parser:match-p submatch)
-                            (eq 'sparql-bnf::|DatasetClause|
+                            (eq 'ebnf::|DatasetClause|
                                 (sparql-parser:match-term submatch))))
                      (sparql-parser:match-submatches match)))
     (mapcar #'remove-dataset-clauses (sparql-parser:match-submatches match)))
@@ -24,10 +24,10 @@
 (defun remove-graph-graph-patterns (match)
   "Converts QuadsNotTriples into TriplesTemplate."
   (when (and (sparql-parser:match-p match))
-    (when (eq (sparql-parser:match-term match) 'sparql-bnf::|GraphGraphPattern|)
+    (when (eq (sparql-parser:match-term match) 'ebnf::|GraphGraphPattern|)
      ;; GraphGraphPattern ::= 'GRAPH' VarOrIri GroupGraphPattern
      ;; GroupOrUnionGraphPatterrn ::= GroupGraphPattern ( 'UNION' GroupGraphPattern )*
-      (setf (sparql-parser:match-term match) 'sparql-bnf::|GroupOrUnionGraphPattern|)
+      (setf (sparql-parser:match-term match) 'ebnf::|GroupOrUnionGraphPattern|)
       (setf (sparql-parser:match-submatches match)
             (cddr (sparql-parser:match-submatches match))))
     (mapcar #'remove-graph-graph-patterns (sparql-parser:match-submatches match)))
@@ -42,26 +42,26 @@
                         ;;                                     (|SourceSelector|
                         ;;                                      (|iri| ,(iriref graph))))))
                 (sparql-parser::make-match
-                 :term 'sparql-bnf::|DatasetClause|
+                 :term 'ebnf::|DatasetClause|
                  :submatches (list (sparql-parser::make-match
                                     :term "FROM"
                                     :submatches (list (sparql-parser::make-scanned-token :start 0 :end 0 :token "FROM")))
                                    (sparql-parser::make-match
-                                    :term 'sparql-bnf::|DefaultGraphClause|
+                                    :term 'ebnf::|DefaultGraphClause|
                                     :submatches (list (sparql-parser::make-match
-                                                       :term 'sparql-bnf::|SourceSelector|
+                                                       :term 'ebnf::|SourceSelector|
                                                        :submatches (list (sparql-parser::make-match
-                                                                          :term 'sparql-bnf::|iri|
+                                                                          :term 'ebnf::|iri|
                                                                           :submatches (list (sparql-parser::make-match
-                                                                                             :term 'sparql-bnf::|IRIREF|
+                                                                                             :term 'ebnf::|IRIREF|
                                                                                              :submatches
                                                                                              (list (sparql-parser::make-scanned-token
                                                                                                     :start 0 :end 0
                                                                                                     :string graph-string
-                                                                                                    :token 'sparql-bnf::|IRIREF|))))))))))))))
+                                                                                                    :token 'ebnf::|IRIREF|))))))))))))))
     (labels ((traverse (match)
                (when (sparql-parser:match-p match)
-                 (when (eq (sparql-parser:match-term match) 'sparql-bnf::|SelectQuery|)
+                 (when (eq (sparql-parser:match-term match) 'ebnf::|SelectQuery|)
                    (update-submatches (match submatches)
                      (destructuring-bind (select-clause &rest other-clauses)
                          submatches
