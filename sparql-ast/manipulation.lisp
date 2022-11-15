@@ -1,5 +1,9 @@
 (in-package #:sparql-manipulation)
 
+;;;; Manipulation primitives
+;;;;
+;;;; Easier ways to manipulate matches
+
 (defun mk-match (content)
   "Constructs a match object from the abbreviated match specification."
   (destructuring-bind (term &rest submatches)
@@ -33,17 +37,41 @@
                (let ((,submatches-var (sparql-parser:match-submatches ,match-var)))
                  ,@body))))))
 
+(defun map-matches* (match functor)
+  "Maps over each submatch of MATCH with FUNCTOR, replacing it with the
+list of matches yielded by the function."
+  (setf (sparql-parser:match-submatches match)
+        (loop for submatch in (sparql-parser:match-submatches match)
+              if (sparql-parser:match-p submatch)
+                append (prog1 (funcall functor submatch)
+                         (map-matches* submatch functor))
+              else
+                collect submatch))
+  match)
+
+(defmacro map-matches (match (var) &body body)
+  "Macro variant of MAP-MATCHES*."
+  ;; This variant may allow for further optimizations down the line.
+  `(map-matches* ,match (lambda (,var) ,@body)))
+
+(defun remove-clause (match term)
+  "Removes any match with MATCH-TERM TERM from MATCH."
+  ;; Moving this into a separate function we give ourselves the leeway
+  ;; to optimize later on.  An obvious optimization is to detect where
+  ;; the clause may exist and home in on it.
+  (map-matches match (match)
+    (unless (eq term (sparql-parser:match-term match))
+      (list match))))
+
+
+;;;; High level manipulations
+;;;;
+;;;; These are the manipulations we may ask on the match as a whole as a
+;;;; logical unit.
+
 (defun remove-dataset-clauses (match)
   "Removes the DatasetClause statements from MATCH, destructively updating it."
-  (when (sparql-parser:match-p match)
-    (setf (sparql-parser:match-submatches match)
-          (delete-if (lambda (submatch)
-                       (and (sparql-parser:match-p submatch)
-                            (eq 'ebnf::|DatasetClause|
-                                (sparql-parser:match-term submatch))))
-                     (sparql-parser:match-submatches match)))
-    (mapcar #'remove-dataset-clauses (sparql-parser:match-submatches match)))
-  match)
+  (remove-clause match 'ebnf::|DatasetClause|))
 
 (defun remove-graph-graph-patterns (match)
   "Converts QuadsNotTriples into TriplesTemplate."
