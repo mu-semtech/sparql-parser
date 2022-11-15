@@ -5,6 +5,14 @@
 ;;;; This package contains symbols yielded when reading the EBNF
 ;;;; s-expression syntax.  Symbols are interned in this package.
 
+(defstruct rule
+  (name nil :type symbol)
+  (type nil :type (member rule terminal))
+  (first nil :type list)
+  (follow nil :type list)
+  (expansion nil :type list)
+  (index nil :type (or null fixnum)))
+
 (defun read-bnfsexp-from-file (path)
   "Reads a bnf sxp file file frrom PATH."
   (let ((*package* (find-package :ebnf))
@@ -32,18 +40,20 @@
                    (let ((first (or (getf mapping (first tree))
                                     (first tree))))
                      `(,first ,@(mapcar #'map-tree (rest tree))))
-                   tree)))
-      (mapcar #'map-tree
+                   tree))
+             (as-ebnf-rule (rule)
+               (make-rule :type (first rule)
+                          :name (second rule)
+                          :first (rule-values-for rule 'first)
+                          :follow (rule-values-for rule 'follow)
+                          :expansion   (find-if (lambda (name) (find name '(seq alt opt plus star)))
+                                                rule
+                                                :key (lambda (x) (and (consp x) (car x))))
+                          :index (handler-case (parse-integer (third rule))
+                                   (error nil)))))
+      (mapcar (alexandria:compose #'as-ebnf-rule #'map-tree)
               (with-open-file (input path :direction :input)
                 (read input))))))
-
-(defun rule-name (rule)
-  "Name of the EBNF rule."
-  (second rule))
-
-(defun rule-type (rule)
-  "Type of the ebnf rule."
-  (first rule))
 
 (defun rule-terminal-p (rule)
   "Returns truethy iff the rule is a terminal specification."
@@ -62,21 +72,3 @@
                                (rest props))
                        t)))
   (values nil nil))
-
-(defun rule-first (rule)
-  "Get first set of RULE."
-  (rule-values-for rule 'first))
-
-(defun rule-follow (rule)
-  "Get first set of RULE."
-  (rule-values-for rule 'follow))
-
-(defun rule-expansion (rule)
-  "Returns the rule expansion for RULE."
-  (find-if (lambda (name) (find name '(seq alt opt plus star)))
-           rule
-           :key (lambda (x) (and (consp x) (car x)))))
-
-(defun rule-index (rule)
-  "Yields a number indicating the index for the EBNF rule."
-  (parse-integer (third rule)))
