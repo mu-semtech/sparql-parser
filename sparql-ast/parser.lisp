@@ -24,14 +24,24 @@
   (string nil :type (or symbol string))  ; optional known string representation
   (token (error "Must supply matched token") :type (or symbol string)))
 
+(defun terminal-p-scanner (thing)
+  (loop for pos from 0 below (length thing)
+        for char = (elt thing pos)
+        unless (support:match-tree-search (char)
+                 (#\A . #\Z)
+                 (#\0 . #\9)
+                 (#\_ . #\_))
+          do (return-from terminal-p-scanner nil))
+  t)
+
 (defun terminalp (thing)
   "Returns truethy iff symbol represents a terminal.
 
 We accept strings and uppercase symbols as terminals."
-  (and
-   (or (stringp thing)
-       (cl-ppcre:scan "^[A-Z_0-9]+$" (symbol-name thing)))
-   t))
+  (typecase thing
+    (string t)
+    (symbol (terminal-p-scanner (symbol-name thing)))
+    (t nil)))
 
 ;;;;;;;;;;;;;;
 ;;;; Constants
