@@ -12,7 +12,8 @@
 (defpackage :ebnf
   (:use :common-lisp)
   (:export #:rule #:terminal #:first #:follow #:seq #:alt #:|_eof| #:|_eps| #:|_empty| #:opt #:plus #:star
-           #:read-bnfsexp-from-file))
+           #:read-bnfsexp-from-file
+           #:rule-name #:read-bnfsexp-from-file #:rule-type #:rule-terminal-p #:rule-values-for #:rule-first #:rule-follow #:rule-expansion #:rule-index))
 
 (defpackage :sparql-terminals
   (:use :common-lisp)

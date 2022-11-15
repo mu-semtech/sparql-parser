@@ -50,68 +50,26 @@ We accept strings and uppercase symbols as terminals."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Construction of transition table
 
-(defun ebnf-rule-name (rule)
-  "Name of the EBNF rule."
-  (second rule))
-
-(defun ebnf-rule-type (rule)
-  "Type of the ebnf rule."
-  (first rule))
-
-(defun ebnf-rule-terminal-p (rule)
-  "Returns truethy iff the rule is a terminal specification."
-  (eq (ebnf-rule-type rule) 'ebnf:terminal))
-
-(defun ebnf-rule-values-for (rule key)
-  "Gets values for KEY in RULE."
-  (loop for props in (rest rule)
-        when (and (listp props)
-                  (eq (first props) key))
-          do (return-from ebnf-rule-values-for
-               (values (mapcar (lambda (thing)
-                                 (if (typep thing 'string)
-                                     (coerce thing 'base-string)
-                                     thing))
-                               (rest props))
-                       t)))
-  (values nil nil))
-
-(defun ebnf-rule-first (rule)
-  "Get first set of RULE."
-  (ebnf-rule-values-for rule 'ebnf:first))
-
-(defun ebnf-rule-follow (rule)
-  "Get first set of RULE."
-  (ebnf-rule-values-for rule 'ebnf:follow))
-
-(defun ebnf-rule-expansion (rule)
-  "Returns the rule expansion for RULE."
-  (multiple-value-bind (seq seqp)
-      (ebnf-rule-values-for rule 'ebnf:seq)
-    (if seqp
-        (cons 'ebnf:seq seq)
-        (cons 'ebnf:alt (ebnf-rule-values-for rule 'ebnf:alt)))))
-
 (defun ebnf-rule-search (rules key)
   "Searches a list of BNF rules for the given rule name."
-  (find key rules :key #'second))
+  (find key rules :key #'ebnf:rule-name))
 
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
   (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
     (loop
       for rule in parsed-bnf
-      for rule-name = (ebnf-rule-name rule)
-      for rule-expansion = (ebnf-rule-expansion rule)
+      for rule-name = (ebnf:rule-name rule)
+      for rule-expansion = (ebnf:rule-expansion rule)
       for rule-expansion-type = (first rule-expansion)
       for rule-expansion-options = (rest rule-expansion)
-      for rule-first-all = (ebnf-rule-first rule)
+      for rule-first-all = (ebnf:rule-first rule)
       for rule-first-includes-empty-p = (some (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
       for rule-first-options = (remove-if (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
-      for rule-follow = (ebnf-rule-follow rule)
-      unless (ebnf-rule-terminal-p rule)
+      for rule-follow = (ebnf:rule-follow rule)
+      unless (ebnf:rule-terminal-p rule)
         append
-        (list (ebnf-rule-name rule)
+        (list (ebnf:rule-name rule)
               (cond ((eq rule-expansion-type 'ebnf:seq)
                      ;; sequence
                      (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
@@ -138,8 +96,8 @@ We accept strings and uppercase symbols as terminals."
                                  (t ;; a subselection
                                   (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
                                          (child-rule (make-rule :name rule-name
-                                                                :expansion (list (ebnf-rule-name ebnf-child-rule)))))
-                                    (loop for key in (ebnf-rule-first ebnf-child-rule)
+                                                                :expansion (list (ebnf:rule-name ebnf-child-rule)))))
+                                    (loop for key in (ebnf:rule-first ebnf-child-rule)
                                           unless (eq key 'ebnf:|_eps|)
                                           append (list key child-rule)))))))
                     (t (error "Found rule expansion which is neither sequence nor alternative.")))))))

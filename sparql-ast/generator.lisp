@@ -9,33 +9,21 @@
 ;;;; consistently select "the right" element by traversing the EBNF
 ;;;; together with the AST.
 
-(defun ebnf-rule-name (rule)
-  "Returns the name of the ebnf-rule."
-  (second rule))
-
-(defun ebnf-rule-expansion (rule)
-  "Expansion for RULE."
-  (fourth rule))
-
-(defun ebnf-rule-index (rule)
-  "Yields a number indicating the index for the EBNF rule."
-  (parse-integer (third rule)))
-
 (defparameter *sparql-ebnf* (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.ebnfsxp"))
 
 (defparameter *sparql-ebnf-hash*
-  (alexandria:alist-hash-table (mapcar (lambda (rule) (cons (ebnf-rule-name rule) rule)) *sparql-ebnf*)))
+  (alexandria:alist-hash-table (mapcar (lambda (rule) (cons (ebnf:rule-name rule) rule)) *sparql-ebnf*)))
 
 (defun find-rule (symbol)
   "Finds rule with rule-name being SYMBOL."
-  ;; (find symbol *sparql-ebnf* :key #'ebnf-rule-name)
+  ;; (find symbol *sparql-ebnf* :key #'ebnf:rule-name)
   (gethash symbol *sparql-ebnf-hash*))
 
 (defun is-valid (match &key (rule (find-rule (sparql-parser:match-term match))) (deep-p t))
   "Verifies MATCH using EBNF.
 
 If CURRENT-RULE is given, this as assumed to be the starting point,
-otherwise MATCH-TERM is used through EBNF-RULE-NAME.
+otherwise MATCH-TERM is used through EBNF:RULE-NAME.
 
 An error is thrown when the match is not valid.  The error specifies
 which element was expected to be valid but was not."
@@ -142,7 +130,7 @@ which element was expected to be valid but was not."
             (and (typep submatch 'sparql-parser:scanned-token)
                  (equal (sparql-parser:match-term match)
                         (sparql-parser:scanned-token-token submatch))))
-          (and (pick-tokens (ebnf-rule-expansion rule))
+          (and (pick-tokens (ebnf:rule-expansion rule))
                (or (consumed-all-tokens-p) (error "Did not consume all tokens in:~% ~A~%Leftover:~% ~A~%Rule: ~A" match available-tokens rule))
                (or (not deep-p)
                    (every #'submatch-is-valid (sparql-parser:match-submatches match))))))))
