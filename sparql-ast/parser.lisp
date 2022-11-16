@@ -66,51 +66,53 @@ We accept strings and uppercase symbols as terminals."
 
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
-  (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
-    (loop
-      for rule in parsed-bnf
-      for rule-name = (ebnf:rule-name rule)
-      for rule-expansion = (ebnf:rule-expansion rule)
-      for rule-expansion-type = (first rule-expansion)
-      for rule-expansion-options = (rest rule-expansion)
-      for rule-first-all = (ebnf:rule-first rule)
-      for rule-first-includes-empty-p = (some (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
-      for rule-first-options = (remove-if (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
-      for rule-follow = (ebnf:rule-follow rule)
-      unless (ebnf:rule-terminal-p rule)
-        append
-        (list (ebnf:rule-name rule)
-              (cond ((eq rule-expansion-type 'ebnf:seq)
-                     ;; sequence
-                     (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
-                            (predicted (loop for first in rule-first-options
-                                             append (list first rule)))
-                            (empty-follow (when rule-first-includes-empty-p
-                                            ;; follow will contain _empty deeper down the stack
-                                            (loop for follow in rule-follow
-                                                  append (list follow rule)))))
-                       (concatenate 'list predicted empty-follow)))
-                    ((eq rule-expansion-type 'ebnf:alt)
-                     ;; alternatives
-                     ;;
-                     ;; although this will result in duplicate rules,
-                     ;; we are generating rules on the fly here.
-                     (loop for option in rule-expansion-options
-                           append
-                           (cond ((eq option 'ebnf:|_empty|)
-                                  (loop for key in (cons 'ebnf:|_eof| rule-follow)
-                                        append (list key empty-rule)))
-                                 ((terminalp option)
-                                  (list option (make-rule :name rule-name
-                                                          :expansion (list option))))
-                                 (t ;; a subselection
-                                  (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
-                                         (child-rule (make-rule :name rule-name
-                                                                :expansion (list (ebnf:rule-name ebnf-child-rule)))))
-                                    (loop for key in (ebnf:rule-first ebnf-child-rule)
-                                          unless (eq key 'ebnf:|_eps|)
-                                          append (list key child-rule)))))))
-                    (t (error "Found rule expansion which is neither sequence nor alternative.")))))))
+  (flet ((mk-key (key)
+           (cons key (sparql-terminals:scanner-for key))))
+    (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
+      (loop
+        for rule in parsed-bnf
+        for rule-name = (ebnf:rule-name rule)
+        for rule-expansion = (ebnf:rule-expansion rule)
+        for rule-expansion-type = (first rule-expansion)
+        for rule-expansion-options = (rest rule-expansion)
+        for rule-first-all = (ebnf:rule-first rule)
+        for rule-first-includes-empty-p = (some (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
+        for rule-first-options = (remove-if (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
+        for rule-follow = (ebnf:rule-follow rule)
+        unless (ebnf:rule-terminal-p rule)
+          append
+          (list (ebnf:rule-name rule)
+                (cond ((eq rule-expansion-type 'ebnf:seq)
+                       ;; sequence
+                       (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
+                              (predicted (loop for first in rule-first-options
+                                               append (list (mk-key first) rule)))
+                              (empty-follow (when rule-first-includes-empty-p
+                                              ;; follow will contain _empty deeper down the stack
+                                              (loop for follow in rule-follow
+                                                    append (list (mk-key follow) rule)))))
+                         (concatenate 'list predicted empty-follow)))
+                      ((eq rule-expansion-type 'ebnf:alt)
+                       ;; alternatives
+                       ;;
+                       ;; although this will result in duplicate rules,
+                       ;; we are generating rules on the fly here.
+                       (loop for option in rule-expansion-options
+                             append
+                             (cond ((eq option 'ebnf:|_empty|)
+                                    (loop for key in (cons 'ebnf:|_eof| rule-follow)
+                                          append (list (mk-key key) empty-rule)))
+                                   ((terminalp option)
+                                    (list (mk-key option) (make-rule :name rule-name
+                                                                     :expansion (list option))))
+                                   (t ;; a subselection
+                                    (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
+                                           (child-rule (make-rule :name rule-name
+                                                                  :expansion (list (ebnf:rule-name ebnf-child-rule)))))
+                                      (loop for key in (ebnf:rule-first ebnf-child-rule)
+                                            unless (eq key 'ebnf:|_eps|)
+                                              append (list (mk-key key) child-rule)))))))
+                      (t (error "Found rule expansion which is neither sequence nor alternative."))))))))
 
 (defparameter *transition-table*
   (construct-transition-table-from-parsed-bnf (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
@@ -196,8 +198,8 @@ is returned."
               end)
             start))))
 
-(defun scan-token (tokens start string)
-  "Searches best matching token of TOKENS at START in STRING.
+(defun scan-token (token-specifiers start string)
+  "Searches best matching token of TOKEN-SPECIFIERS at START in STRING.
 
 A scanned token is returned if one could be found, otherwise nil.
 
@@ -210,21 +212,21 @@ the string, rather nil is returned."
         ((solution
           (alexandria:extremum
            (loop
-             for token in tokens
+             for (token . scanner) in token-specifiers
              ;; for scanner = (get-token-parser token)
              ;; for end-position = (second (multiple-value-list
              ;;                             (cl-ppcre:scan scanner string :start start)))
-             for end-position = (sparql-terminals:scan token start string)
+             for end-position = (funcall scanner string start)
              if end-position collect (cons token end-position))
            #'> :key #'cdr)))
       (make-scanned-token :start start
                           :end (cdr solution)
                           :token (car solution)))))
 
-(defun calculate-next-token (tokens start string)
+(defun calculate-next-token (token-specifiers start string)
   "Calculates the next token and position assuming TOKENS as options START
 as the starting point in STRING."
-  (let* ((token (scan-token tokens start string)))
+  (let* ((token (scan-token token-specifiers start string)))
     (cond (token
            (values token
                    (scan-whitespace (scanned-token-end token) string)))
@@ -267,7 +269,7 @@ as the starting point in STRING."
       (let* ((stack-top (match-term (car *stack*)))
              (next-token-list
               (if (terminalp stack-top)
-                  (list stack-top)
+                  (list (cons stack-top (sparql-terminals:scanner-for stack-top)))
                   (let ((transition-descriptions (getf *transition-table* stack-top)))
                     (loop for (term . rest) on transition-descriptions
                             by #'cddr
@@ -285,7 +287,7 @@ as the starting point in STRING."
 (defun get-stack-transition (table thing)
   "Like getf, but understands strings too"
   (loop for (label result) on table by #'cddr
-        if (equal thing label)
+        if (equal thing (car label))
           return result))
 
 (defun parse-step ()
