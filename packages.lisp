@@ -17,7 +17,7 @@
 
 (defpackage :sparql-terminals
   (:use :common-lisp)
-  (:export #:scan #:scan-whitespace)
+  (:export #:scan #:scanner-for #:scan-whitespace)
   (:import-from :support :hex-char))
 
 (defpackage #:sparql-parser
