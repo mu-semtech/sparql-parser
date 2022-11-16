@@ -12,6 +12,10 @@
   (rule nil :type (or null rule))        ; nil when rule is not known yet
   (submatches nil :type list))
 
+(defstruct sparql-ast
+  (top-node nil :type (or null match))
+  (string (error "Must supply base-string when creating sparql-match") :type base-string))
+
 (defstruct scanned-token
   "Represents a scanned token."
   (start (error "Must supply token start") :type integer)
@@ -362,7 +366,9 @@ as the starting point in STRING."
     (setf *match-tree* (ebnf-simplify *match-tree*)))
   (when print-solution
     (format t "~&===RESULT===~%")
-    (print-match *match-tree* :rulep nil)))
+    (print-match *match-tree* :rulep nil))
+  (make-sparql-ast :top-node *match-tree*
+                   :string *scanning-string*))
 
 (defun parse-sparql-string (string &rest args &key (max-steps 10000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
   "Parses STRING as a SPARQL string either a QueryUnit or an UpdateUnit."
@@ -372,8 +378,7 @@ as the starting point in STRING."
         (apply #'sparql-parser::parse-string string args))
     (simple-error ()
       (let ((sparql-parser::*start-symbol* 'ebnf::|UpdateUnit|))
-        (apply #'sparql-parser::parse-string string args))))
-  *match-tree*)
+        (apply #'sparql-parser::parse-string string args)))))
 
 (defmacro with-parser-setup (&body body)
   "Executes  body within the parser setup scope."

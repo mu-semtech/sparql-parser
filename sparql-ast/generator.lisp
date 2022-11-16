@@ -19,7 +19,7 @@
   ;; (find symbol *sparql-ebnf* :key #'ebnf:rule-name)
   (gethash symbol *sparql-ebnf-hash*))
 
-(defun is-valid (match &key (rule (find-rule (sparql-parser:match-term match))) (deep-p t))
+(defun is-valid-match (match &key (rule (find-rule (sparql-parser:match-term match))) (deep-p t))
   "Verifies MATCH using EBNF.
 
 If CURRENT-RULE is given, this as assumed to be the starting point,
@@ -123,7 +123,7 @@ which element was expected to be valid but was not."
                     (no-solution-found)))))
              (submatch-is-valid (submatch)
                (if (symbolp (sparql-parser:match-term submatch))
-                   (is-valid submatch)
+                   (is-valid-match submatch)
                    t)))
       (if (sparql-parser:terminalp (sparql-parser:match-term match))
           (let ((submatch (first (sparql-parser:match-submatches match))))
@@ -135,7 +135,12 @@ which element was expected to be valid but was not."
                (or (not deep-p)
                    (every #'submatch-is-valid (sparql-parser:match-submatches match))))))))
 
-(defun write-valid (match)
+(defun is-valid
+    (sparql-ast
+     &key (rule (find-rule (sparql-parser:match-term (sparql-parser:sparql-ast-top-node sparql-ast)))))
+  (is-valid-match (sparql-parser:sparql-ast-top-node sparql-ast) :rule rule))
+
+(defun write-valid (sparql-ast)
   "Writes out MATCH assuming it was valid."
   ;; We would like to have a basic round-trip start->finish for
   ;; rendering the contents.  This is an effort for doing just that,
@@ -156,4 +161,4 @@ which element was expected to be valid but was not."
                    (t
                     (loop for sub in (sparql-parser:match-submatches match)
                           append (submatch-strings sub))))))
-    (format nil "~{~A~,^ ~}" (submatch-strings match))))
+    (format nil "~{~A~,^ ~}" (submatch-strings (sparql-parser:sparql-ast-top-node sparql-ast)))))

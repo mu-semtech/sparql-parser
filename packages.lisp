@@ -22,7 +22,7 @@
 
 (defpackage #:sparql-parser
   (:use :common-lisp)
-  (:export #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:terminalp)
+  (:export #:sparql-ast #:sparql-ast-top-node #:sparql-ast-string #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:terminalp)
   (:export #:parse-sparql-string #:with-parser-setup))
 
 (defpackage #:sparql-generator
@@ -36,11 +36,11 @@
 ;; Server and client
 (defpackage #:connection-globals
   (:use :common-lisp)
-  (:export #:mu-call-id #:mu-session-id #:mu-auth-allowed-groups #:with-call-context))
+  (:export #:mu-call-id #:mu-session-id #:mu-auth-allowed-groups #:mu-call-scope #:with-call-context))
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)
   (:export #:query))
 
 (defpackage #:server
-  (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client #:sparql-manipulation))
+  (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client))

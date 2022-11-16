@@ -54,14 +54,15 @@ list of matches yielded by the function."
   ;; This variant may allow for further optimizations down the line.
   `(map-matches* ,match (lambda (,var) ,@body)))
 
-(defun remove-clause (match term)
+(defun remove-clause (sparql-ast term)
   "Removes any match with MATCH-TERM TERM from MATCH."
   ;; Moving this into a separate function we give ourselves the leeway
   ;; to optimize later on.  An obvious optimization is to detect where
   ;; the clause may exist and home in on it.
-  (map-matches match (match)
-    (unless (eq term (sparql-parser:match-term match))
-      (list match))))
+  (prog1 sparql-ast
+    (map-matches (sparql-parser:sparql-ast-top-node sparql-ast) (match)
+      (unless (eq term (sparql-parser:match-term match))
+        (list match)))))
 
 
 ;;;; High level manipulations
@@ -69,23 +70,25 @@ list of matches yielded by the function."
 ;;;; These are the manipulations we may ask on the match as a whole as a
 ;;;; logical unit.
 
-(defun remove-dataset-clauses (match)
+(defun remove-dataset-clauses (sparql-ast)
   "Removes the DatasetClause statements from MATCH, destructively updating it."
-  (remove-clause match 'ebnf::|DatasetClause|))
+  (remove-clause sparql-ast 'ebnf::|DatasetClause|))
 
-(defun remove-graph-graph-patterns (match)
+(defun remove-graph-graph-patterns (sparql-ast)
   "Converts QuadsNotTriples into TriplesTemplate."
-  (when (and (sparql-parser:match-p match))
-    (when (eq (sparql-parser:match-term match) 'ebnf::|GraphGraphPattern|)
-     ;; GraphGraphPattern ::= 'GRAPH' VarOrIri GroupGraphPattern
-     ;; GroupOrUnionGraphPatterrn ::= GroupGraphPattern ( 'UNION' GroupGraphPattern )*
-      (setf (sparql-parser:match-term match) 'ebnf::|GroupOrUnionGraphPattern|)
-      (setf (sparql-parser:match-submatches match)
-            (cddr (sparql-parser:match-submatches match))))
-    (mapcar #'remove-graph-graph-patterns (sparql-parser:match-submatches match)))
-  match)
+  (labels ((traverse (match)
+             (when (and (sparql-parser:match-p match))
+               (when (eq (sparql-parser:match-term match) 'ebnf::|GraphGraphPattern|)
+                 ;; GraphGraphPattern ::= 'GRAPH' VarOrIri GroupGraphPattern
+                 ;; GroupOrUnionGraphPatterrn ::= GroupGraphPattern ( 'UNION' GroupGraphPattern )*
+                 (setf (sparql-parser:match-term match) 'ebnf::|GroupOrUnionGraphPattern|)
+                 (setf (sparql-parser:match-submatches match)
+                       (cddr (sparql-parser:match-submatches match))))
+               (mapcar #'traverse (sparql-parser:match-submatches match)))))
+    (traverse (sparql-parser:sparql-ast-top-node sparql-ast)))
+  sparql-ast)
 
-(defun add-from-graphs (match graphs)
+(defun add-from-graphs (sparql-ast graphs)
   "Adds a series of graphs as the FROM graphs for MATCH."
   (let ((dataset-clauses
           (loop for graph-string in graphs
@@ -101,5 +104,5 @@ list of matches yielded by the function."
                          submatches
                        `(,select-clause ,@dataset-clauses ,@other-clauses))))
                  (mapcar #'traverse (sparql-parser:match-submatches match)))))
-      (traverse match)
-      match)))
+      (traverse (sparql-parser:sparql-ast-top-node sparql-ast))
+      sparql-ast)))
