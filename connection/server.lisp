@@ -31,7 +31,8 @@
   (let ((headers (getf env :headers)))
     (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
                         :mu-session-id (gethash "mu-session-id" headers)
-                        :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers))
+                        :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
+                        :mu-call-scope (gethash "mu-call-scope" headers))
       (with-parser-setup
         (let ((response
                 (client::query

@@ -12,11 +12,15 @@
   "Call id in string form.")
 (defparameter *mu-session-id* nil
   "Session id in string form.")
+(defparameter *mu-call-scope* nil
+  "Call scope for the current request.  This is nil for microservices not
+providing a call scope.")
 
-(defmacro with-call-context ((&key mu-call-id mu-session-id mu-auth-allowed-groups) &body body)
+(defmacro with-call-context ((&key mu-call-id mu-session-id mu-auth-allowed-groups mu-call-scope) &body body)
   `(let ((*mu-call-id* ,mu-call-id)
          (*mu-session-id* ,mu-session-id)
-         (*mu-auth-allowed-groups* ,mu-auth-allowed-groups))
+         (*mu-auth-allowed-groups* ,mu-auth-allowed-groups)
+         (*mu-call-scope* ,mu-call-scope))
      ,@body))
 
 (defun mu-call-id ()
@@ -39,3 +43,10 @@
 
 (defun (setf mu-auth-allowed-groups) (value)
   (setf *mu-auth-allowed-groups* value))
+
+(defun mu-call-scope ()
+  "SETF-able mu-call-scope for the current request."
+  *mu-call-scope*)
+
+(defun (setf mu-call-scope) (value)
+  (setf *mu-call-scope* value))
