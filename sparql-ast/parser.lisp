@@ -115,7 +115,9 @@ We accept strings and uppercase symbols as terminals."
                       (t (error "Found rule expansion which is neither sequence nor alternative."))))))))
 
 (defparameter *transition-table*
-  (construct-transition-table-from-parsed-bnf (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp")))
+  (alexandria:plist-hash-table
+   (construct-transition-table-from-parsed-bnf (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp"))
+   :synchronized t))
 
 
 ;;;;;;;;;;;;;;;;;;
@@ -270,7 +272,7 @@ as the starting point in STRING."
              (next-token-list
               (if (terminalp stack-top)
                   (list (cons stack-top (sparql-terminals:scanner-for stack-top)))
-                  (let ((transition-descriptions (getf *transition-table* stack-top)))
+                  (let ((transition-descriptions (gethash stack-top *transition-table*)))
                     (loop for (term . rest) on transition-descriptions
                             by #'cddr
                           collect term)))))
@@ -313,7 +315,7 @@ as the starting point in STRING."
              (setf *current-token* nil))
            (error "Error during parsing: Token ~A does not match ~A." next-token stack-top)))
       (t
-       (alexandria:if-let ((stack-transitions (getf *transition-table* stack-top)))
+       (alexandria:if-let ((stack-transitions (gethash stack-top *transition-table*)))
          (alexandria:if-let ((rule (get-stack-transition stack-transitions next-token)))
            (let ((stack-insertion (mapcar (lambda (term) (make-match :term term))
                                           (rule-expansion rule))))
