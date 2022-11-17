@@ -6,7 +6,7 @@
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."
   :serial t
-  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador)
+  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown)
   :components ((:file "packages")
                (:file "support/support")
                (:file "support/tree-db")
@@ -16,5 +16,6 @@
                (:file "sparql-ast/generator")
                (:file "sparql-ast/manipulation")
                (:file "connection/globals")
+               (:file "acl/acl")
                (:file "connection/server")
                (:file "connection/client")))

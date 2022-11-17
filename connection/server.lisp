@@ -1,5 +1,10 @@
 (in-package #:server)
 
+(defparameter *request-counter-lock*
+  (bt:make-lock "REQUEST-COUNTER"))
+
+(defparameter *request-count* 0)
+
 (defun extract-query-string (env content-type)
   "Extracts query string from the request when content-type is given."
   (let ((arr (make-array (getf env :content-length) :element-type 'flex:octet)))
@@ -12,12 +17,9 @@
                                                   (assoc "update" params :test #'equal))))
                     'base-string))))))
 
-(defun manipulate-query (match)
+(defun manipulate-query (ast)
   "Manipulates the requested query for current access rights."
-  (-> match
-    (remove-dataset-clauses)
-    (remove-graph-graph-patterns)
-    (add-from-graphs (list "<http://mu.semte.ch/graphs/public>"))))
+  (acl:apply-access-rights ast))
 
 (defun generate-query (match)
   "Generates the query string from the updated match."
@@ -28,6 +30,8 @@
 (defun acceptor (env)
   ;; (declare (ignore env))
   ;; '(200 (:content-type "application/sparql-results+json") ("HELLO HELLO HELLO"))
+  (bt:with-lock-held (*request-counter-lock*)
+    (incf *request-count*))
   (let ((headers (getf env :headers)))
     (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
                         :mu-session-id (gethash "mu-session-id" headers)

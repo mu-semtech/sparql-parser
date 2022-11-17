@@ -38,9 +38,18 @@
   (:use :common-lisp)
   (:export #:mu-call-id #:mu-session-id #:mu-auth-allowed-groups #:mu-call-scope #:with-call-context))
 
+(defpackage #:acl-config
+  (:use :common-lisp))
+
+(defpackage #:acl
+  (:use :common-lisp #:sparql-manipulation #:connection-globals)
+  (:import-from #:support #:->)
+  (:export #:apply-access-rights))
+
 (defpackage #:client
   (:use :common-lisp #:connection-globals)
   (:export #:query))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client))
+
