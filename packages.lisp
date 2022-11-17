@@ -31,7 +31,7 @@
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
-  (:export #:remove-dataset-clauses #:remove-graph-graph-patterns #:add-from-graphs))
+  (:export #:remove-dataset-clauses #:remove-graph-graph-patterns #:add-from-graphs #:replace-iriref))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -48,7 +48,7 @@
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)
-  (:export #:query))
+  (:export #:query #:bindings))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client))

@@ -1,8 +1,30 @@
 (in-package #:acl)
 
+(defparameter *access-specifications* nil
+  "All known ACCESS specifications.")
+
+(defparameter *graphs* nil
+  "All known GRAPH-SPECIFICATION instances.")
+
+(defparameter *rights* nil
+  "All known GRANT instances connecting ACCESS-SPECIFICATION to GRAPH.")
+
 (defclass access ()
-  ()
+  ((name :initform (error "Must supply NAME when defining access.")
+         :initarg :name
+         :reader name))
   (:documentation "Specifies how a thing can be accessed."))
+
+(defgeneric access-string-name (access)
+  (:documentation "String variant of the name of the access right.")
+  (:method ((access access))
+    (string-downcase (symbol-name (name access)))))
+
+(defun find-access-by-name (name)
+  "Find access by name."
+  (find name *access-specifications*
+        :test #'string=
+        :key #'access-string-name))
 
 (defclass access-by-query (access)
   ((query :initform (error "Query is required to be specified for access-by-query")
@@ -16,34 +38,58 @@
 (defmethod initialize-instance :after ((access access-by-query) &key &allow-other-keys)
   (sparql-parser:with-parser-setup
     (setf (slot-value access 'query)
-          (sparql-parser:parse-sparql-string (query access)))))
+          (sparql-parser:parse-sparql-string (coerce (query access) 'base-string)))))
 
 (defclass always-accessible (access)
   ()
   (:documentation "An entity which is always accessible.  Used for public resources."))
 
-(defgeneric is-accessible (access)
+(defstruct access-token
+  (access (error "Must supply ACCESS when creating ACCESS-TOKEN") :type access)
+  (parameters nil :type list))
+
+(defgeneric calculate-access-tokens (access &key mu-session-id)
   (:documentation "Yields truethy iff the given access is accessible within the current access context.")
-  (:method ((access always-accessible))
-    (declare (ignore access))
-    t)
-  (:method ((access access-by-query))
-    (when (mu-session-id) ; ignore when no mu-session-id supplied
-      (let ((query (sparql-manipulation:replace-iriref (query access)
-                                                       :from "SESSION_ID"
-                                                       :to mu-session-id)))
-        ))
-    (error "Implementation of is-accessible has not been implemented for
-access-by-query yet.")))
+  (:method ((access always-accessible) &key mu-session-id)
+    (declare (ignore mu-session-id))
+    (list (make-access-token :access access)))
+  (:method ((access access-by-query) &key mu-session-id)
+    (when mu-session-id ; ignore when no mu-session-id supplied
+      (sparql-parser:with-sparql-ast (query access)
+        (let ((query (replace-iriref (query access) :from "SESSION_ID" :to mu-session-id)))
+          (unless (sparql-generator:is-valid query)
+            (error "Generated invalid access query"))
+          (loop for binding
+                  in (-> query
+                       (sparql-generator:write-valid)
+                       (client:query)
+                       (client:bindings))
+                collect
+                (make-access-token
+                 :access access
+                 :parameters (mapcar (lambda (var) (jsown:filter binding var "value"))
+                                     (variables access)))))))))
 
-(defstruct graph
-  (graph "http://mu.semte.ch/application")
+(defun access-token-jsown (token)
+  "Yields a jsown representation of the access token."
+  (jsown:new-js
+    ("name" (name (access-token-access token)))
+    ("variables" (access-token-parameters token))))
+
+(defun jsown-access-token (jsown)
+  "Yields an ACCESS-TOKEN from the JSOWN specification."
+  (make-access-token :access (find-access-by-name (jsown:val jsown "name"))
+                     :parameters (jsown:val jsown "variables")))
+
+(defstruct graph-specification
+  (name (error "Must supply name to graph name") :type symbol)
+  (base-graph (error "Must supply base graph string") :type string)
+  (constraints nil))
+
+(defstruct access-grant
   (usage (list :read))
-  (scope nil))
-
-(defstruct access-right
-  (access (error "Must supply access when creating access right") :type access)
-  (graphs (error "Must supply graphs when creating access right") :type graph))
+  (graph-spec (error "Must supply graph spec") :type symbol)
+  (access (error "Must supply which grant allows access") :type symbol))
 
 (defparameter *active-access-rights* nil
   ;; TODO: currently not used.  Not sure if this should be globally
@@ -52,12 +98,17 @@ access-by-query yet.")))
 
 (defun access-tokens-from-allowed-groups (mu-auth-allowed-groups)
   "Calculates access rights formthe mu-auth-allowed-groups string."
-  (jsown:parse mu-auth-allowed-groups))
+  (loop for group in (jsown:parse mu-auth-allowed-groups)
+        for access = (find-access-by-name (jsown:val group "name"))
+        when access
+          collect
+          (make-access-token :access access
+                             :parameters (jsown:val group "variables"))))
 
 (defun access-tokens-from-session-id (mu-session-id)
   "Calculates the access rights from the mu-session-id."
-  (declare (ignore mu-session-id))
-  (error "Calculating access rights from the mu-session-id is not yet supported."))
+  (loop for access in *access-specifications*
+        append (calculate-access-tokens access :mu-session-id mu-session-id)))
 
 (defun calculate-and-cache-access-tokens (mu-auth-allowed-groups mu-session-id)
   "Calculates the access rights based on the mu-auth-allowed-groups string or mu-session-id."
@@ -65,14 +116,8 @@ access-by-query yet.")))
       (access-tokens-from-allowed-groups mu-auth-allowed-groups)
       (let ((tokens (access-tokens-from-session-id mu-session-id)))
         (setf (mu-auth-allowed-groups)
-              (jsown:to-json tokens))
+              (mapcar #'access-token-jsown tokens))
         tokens)))
-
-(defun filter-access-rights-for-scope (rights scope)
-  "Filters the supplied set of access rights for the given scope."
-  (loop for right in rights
-        when (access-right-has-scope scope)
-          collect right))
 
 (defmacro with-access-tokens ((access-tokens-var) &body body)
   "Executes BODY with ACCESS-RIGHTS-VAR bound to access rights for current
@@ -81,10 +126,27 @@ variables."
   `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id))))
      ,@body))
 
-(defmacro with-access-rights ((access-rights-var) &body body)
-  (let ((access-tokens-sym (gensym "TOKENS")))
-    `(with-acess-tokens (,access-tokens-sym)
-       ())))
+;; (defmacro with-access-rights ((access-rights-var) &body body)
+;;   (let ((access-tokens-sym (gensym "TOKENS")))
+;;     `(with-acess-tokens (,access-tokens-sym)
+;;        ,@body)))
+
+(defun graphs-for-tokens (tokens)
+  (let* ((grant-info (loop for token in tokens
+                           for token-name = (name (access-token-access token))
+                           append (loop for right in *rights*
+                                        when (eq (access-grant-access right) token-name)
+                                          append (loop for graph-specification in *graphs*
+                                                       for granted-graph-spec-name = (access-grant-graph-spec right)
+                                                       when (eq granted-graph-spec-name
+                                                                (graph-specification-name graph-specification))
+                                                         collect (cons token graph-specification))))))
+    (loop for (token . graph-specification) in grant-info
+          collect (format nil "~A~{~A~,^/~}"
+                          (graph-specification-base-graph graph-specification)
+                          (access-token-parameters token)))
+   ;; (list "http://mu.semte.ch/graphs/public")
+    ))
 
 (defun apply-access-rights (query-ast)
   "Applies current access rights to MATCH.
@@ -98,4 +160,4 @@ MATCH may be updated in place but updated MATCH is returned."
     (-> query-ast
       (remove-dataset-clauses)
       (remove-graph-graph-patterns)
-      (add-from-graphs (list "http://mu.semte.ch/graphs/public")))))
+      (add-from-graphs (graphs-for-tokens tokens)))))

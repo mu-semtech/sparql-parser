@@ -53,7 +53,7 @@ We accept strings and uppercase symbols as terminals."
 Assumes *scanning-string* is available."
   (or (scanned-token-string scanned-token)
       (when (and *scanning-string*
-                 (< (scanned-token-end scanned-token) (length *scanning-string*)))
+                 (<= (scanned-token-end scanned-token) (length *scanning-string*)))
         (subseq *scanning-string*
                 (scanned-token-start scanned-token)
                 (scanned-token-end scanned-token)))))
@@ -184,6 +184,7 @@ those.  Allows for manipulation without destroying the original."
 
 (defmethod print-object ((ast sparql-ast) stream)
   (let ((*scanning-string* (sparql-ast-string ast)))
+    (declare (special *scanning-string*))
     (print-unreadable-object (ast stream :type "AST")
       (print-match (sparql-ast-top-node ast) :rulep nil :stream stream))))
 

@@ -1,4 +1,4 @@
-(in-package :acl-config)
+(in-package :acl)
 
 (defparameter *prefixes* nil
   "plist of prefixes with their expansion.")
@@ -15,9 +15,6 @@
 (define-prefixes
   :skos "http://www.w3.org/2004/02/skos/core#"
   :schema "http://schema.org/")
-
-(defparameter *user-groups* nil
-  "list of known user groups.")
 
 ;;;; User groups
 ;;;;
@@ -41,27 +38,89 @@
 ;;;; is triggered by the producing microservice.  Said microservice can
 ;;;; determine the scope and find out what is necessary.  
 
-(define-user-group account
-  :access (by-query :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-                            PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-                            PREFIX musession: <http://mu.semte.ch/vocabularies/session/>
-                            SELECT ?id WHERE {
-                             <SESSION_ID> ext:hasAccount/mu:uuid ?id.
-                            }"
-                    :vars ("id")))
+(setf *access-specifications*
+      (list (make-instance 'always-accessible :name 'public)
+            (make-instance 'access-by-query
+                           :name 'user
+                           :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+                                   PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+                                   SELECT ?id WHERE {
+                                     <SESSION_ID> session:account/mu:uuid ?id.
+                                   }"
+                           :vars (list "id"))))
 
-(defmacro define-graph (graph (&rest accounts)))
+;; access rights
+;;
+;; Which mu-auth-allow-groups do you have?
+;; (define-access public 'always-accessible)
+;;
+;; (define-access user 'access-by-query
+;;   :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+;;           PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;           SELECT ?id WHERE {
+;;             <SESSION_ID> session:account/mu:uuid ?id.
+;;           }"
+;;   :vars ("id"))
 
-(define-graph "http://data.toevla.org/accounts/"
-  :user-groups (list account)
-  )
+;; graphs in the store
+;;
+;; What data resides where?
+(setf *graphs*
+      (list (make-graph-specification
+             :name 'public
+             :base-graph "http://mu.semte.ch/graphs/public"
+             :constraints nil)
+            (make-graph-specification
+             :name 'user
+             :base-graph "http://mu.semte.ch/graphs/user/"
+             :constraints nil)))
+;; (define-graph application ("http://mu.semte.ch/application")
+;;   ("nfo:FileDataObject"))
+;;
+;; (define-graph private ("http://mu.semte.ch/graphs/user/")
+;;   ("foaf:Person" :predicates ("foaf:givenName" "foaf:familyName" "foaf:mbox"))
+;;   ("veeakker:Basket"))
 
-(defclass )
+(setf *rights*
+      (list (make-access-grant
+             :usage '(:read)
+             :graph-spec 'public
+             :access 'public)))
 
-(defun user-groups-for-session (session-uri scope)
-  "Calculates user groups for the current session uri."
-  (remove-if-not (lambda (ug)
-                   (group-applies group session-uri scope))
-                 *user-groups*))
+;; granting access to groups within scopes
+
+;; ;; anyone can read public
+;; (grant :read :to public :for application)
+;; ;; image service can do more
+;; (grant (:read :write)
+;;        :to public :for application
+;;        :scope "http://mu.semte.ch/services/image-service")
+;; ;; users can read and write their own data
+;; (grant (:read :write) :to user :for private) 
+
+
+;; (define-user-group account
+;;   :access (by-query :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;                             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;                             PREFIX musession: <http://mu.semte.ch/vocabularies/session/>
+;;                             SELECT ?id WHERE {
+;;                              <SESSION_ID> ext:hasAccount/mu:uuid ?id.
+;;                             }"
+;;                     :vars ("id")))
+
+;; (defmacro define-graph (graph (&rest accounts)))
+
+;; (define-graph "http://data.toevla.org/accounts/"
+;;   :user-groups (list account)
+;;   )
+
+;; (defclass )
+
+;; (defun user-groups-for-session (session-uri scope)
+;;   "Calculates user groups for the current session uri."
+;;   (remove-if-not (lambda (ug)
+;;                    (group-applies group session-uri scope))
+;;                  *user-groups*))
 
 ;; let's first cope with cached user groups
+ 

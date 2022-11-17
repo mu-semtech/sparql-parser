@@ -17,3 +17,9 @@
                               ("mu-session-id" . ,(mu-session-id))))
     (declare (ignore code headers))
     body))
+
+(defun bindings (query-result)
+  "Converts the string representation of the SPARQL query result into a set
+of JSOWN compatible BINDINGS."
+  (jsown:filter (jsown:parse query-result)
+                "results" "bindings"))

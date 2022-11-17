@@ -17,5 +17,6 @@
                (:file "sparql-ast/manipulation")
                (:file "connection/globals")
                (:file "acl/acl")
+               (:file "acl/config")
                (:file "connection/server")
                (:file "connection/client")))
