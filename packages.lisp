@@ -22,7 +22,7 @@
 
 (defpackage #:sparql-parser
   (:use :common-lisp)
-  (:export #:sparql-ast #:sparql-ast-top-node #:sparql-ast-string #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:terminalp)
+  (:export #:sparql-ast #:sparql-ast-top-node #:sparql-ast-string #:clone-sparql-ast #:with-sparql-ast #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:scanned-token-effective-string #:terminalp)
   (:export #:parse-sparql-string #:with-parser-setup))
 
 (defpackage #:sparql-generator

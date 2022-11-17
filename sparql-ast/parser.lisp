@@ -58,6 +58,18 @@ Assumes *scanning-string* is available."
                 (scanned-token-start scanned-token)
                 (scanned-token-end scanned-token)))))
 
+(defun clone-sparql-ast (sparql-ast)
+  "Clones SPARQL-AST, including the matches and submatches, but nothing but
+those.  Allows for manipulation without destroying the original."
+  (labels ((clone-match (match)
+             (typecase match
+               (match (make-match :term (match-term match)
+                                  :rule (match-rule match)
+                                  :submatches (mapcar #'clone-match (match-submatches match))))
+               (t match))))
+    (make-sparql-ast :string (sparql-ast-string sparql-ast)
+                     :top-node (clone-match (sparql-ast-top-node sparql-ast)))))
+
 ;;;;;;;;;;;;;;
 ;;;; Constants
 
@@ -169,6 +181,11 @@ Assumes *scanning-string* is available."
                          (print-it submatch (cons prefix-prepend prefix))
                          (format stream "~&~{~A~}[~A]~%" (cons prefix-prepend prefix) submatch)))))))
       (print-it match start-prefix))))
+
+(defmethod print-object ((ast sparql-ast) stream)
+  (let ((*scanning-string* (sparql-ast-string ast)))
+    (print-unreadable-object (ast stream :type "AST")
+      (print-match (sparql-ast-top-node ast) :rulep nil :stream stream))))
 
 ;;;;;;;;;;;;;;;;;;;;;
 ;;;; Detecting tokens
@@ -397,4 +414,11 @@ as the starting point in STRING."
          (*match-tree* nil)
          (*current-token* nil)
          (*next-char-idx* 0))
+     ,@body))
+
+(defmacro with-sparql-ast (sparql-ast &body body)
+  "Executes BODY within the context of SPARQL-AST.
+
+Used for accessing content."
+  `(let ((*scanning-string* (sparql-ast-string ,sparql-ast)))
      ,@body))

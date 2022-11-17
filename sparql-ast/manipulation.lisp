@@ -18,14 +18,14 @@
       (sparql-parser::make-match :term term
                                  :submatches (mapcar #'transform-submatch submatches)))))
 
-(defun iriref (graph-string)
+(defun iriref (uri)
   "Constructs an IRIREF for GRAPH-STRING."
   (sparql-parser::make-match
    :term 'ebnf::|IRIREF|
    :submatches
    (list (sparql-parser::make-scanned-token
           :start 0 :end 0
-          :string graph-string
+          :string (concatenate 'string "<" uri ">")
           :token 'ebnf::|IRIREF|))))
 
 (defmacro update-submatches ((thing submatches-var) &body body)
@@ -49,7 +49,7 @@ list of matches yielded by the function."
                 collect submatch))
   match)
 
-(defmacro map-matches (match (var) &body body)
+(defmacro map-matches ((var) match &body body)
   "Macro variant of MAP-MATCHES*."
   ;; This variant may allow for further optimizations down the line.
   `(map-matches* ,match (lambda (,var) ,@body)))
@@ -60,7 +60,8 @@ list of matches yielded by the function."
   ;; to optimize later on.  An obvious optimization is to detect where
   ;; the clause may exist and home in on it.
   (prog1 sparql-ast
-    (map-matches (sparql-parser:sparql-ast-top-node sparql-ast) (match)
+    (map-matches (match)
+        (sparql-parser:sparql-ast-top-node sparql-ast)
       (unless (eq term (sparql-parser:match-term match))
         (list match)))))
 
@@ -106,3 +107,22 @@ list of matches yielded by the function."
                  (mapcar #'traverse (sparql-parser:match-submatches match)))))
       (traverse (sparql-parser:sparql-ast-top-node sparql-ast))
       sparql-ast)))
+
+(defun replace-iriref (sparql-ast &key from to)
+  "Replaces each occurence of IRIREF FROM to TO in SPARQL-AST.
+
+FROM and TO are both expected to be strings."
+  ;; from: source-iriref-string
+  ;; to: target-iriref-string
+  (sparql-parser:with-sparql-ast sparql-ast
+    (let ((from (coerce (concatenate 'string "<" from ">") 'base-string))
+          (to (iriref (coerce to 'base-string))))
+      (prog1 sparql-ast
+        (map-matches (match)
+                     (sparql-parser:sparql-ast-top-node sparql-ast)
+          (if (and (eq (sparql-parser:match-term match)
+                       'ebnf::|IRIREF|)
+                   (string= from
+                            (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match)))))
+              (list to)
+              (list match)))))))
