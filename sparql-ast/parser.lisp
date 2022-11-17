@@ -47,6 +47,17 @@ We accept strings and uppercase symbols as terminals."
     (symbol (terminal-p-scanner (symbol-name thing)))
     (t nil)))
 
+(defun scanned-token-effective-string (scanned-token)
+  "Yields the effectively matched string of SCANNED-TOKEN within the current context.
+
+Assumes *scanning-string* is available."
+  (or (scanned-token-string scanned-token)
+      (when (and *scanning-string*
+                 (< (scanned-token-end scanned-token) (length *scanning-string*)))
+        (subseq *scanning-string*
+                (scanned-token-start scanned-token)
+                (scanned-token-end scanned-token)))))
+
 ;;;;;;;;;;;;;;
 ;;;; Constants
 
@@ -138,11 +149,7 @@ We accept strings and uppercase symbols as terminals."
             (scanned-token-token scanned-token)
             (scanned-token-start scanned-token)
             (scanned-token-end scanned-token)
-            (when (and *scanning-string*
-                       (< (scanned-token-end scanned-token) (length *scanning-string*)))
-              (subseq *scanning-string*
-                      (scanned-token-start scanned-token)
-                      (scanned-token-end scanned-token))))))
+            (scanned-token-effective-string scanned-token))))
 
 (defun print-match (match &key (stream *standard-output*) (rulep t) (indentation-width 0))
   "Prints the match tree in a clean manner"

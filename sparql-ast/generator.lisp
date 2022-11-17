@@ -151,10 +151,7 @@ which element was expected to be valid but was not."
   ;; create a string of the appropriate size, and then fill it in.
   (labels ((submatch-strings (match)
              (cond ((typep match 'sparql-parser:scanned-token)
-                    (list (or (sparql-parser:scanned-token-string match)
-                              (subseq sparql-parser::*scanning-string*
-                                      (sparql-parser:scanned-token-start match)
-                                      (sparql-parser:scanned-token-end match)))))
+                    (list (sparql-parser:scanned-token-effective-string match)))
                    ((and (typep match 'sparql-parser:match)
                          (typep (sparql-parser:match-term match) 'string))
                     (list (sparql-parser:match-term match)))
