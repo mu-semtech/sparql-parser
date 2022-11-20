@@ -61,5 +61,7 @@
   (:export #:query #:bindings))
 
 (defpackage #:server
-  (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client))
+  (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
+  (:import-from #:alexandria
+                #:when-let))
 

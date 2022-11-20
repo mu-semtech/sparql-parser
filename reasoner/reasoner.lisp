@@ -134,9 +134,50 @@ processing should execute."
         (ebnf::|BaseDecl| (extract-basedecl-from-match match)))
       (make-query-prefixes :prefix-hash answers :base current-base))))
 
-(defun derive-expanded-uris (query)
+(declaim (special *prefixes* *match-uri-mapping*))
+(defun (setf cached-expanded-uri) (uri-string match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
+  "Sets the CACHED-EXPANDED-URI for MATCH to URI-STRING and returns (coerced) URI-STRING."
+  (declare (ignore prefixes))
+  (setf (gethash match match-uri-mapping)
+        (coerce uri-string 'base-string)))
+
+(defun cached-expanded-uri (match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
+  "Yields the expanded URI for MATCH, given PREFIXES, caching it if it is not known yet."
+  (or (gethash match match-uri-mapping)
+      (flet ((set-uri-mapping (value)
+               (setf (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)
+                     value)))
+        (case (sparql-parser:match-term match)
+          (ebnf::|PNAME_LN|
+           (destructuring-bind (prefix following)
+               (cl-utilities:split-sequence
+                #\: (sparql-parser:terminal-match-string match)
+                :count 2)
+             (cond ((string= prefix "")
+                    (set-uri-mapping (query-prefixes-base prefixes)))
+                   ((get-prefix prefixes prefix)
+                    (set-uri-mapping (concatenate 'string
+                                                  (get-prefix prefixes prefix)
+                                                  following)))
+                   (t (error "Missing prefix ~A" prefix)))))
+          (ebnf::|PNAME_NS|
+           (let* ((matched-string (sparql-parser:terminal-match-string match))
+                  ;; cut off the : at the end
+                  (prefix (subseq matched-string 0 (1- (length matched-string)))))
+             (cond ((string= prefix "")
+                    (set-uri-mapping (query-prefixes-base prefixes)))
+                   ((get-prefix prefixes prefix)
+                    (set-uri-mapping (get-prefix prefixes prefix)))
+                   (t (error "Missing prefix ~A" prefix)))))))))
+
+(defun derive-expanded-uris (query prefixes)
   ;; Constructed expanded variant of each prefixed URI
-  nil)
+  (let ((match-uri-mapping (make-hash-table :test 'eq)))
+    ;; TODO: we could skip those mentioned in PREFIXES by extending the tooling
+    (sparql-manipulation:loop-matches-symbol-case (match) query
+      (ebnf::|PNAME_LN| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping))
+      (ebnf::|PNAME_NS|(cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
+    match-uri-mapping))
 
 (defun extract-constraints (query prefixes)
   ;; Figures out which constraints are defined in the query.
