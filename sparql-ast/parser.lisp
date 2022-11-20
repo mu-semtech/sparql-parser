@@ -58,6 +58,12 @@ Assumes *scanning-string* is available."
                 (scanned-token-start scanned-token)
                 (scanned-token-end scanned-token)))))
 
+(defun terminal-match-string (match)
+  "Match string for the supplied terminal match.
+
+Assumes MATCH is a MATCH statement with only a TOKEN-MATCH as a child."
+  (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
+
 (defun clone-sparql-ast (sparql-ast)
   "Clones SPARQL-AST, including the matches and submatches, but nothing but
 those.  Allows for manipulation without destroying the original."

@@ -43,7 +43,10 @@ list of matches yielded by the function."
   (setf (sparql-parser:match-submatches match)
         (loop for submatch in (sparql-parser:match-submatches match)
               if (sparql-parser:match-p submatch)
-                append (prog1 (funcall functor submatch)
+                append (prog1 (let ((result (funcall functor submatch)))
+                                (if (listp result)
+                                    result
+                                    (list result)))
                          (map-matches* submatch functor))
               else
                 collect submatch))
@@ -65,6 +68,55 @@ list of matches yielded by the function."
       (unless (eq term (sparql-parser:match-term match))
         (list match)))))
 
+(defmacro process-sparql-ast-match ((var) sparql-ast &body body)
+  "Processes a SPARQL-AST MATCH within the right context and yielding back
+the SPARQL-AST."
+  (let ((sparql-ast-var (gensym "sparql-ast")))
+    `(let* ((,sparql-ast-var ,sparql-ast)
+            (,var (sparql-parser:sparql-ast-top-node ,sparql-ast-var)))
+       (sparql-parser:with-sparql-ast ,sparql-ast-var
+         (prog1 ,sparql-ast-var
+           ,@body)))))
+
+(defmacro update-matches-symbol-case ((var) sparql-ast &body body)
+  "Maps over each match of SPARQL-AST deeply, binding VAR to match.  BODY is a
+list of forms like CASE in which the CAR is the SYMBOL to be matched
+as MATCH-NAME and the CDR a list of FORMS to be excuted with MATCH
+bound.  The found MATCH is replaced by the list of matches returned."
+  (let ((top-match (gensym "top-match")))
+    `(process-sparql-ast-match (,top-match) ,sparql-ast
+       (map-matches (,var) ,top-match
+         (case (sparql-parser:match-term ,var)
+           ,@body
+           (otherwise (list ,var)))))))
+
+(defun loop-matches* (match functor &key (filter #'sparql-parser:match-p))
+  "Deeply loops over each SUBMATCH of MATCH with FUNCTOR for which FILTER holds.
+
+Returns no values."
+  (loop for submatch in (sparql-parser:match-submatches match)
+        when (funcall filter submatch)
+          do (funcall functor submatch)
+             (loop-matches* submatch functor :filter filter))
+  (values))
+
+(defmacro loop-matches ((var) sparql-ast &body body)
+  "Loops over the matches of SPARQL-AST deeply, binding VAR to each MATCH.
+
+Executes the forms in BODY for each and discards the result, leaving
+SPARQL-AST in tact."
+  (let ((top-match (gensym "top-match")))
+    `(process-sparql-ast-match (,top-match) ,sparql-ast
+       (loop-matches* ,top-match (lambda (,var) ,@body)))))
+
+(defmacro loop-matches-symbol-case ((var) sparql-ast &body clauses)
+  "Loops over each match of SPARQL-AST with a CASE running for the
+solutions."
+  `(loop-matches (,var) ,sparql-ast
+     (case (typecase ,var
+             (sparql-parser:match (sparql-parser:match-term ,var))
+             (sparql-parser:scanned-token (sparql-parser:scanned-token-token ,var)))
+       ,@clauses)))
 
 ;;;; High level manipulations
 ;;;;
@@ -96,33 +148,36 @@ list of matches yielded by the function."
                 collect (mk-match `(ebnf::|DatasetClause|
                                     "FROM" (ebnf::|DefaultGraphClause|
                                             (ebnf::|SourceSelector|
-                                             (ebnf::|iri| ,(iriref graph-string)))))))))
-    (labels ((traverse (match)
-               (when (sparql-parser:match-p match)
-                 (when (eq (sparql-parser:match-term match) 'ebnf::|SelectQuery|)
-                   (update-submatches (match submatches)
-                     (destructuring-bind (select-clause &rest other-clauses)
-                         submatches
-                       `(,select-clause ,@dataset-clauses ,@other-clauses))))
-                 (mapcar #'traverse (sparql-parser:match-submatches match)))))
-      (traverse (sparql-parser:sparql-ast-top-node sparql-ast))
-      sparql-ast)))
+                                                   (ebnf::|iri| ,(iriref graph-string)))))))))
+    (update-matches-symbol-case (match) sparql-ast
+      (ebnf::|SelectQuery|
+             (destructuring-bind (select-clause &rest other-clauses)
+                 (sparql-parser:match-submatches match)
+               (setf (sparql-parser:match-submatches match)
+                     `(,select-clause ,@dataset-clauses ,@other-clauses))
+               match)))))
+
+(defun add-default-base-decl-to-prologue (sparql-ast &optional (base-uri "http://mu.semte.ch/prefix/local/"))
+  "Adds a default base decl as the first element of PROLOGUE."
+  (update-matches-symbol-case (match) sparql-ast
+    (ebnf::|Prologue|
+           (setf (sparql-parser:match-submatches match)
+                 (cons (mk-match `(ebnf::|BaseDecl| "BASE" ,(iriref base-uri)))
+                       (sparql-parser:match-submatches match)))
+           match)))
 
 (defun replace-iriref (sparql-ast &key from to)
   "Replaces each occurence of IRIREF FROM to TO in SPARQL-AST.
 
-FROM and TO are both expected to be strings."
+FROM and TO are both expected to be strings.
+
+Used to replace <SESSION_URI> in access calculation."
   ;; from: source-iriref-string
   ;; to: target-iriref-string
-  (sparql-parser:with-sparql-ast sparql-ast
-    (let ((from (coerce (concatenate 'string "<" from ">") 'base-string))
-          (to (iriref (coerce to 'base-string))))
-      (prog1 sparql-ast
-        (map-matches (match)
-                     (sparql-parser:sparql-ast-top-node sparql-ast)
-          (if (and (eq (sparql-parser:match-term match)
-                       'ebnf::|IRIREF|)
-                   (string= from
-                            (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match)))))
-              (list to)
-              (list match)))))))
+  (let ((from (coerce (concatenate 'string "<" from ">") 'base-string))
+        (to (iriref (coerce to 'base-string))))
+    (update-matches-symbol-case (match) sparql-ast
+      (ebnf::|IRIREF|
+             (if (string= from (sparql-parser:terminal-match-string match))
+                 to
+                 match)))))

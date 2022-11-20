@@ -159,3 +159,8 @@ which element was expected to be valid but was not."
                     (loop for sub in (sparql-parser:match-submatches match)
                           append (submatch-strings sub))))))
     (format nil "~{~A~,^ ~}" (submatch-strings (sparql-parser:sparql-ast-top-node sparql-ast)))))
+
+(defun write-when-valid (sparql-ast)
+  "Writes out SPARQL-AST after verifying it was valid."
+  (when (is-valid sparql-ast)
+    (write-valid sparql-ast)))
