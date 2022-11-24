@@ -63,7 +63,7 @@
   ;; information from each triple.
   (let* ((prefixes (extract-prefixes query))
          (expanded-uris (derive-expanded-uris query prefixes))
-         (extracted-info (extract-constraints query expanded-uris))
+         (extracted-info (extract-constraints query expanded-uris prefixes))
          (derivations (extract-derivation-tree query)))
     (values (derive-knowledge extracted-info derivations domain-model expanded-uris)
             prefixes
@@ -129,7 +129,7 @@ processing should execute."
                      (second)
                      (sparql-parser:terminal-match-string)
                      (iriref-string-strip-markers)))))
-      (sparql-manipulation:loop-matches-symbol-case (match) query
+      (loop-matches-symbol-case (match) query
         (ebnf::|PrefixDecl| (extract-prefix-from-match match))
         (ebnf::|BaseDecl| (extract-basedecl-from-match match)))
       (make-query-prefixes :prefix-hash answers :base current-base))))
@@ -143,49 +143,85 @@ processing should execute."
 
 (defun cached-expanded-uri (match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
   "Yields the expanded URI for MATCH, given PREFIXES, caching it if it is not known yet."
-  (or (gethash match match-uri-mapping)
-      (flet ((set-uri-mapping (value)
-               (setf (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)
-                     value)))
-        (case (sparql-parser:match-term match)
-          (ebnf::|PNAME_LN|
-           (destructuring-bind (prefix following)
-               (cl-utilities:split-sequence
-                #\: (sparql-parser:terminal-match-string match)
-                :count 2)
-             (cond ((string= prefix "")
-                    (set-uri-mapping (query-prefixes-base prefixes)))
-                   ((get-prefix prefixes prefix)
-                    (set-uri-mapping (concatenate 'string
-                                                  (get-prefix prefixes prefix)
-                                                  following)))
-                   (t (error "Missing prefix ~A" prefix)))))
-          (ebnf::|PNAME_NS|
-           (let* ((matched-string (sparql-parser:terminal-match-string match))
-                  ;; cut off the : at the end
-                  (prefix (subseq matched-string 0 (1- (length matched-string)))))
-             (cond ((string= prefix "")
-                    (set-uri-mapping (query-prefixes-base prefixes)))
-                   ((get-prefix prefixes prefix)
-                    (set-uri-mapping (get-prefix prefixes prefix)))
-                   (t (error "Missing prefix ~A" prefix)))))))))
+  (let ((term (sparql-parser:match-term match)))
+    (if (eq term 'ebnf::|IRIREF|)
+        (iriref-string-strip-markers (sparql-parser:terminal-match-string match))
+        (or (gethash match match-uri-mapping)
+            (flet ((set-uri-mapping (value)
+                     (setf (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)
+                           value)))
+              (case term
+                (ebnf::|PNAME_LN|
+                 (destructuring-bind (prefix following)
+                     (cl-utilities:split-sequence
+                      #\: (sparql-parser:terminal-match-string match)
+                      :count 2) ; TODO: cope with #\: in PN_LOCAL
+                   (cond ((string= prefix "")
+                          (set-uri-mapping (query-prefixes-base prefixes)))
+                         ((get-prefix prefixes prefix)
+                          (set-uri-mapping (concatenate 'string
+                                                        (get-prefix prefixes prefix)
+                                                        following)))
+                         (t (error "Missing prefix ~A" prefix)))))
+                (ebnf::|PNAME_NS|
+                 (let* ((matched-string (sparql-parser:terminal-match-string match))
+                        ;; cut off the : at the end
+                        (prefix (subseq matched-string 0 (1- (length matched-string)))))
+                   (cond ((string= prefix "")
+                          (set-uri-mapping (query-prefixes-base prefixes)))
+                         ((get-prefix prefixes prefix)
+                          (set-uri-mapping (get-prefix prefixes prefix)))
+                         (t (error "Missing prefix ~A" prefix)))))))))))
 
 (defun derive-expanded-uris (query prefixes)
-  ;; Constructed expanded variant of each prefixed URI
+  "Expands all prefixed matches of QUERY based on PREFIXES."
   (let ((match-uri-mapping (make-hash-table :test 'eq)))
     ;; TODO: we could skip those mentioned in PREFIXES by extending the tooling
-    (sparql-manipulation:loop-matches-symbol-case (match) query
+    (loop-matches-symbol-case (match) query
       (ebnf::|PNAME_LN| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping))
       (ebnf::|PNAME_NS|(cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
     match-uri-mapping))
 
-(defun extract-constraints (query prefixes)
+(defun extract-triple-sets (query match-uri-mapping prefixes)
+  "Extracts triples from QUERY with some understanding of how they're
+related."
+  )
+
+(defun extract-constraints (query match-uri-mapping prefixes)
+  "Extract direct information from each part of the matches of QUERY, using
+PREFIXES for the expanded URIs."
   ;; Figures out which constraints are defined in the query.
 
   ;; Eg: a triple ?s a foaf:Person would derive indicate ?s must have an
   ;; rdf:type relationship to foaf:Person.  The expansions are used to
   ;; further extract information from these items.
-  )
+  (let (uris variables)
+   (labels ((process-subject (subject-match)
+              (sparql-manipulation::scan-deep-term-case sub (subject-match ebnf::|TriplesSameSubjectPath|)
+                (ebnf::|IRIREF| (process-subject-and-uri subject-match sub))
+                (ebnf::|PNAME_LN| (process-subject-and-uri subject-match sub))
+                (ebnf::|PNAME_NS| (process-subject-and-uri subject-match sub))
+                (ebnf::|VAR1| (process-subject-and-var subject-match sub))
+                (ebnf::|VAR2| (process-subject-and-var subject-match sub))))
+            (process-subject-and-uri (match term)
+              (declare (ignore match))
+              ;; TODO: Enrich predicate
+              ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
+              (let ((iri (cached-expanded-uri term
+                                              :prefixes prefixes
+                                              :match-uri-mapping match-uri-mapping)))
+                (push iri uris)))
+            (process-subject-and-var (match term)
+              (declare (ignore match))
+              ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
+              (push (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))
+                    variables)))
+     (loop-matches-symbol-case (match) query
+       ;; Interpret subject
+       ;; Drill down for predicate and object
+       (ebnf::|TriplesSameSubjectPath| (process-subject match))
+       (ebnf::|TriplesSameSubject| (process-subject match))))
+    (list uris variables)))
 
 (defun extract-derivation-tree (query)
   ;; Figures out which dependencies are within the SPARQL bnf.

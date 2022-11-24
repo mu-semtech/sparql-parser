@@ -54,7 +54,11 @@
 (defpackage #:reasoner
   (:use :common-lisp)
   (:import-from #:support
-                #:->))
+                #:->)
+  (:import-from #:sparql-manipulation
+                #:loop-matches-symbol-case)
+  (:import-from #:alexandria
+                #:when-let))
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)

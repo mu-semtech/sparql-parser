@@ -118,6 +118,77 @@ solutions."
              (sparql-parser:scanned-token (sparql-parser:scanned-token-token ,var)))
        ,@clauses)))
 
+(defun follow-path (match path)
+  "Follow PATH  in  MATCH yielding a list of solutions.
+
+PATH is a tree of properties to follow.  Multiple paths can be followed
+with :OR.
+
+  (:or a b c)
+
+is interpreted as following either a, b or c.  This path itself can
+contain lists to be interpreted as a further depth.
+
+  (:or a (b c))
+
+is interpreted as either a, or c embedded in b."
+  (cond ((symbolp path)
+         ;; verify the current match and return it
+         (when (eq path (sparql-parser:match-term match))
+           (list match)))
+        ((eq (first path) :or)
+         ;; combine all sub solutions
+         (loop for subpath in (rest path)
+               append (follow-path match subpath)))
+        ((eq (first path)
+             (sparql-parser:match-term match))
+         ;; walk over the rest paths and collect the last ones
+         (let ((submatches (sparql-parser:match-submatches match)))
+           (loop for subselection in (rest path)
+                 do
+                    (setf submatches
+                          (loop for submatch in submatches
+                                append (follow-path submatch subselection))))
+           submatches))))
+
+(defun match-child-term-list (match &optional term)
+  "Yields a list of all children with the given type, not recursive.
+
+This is an interesting construct when the items in the list can repeat
+themselves, like with an ObjectList."
+  (flet ((matches-constraint (submatch)
+           (let ((match-term (sparql-parser:match-term submatch)))
+             (and (symbolp match-term)
+                  (or (not term) (eq term match-term))))))
+   (loop for submatch in (sparql-parser:match-submatches match)
+         when (matches-constraint submatch)
+           collect submatch)))
+
+(defun scan-deep-term-case* (match functor)
+  "Deeply scans match for a term, calling functor on the term and yielding the result if the second value is truethy."
+  (labels ((descend (match)
+             (loop for sub-match in (sparql-parser:match-submatches match)
+                   if (sparql-parser:match-p sub-match)
+                     do
+                        (let ((term (sparql-parser:match-term sub-match)))
+                          (cond ((stringp term) nil) ; should not match constants
+                                ((sparql-parser:terminalp term)
+                                 (return-from scan-deep-term-case* (funcall functor sub-match)))
+                                (t (descend sub-match)))))))
+    (descend match)))
+
+(defmacro scan-deep-term-case (var (match &optional start-term) &body clauses)
+  "Deeply matches the term until a terminal match was found.  Accepts any clause of clauses.
+
+TODO: when start-term is supplied, verify all options of start-term are
+taken into account and no loop paths are available."
+  (declare (ignore start-term))
+  `(scan-deep-term-case*
+    ,match
+    (lambda (,var)
+      (case (sparql-parser:match-term ,var)
+        ,@clauses))))
+
 ;;;; High level manipulations
 ;;;;
 ;;;; These are the manipulations we may ask on the match as a whole as a

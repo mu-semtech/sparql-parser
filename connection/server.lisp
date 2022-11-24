@@ -7,15 +7,21 @@
 
 (defun extract-query-string (env content-type)
   "Extracts query string from the request when content-type is given."
-  (let ((arr (make-array (getf env :content-length) :element-type 'flex:octet)))
-    (read-sequence arr (getf env :raw-body))
-    (let ((body-string (flex:octets-to-string arr)))
-      (if (equal content-type "application/sparql-update")
-          (coerce body-string 'base-string)
-          (let ((params (quri:url-decode-params body-string)))
-            (coerce (string-trim "\n \t" (cdr (or (assoc "query" params :test #'equal)
-                                                  (assoc "update" params :test #'equal))))
-                    'base-string))))))
+  (if (eq (getf env :request-method) :post)
+      ;; post should have query in query body or in form body or form update
+      (let ((arr (make-array (getf env :content-length) :element-type 'flex:octet)))
+        (read-sequence arr (getf env :raw-body))
+        (let ((body-string (flex:octets-to-string arr)))
+          (if (equal content-type "application/sparql-update")
+              (coerce body-string 'base-string)
+              (let ((params (quri:url-decode-params body-string)))
+                (coerce (string-trim "\n \t" (cdr (or (assoc "query" params :test #'equal)
+                                                      (assoc "update" params :test #'equal))))
+                        'base-string)))))
+      ;; get should have query in query parameter
+      (when-let ((query-assoc (assoc "query" (quri:url-decode-params (getf env :query-string ""))
+                                     :test #'string=)))
+        (coerce (cdr query-assoc) 'base-string))))
 
 (defun manipulate-query (ast)
   "Manipulates the requested query for current access rights."
