@@ -126,12 +126,8 @@ variables."
   `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id))))
      ,@body))
 
-;; (defmacro with-access-rights ((access-rights-var) &body body)
-;;   (let ((access-tokens-sym (gensym "TOKENS")))
-;;     `(with-acess-tokens (,access-tokens-sym)
-;;        ,@body)))
-
 (defun graphs-for-tokens (tokens)
+  "Yields the graphs which can be accessed from TOKENS."
   (let* ((grant-info (loop for token in tokens
                            for token-name = (name (access-token-access token))
                            append (loop for right in *rights*
@@ -144,20 +140,15 @@ variables."
     (loop for (token . graph-specification) in grant-info
           collect (format nil "~A~{~A~,^/~}"
                           (graph-specification-base-graph graph-specification)
-                          (access-token-parameters token)))
-   ;; (list "http://mu.semte.ch/graphs/public")
-    ))
+                          (access-token-parameters token)))))
 
 (defun apply-access-rights (query-ast)
   "Applies current access rights to MATCH.
 
 MATCH may be updated in place but updated MATCH is returned."
-    ;; (-> match
-    ;;   (remove-dataset-clauses)
-    ;;   (remove-graph-graph-patterns)
-    ;;   (add-from-graphs (list "<http://mu.semte.ch/graphs/public>")))
   (with-access-tokens (tokens)
     (-> query-ast
       (remove-dataset-clauses)
       (remove-graph-graph-patterns)
+      (add-default-base-decl-to-prologue)
       (add-from-graphs (graphs-for-tokens tokens)))))

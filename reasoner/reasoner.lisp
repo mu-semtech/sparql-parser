@@ -187,35 +187,160 @@ processing should execute."
 related."
   )
 
+;; These two parameters indicate what we know of the left and the right
+;; parts of the path.
+;;
+;; Depending on the path itself (which may be an inverse path) the
+;; knowledge we have may need to be distributed differently.
+
+(defparameter *node-knowledge* (make-hash-table :test 'eq)
+  "What we know of the left part of the path.")
+
+(defun node-knowledge (match key)
+  "Yields the knoledge we have on KEY for MATCH."
+  (getf (gethash match *node-knowledge*) key))
+
+(defun (setf node-knowledge) (value match key)
+  (setf (getf (gethash match *node-knowledge*) key) value))
+
+(defmacro with-local-node-knowledge (&body body)
+  "Execute BODY with a local node knowledge store."
+  `(let ((*node-knowledge* (make-hash-table :test 'eq)))
+     ,@body))
+
+(defun match-has-direct-term (match term)
+  "Yields truethy iff MATCH's children contain submatch named TERM."
+  (typecase term
+    (string (loop for m in (sparql-parser:match-submatches match)
+                   when (string= term (sparql-parser:match-term m))
+                     return m))
+    (symbol (loop for m in (sparql-parser:match-submatches match)
+                   when (eq term (sparql-parser:match-term m))
+                     return m))))
+
+(defmacro with-named-child ((var) (match term) &body body)
+  "Executes BODY in a context where VAR is bound to the first submatch of
+MATCH that has symbol TERM.  If no solution is found BODY is not
+executed and NIL is returned."
+  `(alexandria:when-let ((,var (find ',term (sparql-parser:match-submatches ,match) :test (lambda (term match) (and (sparql-parser:match-p match) (eq term (sparql-parser:match-term match)))))))
+     ,@body))
+
+(defmacro term-case (match &body cases)
+  "CASE on the MATCH-TERM of MATCH."
+  `(case (sparql-parser:match-term ,match)
+     ,@cases))
+
 (defun extract-constraints (query match-uri-mapping prefixes)
   "Extract direct information from each part of the matches of QUERY, using
 PREFIXES for the expanded URIs."
   ;; Figures out which constraints are defined in the query.
+
+  ;; We intend to assign the knowledge to the upper-most EBNF node on
+  ;; which we can define the knowledge.  This rule may allow us to make
+  ;; a clear decision on where to position the knowledge.
 
   ;; Eg: a triple ?s a foaf:Person would derive indicate ?s must have an
   ;; rdf:type relationship to foaf:Person.  The expansions are used to
   ;; further extract information from these items.
   (let (uris variables)
    (labels ((process-subject (subject-match)
-              (sparql-manipulation::scan-deep-term-case sub (subject-match ebnf::|TriplesSameSubjectPath|)
-                (ebnf::|IRIREF| (process-subject-and-uri subject-match sub))
-                (ebnf::|PNAME_LN| (process-subject-and-uri subject-match sub))
-                (ebnf::|PNAME_NS| (process-subject-and-uri subject-match sub))
-                (ebnf::|VAR1| (process-subject-and-var subject-match sub))
-                (ebnf::|VAR2| (process-subject-and-var subject-match sub))))
-            (process-subject-and-uri (match term)
-              (declare (ignore match))
-              ;; TODO: Enrich predicate
+              (when (match-has-direct-term subject-match 'ebnf::|VarOrTerm|)
+                (sparql-manipulation::scan-deep-term-case sub (subject-match ebnf::|TriplesSameSubjectPath|)
+                  (ebnf::|IRIREF| (process-subject-and-uri subject-match sub))
+                  (ebnf::|PNAME_LN| (process-subject-and-uri subject-match sub))
+                  (ebnf::|PNAME_NS| (process-subject-and-uri subject-match sub))
+                  (ebnf::|VAR1| (process-subject-and-var subject-match sub))
+                  (ebnf::|VAR2| (process-subject-and-var subject-match sub)))))
+            (process-subject-and-uri (subject-match term)
+              ;; subject-match :: TriplesSameSubjectPath
+              ;; term :: Expandable URI for subject
+
+              ;; DONE: Enrich predicate match
               ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
               (let ((iri (cached-expanded-uri term
                                               :prefixes prefixes
                                               :match-uri-mapping match-uri-mapping)))
-                (push iri uris)))
+                (push iri uris) ; TODO: for fun, remove
+                (with-named-child (property-list-match) (subject-match ebnf::|PropertyListPathNotEmpty|)
+                  (setf (node-knowledge property-list-match :left-iri) iri) ; TODO: can move to one of the specific cases
+                  (process-object :subject-path subject-match :subject-uri iri))))
             (process-subject-and-var (match term)
-              (declare (ignore match))
               ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
-              (push (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))
-                    variables)))
+              ;; (format t "Working through ~A ~A" match term)
+              (with-named-child (property-list-match) (match ebnf::|PropertyListPathNotEmpty|)
+                (let ((var-string (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))))
+                  (push var-string variables) ; TODO: for fun, remove
+                  (process-object :subject-path match :subject-var var-string)))) 
+            (extract-match-uri-mapping (match)
+              (cached-expanded-uri match
+                                   :prefixes prefixes
+                                   :match-uri-mapping match-uri-mapping))
+            (extract-match-var-string (match)
+              (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
+            (process-object (&key subject-path subject-uri subject-var)
+              (format nil "process-object got called with ~A ~A ~A" subject-path subject-uri subject-var)
+              (with-named-child (child) (subject-path ebnf::|PropertyListPathNotEmpty|)
+                (prog1 child)
+                (do-grouped-children (verb objects-match)
+                    (child :amount 2
+                           :filter-terms (ebnf::|VerbPath| ebnf::|VerbSimple| ebnf::|ObjectList| ebnf::|ObjectListPath|)
+                           :error-on-incomplete-amount-p t)
+                  (declare (ignore verb)) ; TODO: treat verb
+                  ;; ObjectList or ObjectListPath
+                  ;; these objects will contain extra information
+                  ;; (format t "Got ~A" objects-match)
+                  (prog1 objects-match)
+                  (do-grouped-children (single-object-match) (objects-match :filter-terms (ebnf::|ObjectPath| ebnf::|Object|))
+                    (prog1 single-object-match)
+                    (sparql-manipulation::scan-deep-term-case sub (single-object-match ebnf::|TriplesSameSubjectPath|)
+                      (ebnf::|IRIREF| (if subject-var
+                                          (extract-info-from-var-pred-uri subject-var
+                                                                          subject-path
+                                                                          (extract-match-uri-mapping sub))
+                                          (extract-info-from-uri-pred-uri subject-uri
+                                                                          subject-path
+                                                                          (extract-match-uri-mapping sub))))
+                      (ebnf::|PNAME_LN| (if subject-var
+                                          (extract-info-from-var-pred-uri subject-var
+                                                                          subject-path
+                                                                          (extract-match-uri-mapping sub))
+                                          (extract-info-from-uri-pred-uri subject-uri
+                                                                          subject-path
+                                                                          (extract-match-uri-mapping sub))))
+                      (ebnf::|PNAME_NS| (if subject-var
+                                          (extract-info-from-var-pred-uri subject-var
+                                                                          subject-path
+                                                                          (extract-match-uri-mapping sub))
+                                          (extract-info-from-uri-pred-uri subject-uri
+                                                                          subject-path
+                                                                          (extract-match-uri-mapping sub))))
+                      (ebnf::|VAR1| (if subject-var
+                                        (extract-info-from-var-pred-var subject-var
+                                                                        subject-path
+                                                                        (extract-match-var-string sub))
+                                        (extract-info-from-uri-pred-var subject-uri
+                                                                        subject-path
+                                                                        (extract-match-var-string sub))))
+                      (ebnf::|VAR2| (if subject-var
+                                        (extract-info-from-var-pred-var subject-var
+                                                                        subject-path
+                                                                        (extract-match-var-string sub))
+                                        (extract-info-from-uri-pred-var subject-uri
+                                                                        subject-path
+                                                                        (extract-match-var-string sub)))))))))
+            ;; (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))
+            (extract-info-from-var-pred-var (left predicate right)
+              (format t "Var pred var :: ~A P ~A" left ;; predicate
+                      right))
+            (extract-info-from-var-pred-uri (left predicate right)
+              (format t "Var pred uri :: ~A P ~A" left ;; predicate
+                      right))
+            (extract-info-from-uri-pred-var (left predicate right)
+              (format t "uri pred var :: ~A P ~A" left ;; predicate
+                      right))
+            (extract-info-from-uri-pred-uri (left predicate right)
+              (format t "uri pred uri :: ~A P ~A" left ;; predicate
+                      right)))
      (loop-matches-symbol-case (match) query
        ;; Interpret subject
        ;; Drill down for predicate and object

@@ -33,10 +33,15 @@
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
+  (:import-from #:sparql-parser
+                #:match-submatches
+                #:match-term
+                #:match-p)
   (:export #:remove-dataset-clauses #:remove-graph-graph-patterns #:add-from-graphs #:replace-iriref
            #:add-default-base-decl-to-prologue
            #:loop-matches
-           #:loop-matches-symbol-case))
+           #:loop-matches-symbol-case
+           #:do-grouped-children))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -56,6 +61,7 @@
   (:import-from #:support
                 #:->)
   (:import-from #:sparql-manipulation
+                #:do-grouped-children
                 #:loop-matches-symbol-case)
   (:import-from #:alexandria
                 #:when-let))
