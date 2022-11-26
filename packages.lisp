@@ -13,7 +13,9 @@
   (:use :common-lisp)
   (:export #:rule #:terminal #:first #:follow #:seq #:alt #:|_eof| #:|_eps| #:|_empty| #:opt #:plus #:star
            #:read-bnfsexp-from-file
-           #:rule-name #:read-bnfsexp-from-file #:rule-type #:rule-terminal-p #:rule-values-for #:rule-first #:rule-follow #:rule-expansion #:rule-index))
+           #:rule-name #:read-bnfsexp-from-file #:rule-type #:rule-terminal-p #:rule-values-for #:rule-first #:rule-follow #:rule-expansion #:rule-index
+           #:define-abstract-token
+           #:abstract-token-expansion))
 
 (defpackage :sparql-terminals
   (:use :common-lisp)

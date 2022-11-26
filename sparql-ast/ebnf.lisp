@@ -72,3 +72,19 @@
                                (rest props))
                        t)))
   (values nil nil))
+
+(defparameter *abstract-tokens* nil
+  "List of known abstract token expansions.")
+
+(defmacro define-abstract-token (token &rest elements)
+  "Used as an abstraction layer, must be known at compiletime.  These
+define names that could be used as an alternative for many other names."
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (setf (getf *abstract-tokens* ',token) ',elements)))
+
+(defun abstract-token-expansion (token)
+  "Yields the abstract token set for the supplied token."
+  (getf *abstract-tokens* token))
+
+(define-abstract-token ebnf::|ABSTRACT-IRI| ebnf::|IRIREF| ebnf::|PNAME_LN| ebnf::|PNAME_NS|)
+(define-abstract-token ebnf::|ABSTRACT-VAR| ebnf::|VAR1| ebnf::|VAR2|)

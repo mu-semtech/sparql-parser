@@ -78,15 +78,39 @@ the SPARQL-AST."
          (prog1 ,sparql-ast-var
            ,@body)))))
 
+(defmacro expanded-term-case (term &body clauses)
+  "Constructs a CASE for TERM, expanding CLAUSES by
+ABSTRACT-TOKEN-EXPANSION and duplicating terms for clauses which are
+lists."
+  (flet ((expand-clause (clause)
+           (destructuring-bind (term-spec &rest body)
+               clause
+             (cons
+              (loop for term in (if (listp term-spec) term-spec (list term-spec))
+                    append (or (ebnf:abstract-token-expansion term) (list term)))
+              body)))
+         (dedup-clause (clause)
+           (destructuring-bind (term-spec &rest body)
+               clause
+             (if (listp term-spec)
+                 (loop for term in (alexandria:flatten term-spec)
+                       collect `(,term ,@body))
+                 `((,term ,@body))))))
+    `(case ,term
+       ,@(loop for clause in clauses
+               append (dedup-clause (expand-clause clause))))))
+
 (defmacro update-matches-symbol-case ((var) sparql-ast &body body)
   "Maps over each match of SPARQL-AST deeply, binding VAR to match.  BODY is a
 list of forms like CASE in which the CAR is the SYMBOL to be matched
 as MATCH-NAME and the CDR a list of FORMS to be excuted with MATCH
-bound.  The found MATCH is replaced by the list of matches returned."
+bound.  The found MATCH is replaced by the list of matches returned.
+
+Allows case expansions through EXPANDED-TERM-CASE."
   (let ((top-match (gensym "top-match")))
     `(process-sparql-ast-match (,top-match) ,sparql-ast
        (map-matches (,var) ,top-match
-         (case (match-term ,var)
+         (expanded-term-case (match-term ,var)
            ,@body
            (otherwise (list ,var)))))))
 
@@ -111,11 +135,13 @@ SPARQL-AST in tact."
 
 (defmacro loop-matches-symbol-case ((var) sparql-ast &body clauses)
   "Loops over each match of SPARQL-AST with a CASE running for the
-solutions."
+solutions.
+
+Allows case expansions through EXPANDED-TERM-CASE."
   `(loop-matches (,var) ,sparql-ast
-     (case (typecase ,var
-             (sparql-parser:match (match-term ,var))
-             (sparql-parser:scanned-token (sparql-parser:scanned-token-token ,var)))
+     (expanded-term-case (typecase ,var
+                           (sparql-parser:match (match-term ,var))
+                           (sparql-parser:scanned-token (sparql-parser:scanned-token-token ,var)))
        ,@clauses)))
 
 
@@ -181,13 +207,15 @@ themselves, like with an ObjectList."
 (defmacro scan-deep-term-case (var (match &optional start-term) &body clauses)
   "Deeply matches the term until a terminal match was found.  Accepts any clause of clauses.
 
+Allows case expansions through EXPANDED-TERM-CASE.
+
 TODO: when start-term is supplied, verify all options of start-term are
 taken into account and no loop paths are available."
   (declare (ignore start-term))
   `(scan-deep-term-case*
     ,match
     (lambda (,var)
-      (case (match-term ,var)
+      (expanded-term-case (match-term ,var)
         ,@clauses))))
 
 (defun self-recursive-list (match)

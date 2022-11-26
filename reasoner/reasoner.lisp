@@ -65,10 +65,11 @@
          (expanded-uris (derive-expanded-uris query prefixes))
          (extracted-info (extract-constraints query expanded-uris prefixes))
          (derivations (extract-derivation-tree query)))
-    (values (derive-knowledge extracted-info derivations domain-model expanded-uris)
+    (values ;; (derive-knowledge extracted-info derivations domain-model expanded-uris)
             prefixes
             expanded-uris
-            extracted-info)))
+            extracted-info
+            derivations)))
 
 (defmacro traverse-query-terms ((var) query &body body)
   body)
@@ -101,6 +102,13 @@
   (declare (ignore base))
   uri-string)
 
+(defmacro with-named-child ((var) (match term) &body body)
+  "Executes BODY in a context where VAR is bound to the first submatch of
+MATCH that has symbol TERM.  If no solution is found BODY is not
+executed and NIL is returned."
+  `(alexandria:when-let ((,var (find ',term (sparql-parser:match-submatches ,match) :test (lambda (term match) (and (sparql-parser:match-p match) (eq term (sparql-parser:match-term match)))))))
+     ,@body))
+
 (defun extract-prefixes (query)
   "Extract all prefixes from QUERY.
 Assumes a fixed BASE is determined before it is used, as our query
@@ -110,25 +118,24 @@ processing should execute."
         (current-base nil))
     (flet ((extract-prefix-from-match (match)
              ;; PrefixDecl ::= 'PREFIX' PNAME_NS IRIREF
-             (let* ((submatches (sparql-parser::match-submatches match))
-                    (pname-ns-string (-> submatches
-                                       (second)
-                                       (sparql-parser:terminal-match-string)
-                                       (pname-ns-strip-colon)))
-                    (iriref-string (-> submatches
-                                     (third)
-                                     (sparql-parser:terminal-match-string)
-                                     (iriref-string-strip-markers)
-                                     (expand-uri current-base))))
-               (setf (gethash pname-ns-string answers) iriref-string)))
+             (do-grouped-children (pname-ns iriref)
+                 (match :amount 2 :filter-terms (ebnf::|PNAME_NS| ebnf::|IRIREF|))
+               (let ((pname-ns-string (-> pname-ns
+                                        (sparql-parser:terminal-match-string)
+                                        (pname-ns-strip-colon)))
+                     (iriref-string (-> iriref
+                                      (sparql-parser:terminal-match-string)
+                                      (iriref-string-strip-markers)
+                                      (expand-uri current-base))))
+                 (setf (gethash pname-ns-string answers) iriref-string))))
            (extract-basedecl-from-match (match)
              ;; BaseDecl ::= 'BASE' IRIREF
-             (setf current-base
-                   (-> match
-                     (sparql-parser:match-submatches)
-                     (second)
-                     (sparql-parser:terminal-match-string)
-                     (iriref-string-strip-markers)))))
+             (with-named-child (iriref)
+                 (match ebnf::|IRIREF|)
+               (setf current-base
+                     (-> iriref
+                       (sparql-parser:terminal-match-string)
+                       (iriref-string-strip-markers))))))
       (loop-matches-symbol-case (match) query
         (ebnf::|PrefixDecl| (extract-prefix-from-match match))
         (ebnf::|BaseDecl| (extract-basedecl-from-match match)))
@@ -179,7 +186,7 @@ processing should execute."
     ;; TODO: we could skip those mentioned in PREFIXES by extending the tooling
     (loop-matches-symbol-case (match) query
       (ebnf::|PNAME_LN| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping))
-      (ebnf::|PNAME_NS|(cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
+      (ebnf::|PNAME_NS| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
     match-uri-mapping))
 
 (defun extract-triple-sets (query match-uri-mapping prefixes)
@@ -218,13 +225,6 @@ related."
                    when (eq term (sparql-parser:match-term m))
                      return m))))
 
-(defmacro with-named-child ((var) (match term) &body body)
-  "Executes BODY in a context where VAR is bound to the first submatch of
-MATCH that has symbol TERM.  If no solution is found BODY is not
-executed and NIL is returned."
-  `(alexandria:when-let ((,var (find ',term (sparql-parser:match-submatches ,match) :test (lambda (term match) (and (sparql-parser:match-p match) (eq term (sparql-parser:match-term match)))))))
-     ,@body))
-
 (defmacro term-case (match &body cases)
   "CASE on the MATCH-TERM of MATCH."
   `(case (sparql-parser:match-term ,match)
@@ -246,11 +246,8 @@ PREFIXES for the expanded URIs."
    (labels ((process-subject (subject-match)
               (when (match-has-direct-term subject-match 'ebnf::|VarOrTerm|)
                 (sparql-manipulation::scan-deep-term-case sub (subject-match ebnf::|TriplesSameSubjectPath|)
-                  (ebnf::|IRIREF| (process-subject-and-uri subject-match sub))
-                  (ebnf::|PNAME_LN| (process-subject-and-uri subject-match sub))
-                  (ebnf::|PNAME_NS| (process-subject-and-uri subject-match sub))
-                  (ebnf::|VAR1| (process-subject-and-var subject-match sub))
-                  (ebnf::|VAR2| (process-subject-and-var subject-match sub)))))
+                  (ebnf::|ABSTRACT-IRI| (process-subject-and-uri subject-match sub))
+                  (ebnf::|ABSTRACT-VAR| (process-subject-and-var subject-match sub)))))
             (process-subject-and-uri (subject-match term)
               ;; subject-match :: TriplesSameSubjectPath
               ;; term :: Expandable URI for subject
@@ -293,41 +290,20 @@ PREFIXES for the expanded URIs."
                   (do-grouped-children (single-object-match) (objects-match :filter-terms (ebnf::|ObjectPath| ebnf::|Object|))
                     (prog1 single-object-match)
                     (sparql-manipulation::scan-deep-term-case sub (single-object-match ebnf::|TriplesSameSubjectPath|)
-                      (ebnf::|IRIREF| (if subject-var
-                                          (extract-info-from-var-pred-uri subject-var
-                                                                          subject-path
-                                                                          (extract-match-uri-mapping sub))
-                                          (extract-info-from-uri-pred-uri subject-uri
-                                                                          subject-path
-                                                                          (extract-match-uri-mapping sub))))
-                      (ebnf::|PNAME_LN| (if subject-var
-                                          (extract-info-from-var-pred-uri subject-var
-                                                                          subject-path
-                                                                          (extract-match-uri-mapping sub))
-                                          (extract-info-from-uri-pred-uri subject-uri
-                                                                          subject-path
-                                                                          (extract-match-uri-mapping sub))))
-                      (ebnf::|PNAME_NS| (if subject-var
-                                          (extract-info-from-var-pred-uri subject-var
-                                                                          subject-path
-                                                                          (extract-match-uri-mapping sub))
-                                          (extract-info-from-uri-pred-uri subject-uri
-                                                                          subject-path
-                                                                          (extract-match-uri-mapping sub))))
-                      (ebnf::|VAR1| (if subject-var
-                                        (extract-info-from-var-pred-var subject-var
-                                                                        subject-path
-                                                                        (extract-match-var-string sub))
-                                        (extract-info-from-uri-pred-var subject-uri
-                                                                        subject-path
-                                                                        (extract-match-var-string sub))))
-                      (ebnf::|VAR2| (if subject-var
-                                        (extract-info-from-var-pred-var subject-var
-                                                                        subject-path
-                                                                        (extract-match-var-string sub))
-                                        (extract-info-from-uri-pred-var subject-uri
-                                                                        subject-path
-                                                                        (extract-match-var-string sub)))))))))
+                      (ebnf::|ABSTRACT-IRI| (if subject-var
+                                                (extract-info-from-var-pred-uri subject-var
+                                                                                subject-path
+                                                                                (extract-match-uri-mapping sub))
+                                                (extract-info-from-uri-pred-uri subject-uri
+                                                                                subject-path
+                                                                                (extract-match-uri-mapping sub))))
+                      (ebnf::|ABSTRACT-VAR| (if subject-var
+                                                (extract-info-from-var-pred-var subject-var
+                                                                                subject-path
+                                                                                (extract-match-var-string sub))
+                                                (extract-info-from-uri-pred-var subject-uri
+                                                                                subject-path
+                                                                                (extract-match-var-string sub)))))))))
             ;; (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))
             (extract-info-from-var-pred-var (left predicate right)
               (format t "Var pred var :: ~A P ~A" left ;; predicate
