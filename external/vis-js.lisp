@@ -51,18 +51,18 @@ representation of the edges."
                  (typecase match
                    (match ;; describe the match
                      (push (jsown:new-js
-                             ("id" id)
-                             ("label" (as-string (match-term match)))
-                             ("title" (format nil "~A~%<br/>~A"
-                                              (html-escape (sparql-generator::write-valid-match match))
-                                              (alexandria:if-let ((rule-expansion (rule-expansion match)))
+                               ("id" id)
+                               ("label" (as-string (match-term match)))
+                               ("title" (format nil "~A~%<br/>~A"
+                                                (html-escape (sparql-generator::write-valid-match match))
+                                                (alexandria:if-let ((rule-expansion (rule-expansion match)))
                                                   (html-escape (princ-to-string rule-expansion))
                                                   "UNKNOWN")))
-                             ("color" (determine-color match);; (jsown:new-js
+                               ("color" (determine-color match);; (jsown:new-js
                                         ;; ("background" (determine-color match))
                                         ;; ("border" "rgb(233,233,233)"))
-                                      ))
-                           node-descriptions)
+                                        ))
+                             node-descriptions)
                      ;; add reference to parent if parent exists
                      (when parent-id
                        (push (jsown:new-js
@@ -87,7 +87,7 @@ representation of the edges."
                               edge-descriptions))))))))
       (traverse-match match)
       (values (jsown:to-json (reverse node-descriptions))
-              (jsown:to-json (reverse edge-descriptions)))))))
+              (jsown:to-json (reverse edge-descriptions))))))
 
 (defun in-page (nodes edges &optional stream)
   "Dumps NODES and EDGES into a page."
