@@ -77,3 +77,14 @@
   (:import-from #:alexandria
                 #:when-let))
 
+(defpackage #:sparql-visjs
+  (:use :common-lisp)
+  (:import-from #:sparql-parser
+                #:scanned-token-effective-string
+                #:scanned-token-token
+                #:match-p
+                #:match-submatches
+                #:match-term
+                #:scanned-token
+                #:match)
+  (:export #:match-as-visjs))

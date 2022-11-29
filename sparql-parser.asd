@@ -20,4 +20,5 @@
                (:file "acl/acl")
                (:file "acl/config")
                (:file "connection/server")
-               (:file "connection/client")))
+               (:file "connection/client")
+               (:file "external/vis-js")))
