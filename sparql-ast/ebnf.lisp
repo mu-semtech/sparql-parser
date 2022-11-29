@@ -79,8 +79,7 @@
 (defmacro define-abstract-token (token &rest elements)
   "Used as an abstraction layer, must be known at compiletime.  These
 define names that could be used as an alternative for many other names."
-  `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (setf (getf *abstract-tokens* ',token) ',elements)))
+  `(setf (getf *abstract-tokens* ',token) ',elements))
 
 (defun abstract-token-expansion (token)
   "Yields the abstract token set for the supplied token."
@@ -88,3 +87,6 @@ define names that could be used as an alternative for many other names."
 
 (define-abstract-token ebnf::|ABSTRACT-IRI| ebnf::|IRIREF| ebnf::|PNAME_LN| ebnf::|PNAME_NS|)
 (define-abstract-token ebnf::|ABSTRACT-VAR| ebnf::|VAR1| ebnf::|VAR2|)
+;; NOTE: does not contain RDFLiteral, which does contain String so must be checked first
+(define-abstract-token ebnf::|ABSTRACT-PRIMITIVE|
+  ebnf::|STRING_LITERAL1| ebnf::|STRING_LITERAL2| ebnf::|STRING_LITERAL_LONG1| ebnf::|STRING_LITERAL_LONG2| ebnf::|INTEGER_NEGATIVE| ebnf::|DECIMAL_NEGATIVE| ebnf::|DOUBLE_NEGATIVE| ebnf::|INTEGER_POSITIVE| ebnf::|DECIMAL_POSITIVE| ebnf::|DOUBLE_POSITIVE| ebnf::|INTEGER| ebnf::|DECIMAL| ebnf::|DOUBLE|)
