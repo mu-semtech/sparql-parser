@@ -140,15 +140,10 @@ which element was expected to be valid but was not."
      &key (rule (find-rule (sparql-parser:match-term (sparql-parser:sparql-ast-top-node sparql-ast)))))
   (is-valid-match (sparql-parser:sparql-ast-top-node sparql-ast) :rule rule))
 
-(defun write-valid (sparql-ast)
-  "Writes out MATCH assuming it was valid."
-  ;; We would like to have a basic round-trip start->finish for
-  ;; rendering the contents.  This is an effort for doing just that,
-  ;; even though we know there are going to be some limitations in the
-  ;; approach taken.
+(defun write-valid-match (match)
+  "Writes out MATCH assuming it was valid.
 
-  ;; For humour's sake, let's first calculate the length we'd need,
-  ;; create a string of the appropriate size, and then fill it in.
+NOTE: you likely want WRITE-VALID instead."
   (labels ((submatch-strings (match)
              (cond ((typep match 'sparql-parser:scanned-token)
                     (list (sparql-parser:scanned-token-effective-string match)))
@@ -158,7 +153,15 @@ which element was expected to be valid but was not."
                    (t
                     (loop for sub in (sparql-parser:match-submatches match)
                           append (submatch-strings sub))))))
-    (format nil "~{~A~,^ ~}" (submatch-strings (sparql-parser:sparql-ast-top-node sparql-ast)))))
+    (format nil "~{~A~,^ ~}" (submatch-strings match))))
+
+(defun write-valid (sparql-ast)
+  "Writes out MATCH assuming it was valid."
+  ;; We would like to have a basic round-trip start->finish for
+  ;; rendering the contents.  This is an effort for doing just that,
+  ;; even though we know there are going to be some limitations in the
+  ;; approach taken.
+  (write-valid-match (sparql-parser:sparql-ast-top-node sparql-ast)))
 
 (defun write-when-valid (sparql-ast)
   "Writes out SPARQL-AST after verifying it was valid."

@@ -272,51 +272,70 @@ PREFIXES for the expanded URIs."
               (cached-expanded-uri match
                                    :prefixes prefixes
                                    :match-uri-mapping match-uri-mapping))
-            (extract-match-var-string (match)
+            (extract-match-string (match)
               (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
             (process-object (&key subject-path subject-uri subject-var)
               (format nil "process-object got called with ~A ~A ~A" subject-path subject-uri subject-var)
               (with-named-child (child) (subject-path ebnf::|PropertyListPathNotEmpty|)
                 (prog1 child)
-                (do-grouped-children (verb objects-match)
+                (do-grouped-children (predicate-path objects-match)
                     (child :amount 2
                            :filter-terms (ebnf::|VerbPath| ebnf::|VerbSimple| ebnf::|ObjectList| ebnf::|ObjectListPath|)
                            :error-on-incomplete-amount-p t)
-                  (declare (ignore verb)) ; TODO: treat verb
                   ;; ObjectList or ObjectListPath
                   ;; these objects will contain extra information
                   ;; (format t "Got ~A" objects-match)
                   (prog1 objects-match)
                   (do-grouped-children (single-object-match) (objects-match :filter-terms (ebnf::|ObjectPath| ebnf::|Object|))
                     (prog1 single-object-match)
+                    ;; TODO: Correctly support or break in case of RDFLiteral
                     (sparql-manipulation::scan-deep-term-case sub (single-object-match ebnf::|TriplesSameSubjectPath|)
                       (ebnf::|ABSTRACT-IRI| (if subject-var
                                                 (extract-info-from-var-pred-uri subject-var
-                                                                                subject-path
+                                                                                predicate-path
                                                                                 (extract-match-uri-mapping sub))
                                                 (extract-info-from-uri-pred-uri subject-uri
-                                                                                subject-path
+                                                                                predicate-path
                                                                                 (extract-match-uri-mapping sub))))
                       (ebnf::|ABSTRACT-VAR| (if subject-var
                                                 (extract-info-from-var-pred-var subject-var
-                                                                                subject-path
-                                                                                (extract-match-var-string sub))
+                                                                                predicate-path
+                                                                                (extract-match-string sub))
                                                 (extract-info-from-uri-pred-var subject-uri
-                                                                                subject-path
-                                                                                (extract-match-var-string sub)))))))))
+                                                                                predicate-path
+                                                                                (extract-match-string sub))))
+                      (ebnf::|ABSTRACT-PRIMITIVE| (if subject-var
+                                                      (extract-info-from-var-pred-term subject-var
+                                                                                       predicate-path
+                                                                                       (extract-match-string sub))
+                                                      (extract-info-from-uri-pred-term subject-uri
+                                                                                       predicate-path
+                                                                                       (extract-match-string sub)))))))))
             ;; (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))
             (extract-info-from-var-pred-var (left predicate right)
-              (format t "Var pred var :: ~A P ~A" left ;; predicate
-                      right))
+              (setf (node-knowledge predicate :left-var) left)
+              (push right (node-knowledge predicate :right-var))
+              (format t "~&Var pred var :: ~A ~A ~A~%" left (sparql-generator::write-valid-match predicate) right))
             (extract-info-from-var-pred-uri (left predicate right)
-              (format t "Var pred uri :: ~A P ~A" left ;; predicate
-                      right))
+              (setf (node-knowledge predicate :left-var) left)
+              (push right (node-knowledge predicate :right-uri))
+              (format t "~&Var pred uri :: ~A ~A ~A~%" left (sparql-generator::write-valid-match predicate) right))
             (extract-info-from-uri-pred-var (left predicate right)
-              (format t "uri pred var :: ~A P ~A" left ;; predicate
-                      right))
+              (setf (node-knowledge predicate :left-uri) left)
+              (push right (node-knowledge predicate :right-var))
+              (format t "~&uri pred var :: ~A ~A ~A~%" left (sparql-generator::write-valid-match predicate) right))
             (extract-info-from-uri-pred-uri (left predicate right)
-              (format t "uri pred uri :: ~A P ~A" left ;; predicate
-                      right)))
+              (setf (node-knowledge predicate :left-uri) left)
+              (push right (node-knowledge predicate :right-uri))
+              (format t "~&uri pred uri :: ~A ~A ~A~%" left (sparql-generator::write-valid-match predicate) right))
+            (extract-info-from-var-pred-term (left predicate right)
+              (setf (node-knowledge predicate :left-var) left)
+              (push right (node-knowledge predicate :right-primitive))
+              (format t "~&var pred term :: ~A ~A ~A~%" left (sparql-generator::write-valid-match predicate) right))
+            (extract-info-from-uri-pred-term (left predicate right)
+              (setf (node-knowledge predicate :left-uri) left)
+              (push right (node-knowledge predicate :right-primitive))
+              (format t "~&uri pred term :: ~A ~A ~A~%" left (sparql-generator::write-valid-match predicate) right)))
      (loop-matches-symbol-case (match) query
        ;; Interpret subject
        ;; Drill down for predicate and object
