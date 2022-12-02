@@ -58,6 +58,12 @@
   (:import-from #:support #:->)
   (:export #:apply-access-rights))
 
+(defpackage #:reasoner-term-info
+  (:use :common-lisp)
+  (:export #:with-match-term-info
+           #:term-info
+           #:union-term-info))
+
 (defpackage #:reasoner
   (:use :common-lisp)
   (:import-from #:support
