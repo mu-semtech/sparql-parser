@@ -31,7 +31,8 @@
 (defpackage #:sparql-generator
   (:use :common-lisp)
   (:export #:is-valid #:write-valid
-           #:write-when-valid))
+           #:write-when-valid
+           #:write-valid-match))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
@@ -43,7 +44,8 @@
            #:add-default-base-decl-to-prologue
            #:loop-matches
            #:loop-matches-symbol-case
-           #:do-grouped-children))
+           #:do-grouped-children
+           #:match-symbol-case))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -69,6 +71,7 @@
   (:import-from #:support
                 #:->)
   (:import-from #:sparql-manipulation
+                #:match-symbol-case
                 #:do-grouped-children
                 #:loop-matches-symbol-case)
   (:import-from #:alexandria

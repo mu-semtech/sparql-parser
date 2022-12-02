@@ -144,6 +144,14 @@ Allows case expansions through EXPANDED-TERM-CASE."
                            (sparql-parser:scanned-token (sparql-parser:scanned-token-token ,var)))
        ,@clauses)))
 
+(defmacro match-symbol-case (match &body clauses)
+  "Matches MATCH using CASE for its SYMBOL.
+
+Allows case expansions through EXPANDED-TERM-CASE."
+  `(when (match-p ,match)
+     (expanded-term-case (match-term ,match)
+       ,@clauses)))
+
 
 (defun follow-path (match path)
   "Follow PATH  in  MATCH yielding a list of solutions.
