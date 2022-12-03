@@ -16,6 +16,7 @@
                (:file "sparql-ast/generator")
                (:file "sparql-ast/manipulation")
                (:file "connection/globals")
+               (:file "reasoner/term-info")
                (:file "reasoner/reasoner")
                (:file "acl/acl")
                (:file "acl/config")

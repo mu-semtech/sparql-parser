@@ -69,3 +69,13 @@
                            ,(emit right (cons bound known-lower-bounds) known-upper-bounds)))))))
       (emit sorted-ranges nil nil))))
 
+(defun group-by (list cmp &key (key #'identity))
+  "Groups elements in LIST by CMP returning a new nested list."
+  (loop for discovered-groups = nil then discovered-groups
+        for item in list
+        for group = (find (funcall key item) discovered-groups :key (lambda (x) (funcall key (first x))) :test cmp)
+        if group
+          do (setf (cdr (last group)) (list item))
+        else
+          do (push (list item) discovered-groups)
+        finally (return discovered-groups)))

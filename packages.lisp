@@ -7,7 +7,7 @@
 
 (defpackage :support
   (:use :common-lisp)
-  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search))
+  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search #:group-by))
 
 (defpackage :ebnf
   (:use :common-lisp)
@@ -70,13 +70,16 @@
 (defpackage #:reasoner
   (:use :common-lisp)
   (:import-from #:support
+                #:group-by
                 #:->)
   (:import-from #:sparql-manipulation
                 #:match-symbol-case
                 #:do-grouped-children
                 #:loop-matches-symbol-case)
   (:import-from #:alexandria
-                #:when-let))
+                #:when-let)
+  (:import-from #:reasoner-term-info
+                #:union-term-info))
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)

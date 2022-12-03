@@ -154,17 +154,6 @@ distributed amongst matches."
                                             object-string))
         (t (warn "Received an unknown type of value in REASONER-TERM-INFO:ADD-SUBJECT-PREDICATE-OBJECT ~A" object))))))
 
-(defun group-by (list cmp &key (key #'identity))
-  "Groups elements in LIST by CMP returning a new nested list."
-  (loop for discovered-groups = nil then discovered-groups
-        for item in list
-        for group = (find (funcall key item) discovered-groups :key (lambda (x) (funcall key (first x))) :test cmp)
-        if group
-          do (setf (cdr (last group)) (list item))
-        else
-          do (push (list item) discovered-groups)
-        finally (return discovered-groups)))
-
 (defun primitive-term-equal (left right)
   "Compares two primitive terms as used by the reasoner."
   ;; this currently assumes a string as a value.  However, these could
