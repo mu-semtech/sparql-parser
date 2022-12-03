@@ -256,12 +256,9 @@ PREFIXES for the expanded URIs."
 
              ;; DONE: Enrich predicate match
              ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
-             (let ((iri (cached-expanded-uri term
-                                             :prefixes prefixes
-                                             :match-uri-mapping match-uri-mapping)))
-               (with-named-child (property-list-match)
-                   (same-subject-match ebnf::|PropertyListPathNotEmpty|)
-                 (process-object :same-subject-match same-subject-match :subject-uri term))))
+             (with-named-child (property-list-match)
+                 (same-subject-match ebnf::|PropertyListPathNotEmpty|)
+               (process-object :same-subject-match same-subject-match :subject-uri term)))
            (process-subject-and-var (same-subject-match term)
              ;; same-subject-match :: TriplesSameSubjectPath or TriplesSameSubject
              ;; term :: VAR for subject
@@ -270,14 +267,13 @@ PREFIXES for the expanded URIs."
              ;; (format t "Working through ~A ~A" same-subject-match term)
              (with-named-child (property-list-match)
                  (same-subject-match ebnf::|PropertyListPathNotEmpty|)
-               (let ((var-string (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))))
-                 (process-object :same-subject-match same-subject-match :subject-var (first (sparql-parser:match-submatches term))))))
-           (extract-match-uri-mapping (match)
-             (cached-expanded-uri match
-                                  :prefixes prefixes
-                                  :match-uri-mapping match-uri-mapping))
-           (extract-match-string (match)
-             (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
+               (process-object :same-subject-match same-subject-match :subject-var (first (sparql-parser:match-submatches term)))))
+           ;; (extract-match-uri-mapping (match)
+           ;;   (cached-expanded-uri match
+           ;;                        :prefixes prefixes
+           ;;                        :match-uri-mapping match-uri-mapping))
+           ;; (extract-match-string (match)
+           ;;   (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
            (process-object (&key same-subject-match subject-uri subject-var)
              ;; same-subject-match :: TriplesSameSubjectPath or TriplesSameSubject
              ;; subject-uri :: ABSTRACT-URI for subject or nil
