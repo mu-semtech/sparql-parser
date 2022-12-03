@@ -81,6 +81,11 @@
 
 The term info options are collections of constraints that hold at the key MATCH.")
 
+(defmacro with-match-term-info (&body body)
+  "Executes code-block with a scoped match-term-info block."
+  `(let ((*match-term-info* (make-hash-table :test 'eq)))
+     ,@body))
+
 (defun term-info (match &optional (default (list :or (make-hash-table :test 'equal))))
   "Yields known term information at MATCH.
 
@@ -88,15 +93,66 @@ These are options of constraints that we know of at MATCH.  They are
 distributed amongst matches."
   (gethash match *match-term-info* default))
 
-(defun (setf term-info) (value match &optional default)
+(defun (setf term-info) (value match &optional (default (list :or (make-hash-table :test 'equal))))
   "Sets the term-info for VALUE"
-  (declare (ignore default))
-  (setf (gethash match *match-term-info*) value))
+  (setf (gethash match *match-term-info* default) value))
 
-(defmacro with-match-term-info (&body body)
-  "Executes code-block with a scoped match-term-info block."
-  `(let ((*match-term-info* (make-hash-table :test 'eq)))
-     ,@body))
+(defun ensure-term-info (match)
+  "Ensures term-info has a setting for MATCH and returns it."
+  (multiple-value-bind (value foundp)
+      (term-info match)
+    (unless foundp
+      (setf (term-info match) value))
+    value))
+
+(defun add-subject-predicate-object (match subject predicate object &optional (also-set-backward t) (predicate-type :forward-predicates))
+  "Adds the SUBJECT PREDICATE OBJECT combination to the known knowledge of MATCH."
+  ;; types of predicates:
+  ;; - :forward-predicates
+  ;; - :backward-predicates
+  ;;
+  ;; NOTE: the solution with also-set-backward and predicate-type is not
+  ;; the cleanest approach.  we could refactor this someday.
+  (let ((subject-string (sparql-manipulation:match-symbol-case subject
+                          (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri subject))
+                          (t (sparql-generator:write-valid-match subject))))
+        (predicate-string (sparql-generator:write-valid-match predicate))
+        (object-string (sparql-manipulation:match-symbol-case object
+                         (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri object))
+                         (t (sparql-generator:write-valid-match object)))))
+    ;; subject exists with :forward-perdicates
+    (unless (assoc predicate-string
+                   (getf (gethash subject-string
+                                  (second (term-info match)))
+                         predicate-type)
+                   :test #'primitive-term-equal)
+      ;; subject exists but predicate is not known
+      (push (list predicate-string)
+            (getf (gethash subject-string
+                           (second (ensure-term-info match)))
+                  predicate-type)))
+    ;; we now know the subject-predicate combination exists
+    (let ((predicate-cell (assoc predicate-string
+                                 (getf (gethash subject-string
+                                                (second (term-info match)))
+                                       predicate-type)
+                                 :test #'primitive-term-equal)))
+      (if predicate-cell
+          (unless (find object-string (rest predicate-cell) :test #'primitive-term-equal)
+            (setf (cdr (last predicate-cell)) (list object-string)))
+          (push (list predicate object-string)
+                (getf (gethash subject-string
+                               (second (ensure-term-info match)))
+                      predicate-type))))
+    ;; if object represents an iri or a variable, we must set the backward-predicates too
+    ;; TODO: support RDFLiteral
+    (when also-set-backward
+      (sparql-manipulation:match-symbol-case object
+        (ebnf::|ABSTRACT-IRI| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
+        (ebnf::|ABSTRACT-VARIABLE| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
+        (ebnf::|ABSTRACT-PRIMITIVE| (format t "~&Not defining inverse predicate for primitive ~A~%"
+                                            object-string))
+        (t (warn "Received an unknown type of value in REASONER-TERM-INFO:ADD-SUBJECT-PREDICATE-OBJECT ~A" object))))))
 
 (defun group-by (list cmp &key (key #'identity))
   "Groups elements in LIST by CMP returning a new nested list."

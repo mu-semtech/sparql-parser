@@ -242,72 +242,82 @@ PREFIXES for the expanded URIs."
   ;; Eg: a triple ?s a foaf:Person would derive indicate ?s must have an
   ;; rdf:type relationship to foaf:Person.  The expansions are used to
   ;; further extract information from these items.
-  (let (uris variables)
-    (labels ((process-subject (subject-match)
-               (when (match-has-direct-term subject-match 'ebnf::|VarOrTerm|)
-                 (sparql-manipulation::scan-deep-term-case sub (subject-match ebnf::|TriplesSameSubjectPath|)
-                   (ebnf::|ABSTRACT-IRI| (process-subject-and-uri subject-match sub))
-                   (ebnf::|ABSTRACT-VAR| (process-subject-and-var subject-match sub)))))
-             (process-subject-and-uri (subject-match term)
-               ;; subject-match :: TriplesSameSubjectPath
-               ;; term :: Expandable URI for subject
+  (labels ((process-subject (same-subject-match)
+             ;; same-subject-match is an ebnf::|TriplesSameSubject| or
+             ;; ebnf::|TriplesSameSubjectPath|
+             (when (match-has-direct-term same-subject-match 'ebnf::|VarOrTerm|)
+               (sparql-manipulation::scan-deep-term-case sub (same-subject-match ebnf::|TriplesSameSubjectPath|)
+                 ;; TODO: this will fail on RDFLiteral
+                 (ebnf::|ABSTRACT-IRI| (process-subject-and-uri same-subject-match sub))
+                 (ebnf::|ABSTRACT-VAR| (process-subject-and-var same-subject-match sub)))))
+           (process-subject-and-uri (same-subject-match term)
+             ;; same-subject-match :: TriplesSameSubjectPath or TriplesSameSubjectPath
+             ;; term :: Expandable URI for subject
 
-               ;; DONE: Enrich predicate match
-               ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
-               (let ((iri (cached-expanded-uri term
-                                               :prefixes prefixes
-                                               :match-uri-mapping match-uri-mapping)))
-                 (push iri uris) ; TODO: for fun, remove
-                 (with-named-child (property-list-match) (subject-match ebnf::|PropertyListPathNotEmpty|)
-                   ;; (setf (node-knowledge property-list-match :left-iri) iri)
-                                        ; TODO: can move to one of the specific cases
-                   (process-object :subject-path subject-match :subject-uri term))))
-             (process-subject-and-var (match term)
-               ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
-               ;; (format t "Working through ~A ~A" match term)
-               (with-named-child (property-list-match) (match ebnf::|PropertyListPathNotEmpty|)
-                 (let ((var-string (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))))
-                   (push var-string variables) ; TODO: for fun, remove
-                   (process-object :subject-path match :subject-var (first (sparql-parser:match-submatches term))))))
-             (extract-match-uri-mapping (match)
-               (cached-expanded-uri match
-                                    :prefixes prefixes
-                                    :match-uri-mapping match-uri-mapping))
-             (extract-match-string (match)
-               (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
-             (process-object (&key subject-path subject-uri subject-var)
-               ;; (format nil "process-object got called with ~A ~A ~A" subject-path subject-uri subject-var)
-               (with-named-child (child) (subject-path ebnf::|PropertyListPathNotEmpty|)
-                 (do-grouped-children (predicate-path objects-match)
-                     (child :amount 2
-                            :filter-terms (ebnf::|VerbPath| ebnf::|VerbSimple| ebnf::|ObjectList| ebnf::|ObjectListPath|)
-                            :error-on-incomplete-amount-p t)
-                   ;; ObjectList or ObjectListPath
-                   ;; these objects will contain extra information
-                   (do-grouped-children (single-object-match) (objects-match :filter-terms (ebnf::|ObjectPath| ebnf::|Object|))
-                     ;; TODO: Correctly support or break in case of RDFLiteral
-                     (let ((properties (list :predicate predicate-path)))
-                       (when subject-var
-                         (alexandria:appendf properties (list :left-var subject-var)))
-                       (when subject-uri
-                         (alexandria:appendf properties (list :left-uri subject-uri)))
-                       (sparql-manipulation::scan-deep-term-case sub (single-object-match ebnf::|TriplesSameSubjectPath|)
-                         (ebnf::|ABSTRACT-IRI| (alexandria:appendf properties (list :right-uri sub)))
-                         (ebnf::|ABSTRACT-VAR| (alexandria:appendf properties (list :right-var sub)))
-                         (ebnf::|ABSTRACT-PRIMITIVE| (alexandria:appendf properties (list :right-primitive sub))))
-                       (apply (function extract-info) properties))))))
-             (extract-info (&key left-var left-uri predicate right-var right-uri right-primitive)
-               (when left-var (setf (node-knowledge predicate :left-var) left-var))
-               (when left-uri (setf (node-knowledge predicate :left-uri) left-uri))
-               (when right-var (setf (node-knowledge predicate :right-var) right-var))
-               (when right-uri (setf (node-knowledge predicate :right-uri) right-uri))
-               (when right-primitive (setf (node-knowledge predicate :right-primitive) right-primitive))))
-      (loop-matches-symbol-case (match) query
-        ;; Interpret subject
-        ;; Drill down for predicate and object
-        (ebnf::|TriplesSameSubjectPath| (process-subject match))
-        (ebnf::|TriplesSameSubject| (process-subject match))))
-    (list uris variables)))
+             ;; DONE: Enrich predicate match
+             ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
+             (let ((iri (cached-expanded-uri term
+                                             :prefixes prefixes
+                                             :match-uri-mapping match-uri-mapping)))
+               (with-named-child (property-list-match)
+                   (same-subject-match ebnf::|PropertyListPathNotEmpty|)
+                 (process-object :same-subject-match same-subject-match :subject-uri term))))
+           (process-subject-and-var (same-subject-match term)
+             ;; same-subject-match :: TriplesSameSubjectPath or TriplesSameSubject
+             ;; term :: VAR for subject
+
+             ;; TODO: Drill down to predicate (and enrich uri with knowledge based on predicate)
+             ;; (format t "Working through ~A ~A" same-subject-match term)
+             (with-named-child (property-list-match)
+                 (same-subject-match ebnf::|PropertyListPathNotEmpty|)
+               (let ((var-string (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches term)))))
+                 (process-object :same-subject-match same-subject-match :subject-var (first (sparql-parser:match-submatches term))))))
+           (extract-match-uri-mapping (match)
+             (cached-expanded-uri match
+                                  :prefixes prefixes
+                                  :match-uri-mapping match-uri-mapping))
+           (extract-match-string (match)
+             (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
+           (process-object (&key same-subject-match subject-uri subject-var)
+             ;; same-subject-match :: TriplesSameSubjectPath or TriplesSameSubject
+             ;; subject-uri :: ABSTRACT-URI for subject or nil
+             ;; subject-var :: ABSTRACT-VAR for subject or nil
+
+             ;; (format nil "process-object got called with ~A ~A ~A" same-subject-match subject-uri subject-var)
+             (with-named-child (child) (same-subject-match ebnf::|PropertyListPathNotEmpty|)
+               (do-grouped-children (predicate-path objects-match)
+                   (child :amount 2
+                          :filter-terms (ebnf::|VerbPath| ebnf::|VerbSimple| ebnf::|ObjectList| ebnf::|ObjectListPath|)
+                          :error-on-incomplete-amount-p t)
+                 ;; ObjectList or ObjectListPath
+                 ;; these objects will contain extra information
+                 (do-grouped-children (single-object-match) (objects-match :filter-terms (ebnf::|ObjectPath| ebnf::|Object|))
+                   ;; TODO: Correctly support or break in case of RDFLiteral
+                   (let ((properties (list same-subject-match :predicate predicate-path)))
+                     (when subject-var
+                       (alexandria:appendf properties (list :left-var subject-var)))
+                     (when subject-uri
+                       (alexandria:appendf properties (list :left-uri subject-uri)))
+                     (sparql-manipulation::scan-deep-term-case sub (single-object-match ebnf::|TriplesSameSubjectPath|)
+                       (ebnf::|ABSTRACT-IRI| (alexandria:appendf properties (list :right-uri sub)))
+                       (ebnf::|ABSTRACT-VAR| (alexandria:appendf properties (list :right-var sub)))
+                       (ebnf::|ABSTRACT-PRIMITIVE| (alexandria:appendf properties (list :right-primitive sub))))
+                     (apply (function extract-info) properties))))))
+           (extract-info (match &key left-var left-uri predicate right-var right-uri right-primitive)
+             (when left-var (setf (node-knowledge predicate :left-var) left-var))
+             (when left-uri (setf (node-knowledge predicate :left-uri) left-uri))
+             (when right-var (setf (node-knowledge predicate :right-var) right-var))
+             (when right-uri (setf (node-knowledge predicate :right-uri) right-uri))
+             (when right-primitive (setf (node-knowledge predicate :right-primitive) right-primitive))
+             ;; TODO: support predicate as a real path instead
+             (let ((*prefixes* prefixes)
+                   (*match-uri-mapping* match-uri-mapping))
+              (reasoner-term-info:add-subject-predicate-object match (or left-var left-uri) predicate (or right-var right-uri right-primitive)))))
+    (loop-matches-symbol-case (match) query
+      ;; Interpret subject
+      ;; Drill down for predicate and object
+      (ebnf::|TriplesSameSubjectPath| (process-subject match))
+      (ebnf::|TriplesSameSubject| (process-subject match)))))
 
 (defparameter *information-distribution-approaches* nil
   "All approaches for distributing information between nodes.")

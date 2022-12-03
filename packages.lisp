@@ -64,7 +64,8 @@
   (:use :common-lisp)
   (:export #:with-match-term-info
            #:term-info
-           #:union-term-info))
+           #:union-term-info
+           #:add-subject-predicate-object))
 
 (defpackage #:reasoner
   (:use :common-lisp)
