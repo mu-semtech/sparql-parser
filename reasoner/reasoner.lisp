@@ -54,10 +54,6 @@
 ;;   X> cannot derive ?s in 1 has type of "foaf:Person" because filter
 ;;      does not bind outside.
 
-(defun construct-derivation-tree (query)
-  ;; Should return rules on propagating what we've derived.
-  nil)
-
 (defun derived-knowledge (query)
   ;; Extracts directly known knowledge from the query.  This may derive
   ;; information from each triple.
@@ -70,9 +66,6 @@
             expanded-uris
             extracted-info
             derivations)))
-
-(defmacro traverse-query-terms ((var) query &body body)
-  body)
 
 (defun iriref-string-strip-markers (string)
   (if (and (char= (elt string 0) #\<)
@@ -188,11 +181,6 @@ processing should execute."
       (ebnf::|PNAME_LN| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping))
       (ebnf::|PNAME_NS| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
     match-uri-mapping))
-
-(defun extract-triple-sets (query match-uri-mapping prefixes)
-  "Extracts triples from QUERY with some understanding of how they're
-related."
-  )
 
 ;; These two parameters indicate what we know of the left and the right
 ;; parts of the path.
@@ -317,6 +305,133 @@ PREFIXES for the expanded URIs."
 
 (defparameter *information-distribution-approaches* nil
   "All approaches for distributing information between nodes.")
+
+(defmacro define-handler (pattern &rest approaches)
+  `(alexandria:appendf
+    *information-distribution-approaches*
+    (list ',(intern (symbol-name pattern) (find-package :ebnf))
+          (list ,@(mapcar (lambda (term)
+                            `(function ,(intern (concatenate 'string "HANDLE-" (symbol-name term)))))
+                          approaches)))))
+
+(defun walk-distribute-match-1 (match)
+  "Runs all distribution efforts for MATCH once."
+  (when (match-p match)
+    (dolist (processor (getf *information-distribution-approaches*
+                             (match-term match)
+                             (list #'handle-down-pass)))
+      (funcall processor match))
+    (dolist (submatch (match-submatches match))
+      (walk-distribute-match-1 submatch))))
+
+;; Options
+;;
+;; down-pass :: any exposed information from our parent applies to our children but no information from the children applies to the parents (default)
+;; up-pass :: any exposed infornmation from our children applies to our parent
+;; peers-pass :: any exposed information on any of the children, applies to the other children
+;; up-options-pass :: each of our children represents a set of optional constraints which should be passed up
+;; up-negative-pass :: passes the constraints of our children (unioned) as not allowed in our parent (TODO)
+
+(define-handler |SelectQuery| down-pass peers-pass)
+(define-handler |WhereClause| up-pass down-pass)
+(define-handler |GroupGraphPattern| up-pass down-pass)
+(define-handler |SubSelect| down-pass peers-pass) ;; TODO: expand SubSelect
+(define-handler |GroupGraphPatternSub| peers-pass)
+(define-handler |GraphPatternNotTriples| down-pass) ;; default
+(define-handler |TriplesBlock| up-pass down-pass) ;; perhaps better custom behaviour?
+(define-handler |GroupOrUnionPattern| up-pass down-pass)
+(define-handler |GroupOrUnionGraphPattern| down-pass up-options-pass)
+(define-handler |OptionalGraphPattern| down-pass)
+(define-handler |MinusGraphPattern| down-pass up-negative-pass)
+(define-handler |GraphGrahpPattern| up-pass down-pass)
+(define-handler |ServiceGraphPattern| up-pass down-pass)
+(define-handler |Filter| up-pass down-pass)
+(define-handler |Bind| down-pass)
+(define-handler |InlineData| up-pass down-pass)
+
+;; These properties can be used to push information through various levels
+(defparameter handler-pass-had-change nil
+  "Special case indicating whether the pass yielded a change of information or not.")
+
+(defun match-match-submatches (match)
+  "Yields all submatches of match which are a match themselves as per MATCH-P"
+  (when (sparql-parser:match-p match)
+    (remove-if-not #'sparql-parser:match-p (sparql-parser:match-submatches match))))
+
+(defun handle-peers-pass (match)
+  "Passes upstream knowledge to peers, and from peers to peers."
+  (let* ((submatches (match-match-submatches match))
+         (known-info (apply #'union-term-info (cons match submatches))))
+    (dolist (submatch submatches)
+      (setf (term-info submatch)
+            known-info))))
+
+(defun handle-down-pass (match)
+  "Passes knowledge from the current match to its children."
+  (dolist (submatch (match-match-submatches match))
+    (setf (term-info submatch) (union-term-info match submatch))))
+
+(defun handle-up-pass (match)
+  "Passes knowledge from the match's children to the current match."
+  (match-term match)
+  (setf (term-info match)
+        (apply #'union-term-info (cons match (match-match-submatches match)))))
+
+(defun handle-up-options-pass (match)
+  "Passes knowledge from the match's children to the parent as a series of options."
+  ;; find all option clauses from children
+  ;; combine them x with parent
+  (setf (term-info match)
+        (union-term-info `(:or ,@(loop for submatch in (match-match-submatches match)
+                                       append (rest (term-info submatch))))
+                         (term-info match))))
+
+(defun handle-up-negative-pass (match)
+  "Constructs a negative pass, indicating the following is something that would *not* resolve."
+  (declare (ignore match))
+  ;; TODO: construct negative mach for MINUS
+  nil)
+
+(defgeneric handle-custom-term (term match)
+  (:documentation "Handles a custom approach for the given match.")
+  (:method ((term (eql 'ebnf::|TriplesBlock|)) (match sparql-parser:match))
+    ;; Unless calculated before, we should extract all available information.
+    (format t "~&Handling custom term ~A for match ~&~A~&" term match))
+  (:method (term (match sparql-parser:match))
+    ;; Unless calculated before, we should extract all available information.
+    (format t "~&No term custom matcher found for ~A for SPARQL-PARSER:MATCH~%" term)))
+
+(defun handle-custom (match)
+  (handle-custom-term (sparql-parser:match-term match) match))
+
+;; (define-handler |GroupOrUnionGraphPattern| :up alternatives)
+
+;; (define-handler |QueryUnit| descend)
+;; (define-handler |Query| descend)
+;; (define-handler |Prologue| skip)
+;; (define-handler |ValuesClause| skip warn)
+;; (define-handler |SelectQuery| descend)
+;; (define-handler |SelectClause| skip)
+;; (define-handler |DatasetClause| skip)
+;; (define-handler |WhereClause| descend)
+;; (define-handler |SolutionModifier| skip)
+
+
+;; (define-handler |WhereClause| bidirectional)
+;; (define-handler |GroupGraphPattern| bidirectional)
+;; (define-handler |GroupGraphPatternSub| bidirectional)
+;; (define-handler |TriplesBlock| bidirectional)
+;; (define-handler |TriplesSameSubjectPath| todo)
+;; (define-handler |GraphPatternNotTriples| bidirectional)
+;; (define-handler |GroupOrUnionGraphPattern| constraints-down alternatives-up)
+;; (define-handler |OptionalGraphPattern| constraints-down)
+;; (define-handler |MinusGraphPattern| inverted-constraints-up)
+;; (define-handler |GraphGraphPattern| bidirectional)
+;; (define-handler |ServiceGraphPattern| warn)
+;; (define-handler |Filter| constraints-down) ; we can add custom behaviour too
+;; (define-hanlder |Bind| todo) ; TODO: try out a bind and see what it looks like in a parsed query
+;; (define-handler |InlineData| bidirectional)
+;; (define-handler |DataBlock| custom)
 
 (defun extract-derivation-tree (query)
   ;; Figures out which dependencies are within the SPARQL bnf.

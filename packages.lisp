@@ -65,7 +65,9 @@
   (:export #:with-match-term-info
            #:term-info
            #:union-term-info
-           #:add-subject-predicate-object))
+           #:add-subject-predicate-object)
+  (:import-from #:support
+                #:group-by))
 
 (defpackage #:reasoner
   (:use :common-lisp)
@@ -79,7 +81,12 @@
   (:import-from #:alexandria
                 #:when-let)
   (:import-from #:reasoner-term-info
-                #:union-term-info))
+                #:term-info
+                #:union-term-info)
+  (:import-from #:sparql-parser
+                #:match-p
+                #:match-term
+                #:match-submatches))
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)

@@ -113,13 +113,19 @@ distributed amongst matches."
   ;;
   ;; NOTE: the solution with also-set-backward and predicate-type is not
   ;; the cleanest approach.  we could refactor this someday.
-  (let ((subject-string (sparql-manipulation:match-symbol-case subject
-                          (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri subject))
-                          (t (sparql-generator:write-valid-match subject))))
+  (let ((subject-string (progn match
+                               subject
+                               (or
+                                (sparql-manipulation:match-symbol-case subject ; should also accept t
+                                  (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri subject)))
+                                (sparql-generator:write-valid-match subject))))
         (predicate-string (sparql-generator:write-valid-match predicate))
-        (object-string (sparql-manipulation:match-symbol-case object
-                         (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri object))
-                         (t (sparql-generator:write-valid-match object)))))
+        (object-string (progn match
+                              object
+                              (or
+                               (sparql-manipulation:match-symbol-case object
+                                 (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri object)))
+                               (sparql-generator:write-valid-match object)))))
     ;; subject exists with :forward-perdicates
     (unless (assoc predicate-string
                    (getf (gethash subject-string
@@ -150,8 +156,10 @@ distributed amongst matches."
       (sparql-manipulation:match-symbol-case object
         (ebnf::|ABSTRACT-IRI| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
         (ebnf::|ABSTRACT-VARIABLE| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
-        (ebnf::|ABSTRACT-PRIMITIVE| (format t "~&Not defining inverse predicate for primitive ~A~%"
-                                            object-string))
+        (ebnf::|ABSTRACT-PRIMITIVE| nil
+               ;; (format t "~&Not defining inverse predicate for primitive ~A~%"
+               ;;         object-string)
+               )
         (t (warn "Received an unknown type of value in REASONER-TERM-INFO:ADD-SUBJECT-PREDICATE-OBJECT ~A" object))))))
 
 (defun primitive-term-equal (left right)
