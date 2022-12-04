@@ -45,7 +45,8 @@
            #:loop-matches
            #:loop-matches-symbol-case
            #:do-grouped-children
-           #:match-symbol-case))
+           #:match-symbol-case
+           #:with-named-child))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -60,6 +61,20 @@
   (:import-from #:support #:->)
   (:export #:apply-access-rights))
 
+(defpackage #:reasoner-prefixes
+  (:use :common-lisp)
+  (:import-from #:sparql-manipulation
+                #:with-named-child
+                #:do-grouped-children
+                #:loop-matches-symbol-case)
+  (:import-from #:support
+                #:->)
+  (:export :cached-expanded-uri
+           :extract-prefixes
+           :with-local-prefixes
+           :derive-expanded-uris
+           :with-known-local-prefixes))
+
 (defpackage #:reasoner-term-info
   (:use :common-lisp)
   (:export #:with-match-term-info
@@ -68,7 +83,10 @@
            #:add-subject-predicate-object
            #:print-term-info)
   (:import-from #:support
-                #:group-by))
+                #:->
+                #:group-by)
+  (:import-from #:reasoner-prefixes
+                #:cached-expanded-uri))
 
 (defpackage #:reasoner
   (:use :common-lisp)
@@ -76,6 +94,7 @@
                 #:group-by
                 #:->)
   (:import-from #:sparql-manipulation
+                #:with-named-child
                 #:match-symbol-case
                 #:do-grouped-children
                 #:loop-matches-symbol-case)
@@ -87,7 +106,12 @@
   (:import-from #:sparql-parser
                 #:match-p
                 #:match-term
-                #:match-submatches))
+                #:match-submatches)
+  (:import-from #:reasoner-prefixes
+                #:cached-expanded-uri
+                #:with-known-local-prefixes
+                #:derive-expanded-uris
+                #:extract-prefixes))
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)

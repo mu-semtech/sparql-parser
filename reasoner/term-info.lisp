@@ -90,7 +90,10 @@ The term info options are collections of constraints that hold at the key MATCH.
   "Yields known term information at MATCH.
 
 These are options of constraints that we know of at MATCH.  They are
-distributed amongst matches."
+distributed amongst matches.
+
+Returns two values, the first being the term-info and the second
+indicating whether term info was available."
   (gethash match *match-term-info* default))
 
 (defun (setf term-info) (value match &optional (default (list :or (make-hash-table :test 'equal))))
@@ -122,14 +125,14 @@ distributed amongst matches."
                                subject
                                (or
                                 (sparql-manipulation:match-symbol-case subject ; should also accept t
-                                  (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri subject)))
+                                  (ebnf::|ABSTRACT-IRI| (cached-expanded-uri subject)))
                                 (sparql-generator:write-valid-match subject))))
         (predicate-string (sparql-generator:write-valid-match predicate))
         (object-string (progn match
                               object
                               (or
                                (sparql-manipulation:match-symbol-case object
-                                 (ebnf::|ABSTRACT-IRI| (reasoner::cached-expanded-uri object)))
+                                 (ebnf::|ABSTRACT-IRI| (cached-expanded-uri object)))
                                (sparql-generator:write-valid-match object)))))
     ;; subject exists with :forward-perdicates
     (unless (assoc predicate-string

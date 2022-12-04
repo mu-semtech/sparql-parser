@@ -152,6 +152,12 @@ Allows case expansions through EXPANDED-TERM-CASE."
      (expanded-term-case (match-term ,match)
        ,@clauses)))
 
+(defmacro with-named-child ((var) (match term) &body body)
+  "Executes BODY in a context where VAR is bound to the first submatch of
+MATCH that has symbol TERM.  If no solution is found BODY is not
+executed and NIL is returned."
+  `(alexandria:when-let ((,var (find ',term (sparql-parser:match-submatches ,match) :test (lambda (term match) (and (sparql-parser:match-p match) (eq term (sparql-parser:match-term match)))))))
+     ,@body))
 
 (defun follow-path (match path)
   "Follow PATH  in  MATCH yielding a list of solutions.

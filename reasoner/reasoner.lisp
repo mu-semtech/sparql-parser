@@ -67,121 +67,6 @@
             extracted-info
             derivations)))
 
-(defun iriref-string-strip-markers (string)
-  (if (and (char= (elt string 0) #\<)
-           (char= (elt string (1- (length string))) #\>))
-      (coerce (subseq string 1 (1- (length string))) 'base-string)
-      (error "Cannot strip iriref string markers from STRING it does not have any, for: ~A" string)))
-
-(defun pname-ns-strip-colon (string)
-  (if (char= (elt string (1- (length string))) #\:)
-      (coerce (subseq string 0 (1- (length string))) 'base-string)
-      (error "Cannot strip pname-ns colon from STRING it does not end with colon, for: ~A" string)))
-
-(defstruct query-prefixes
-  (prefix-hash (make-hash-table :test 'equal))
-  (base (coerce "http://mu.semte.ch/local/" 'base-string) :type base-string))
-
-(defun get-prefix (query-prefixes prefix)
-  "Gets a prefix from the query-prefixes information."
-  (gethash prefix (query-prefixes-prefix-hash query-prefixes)))
-
-(defun (setf get-prefix) (value query-prefixes prefix)
-  (setf (gethash prefix (query-prefixes-prefix-hash query-prefixes)) value))
-
-(defun expand-uri (uri-string base)
-  "Expands URI-STRING with respect to BASE."
-  ;; TODO: expand prefixes based on current BASE
-  (declare (ignore base))
-  uri-string)
-
-(defmacro with-named-child ((var) (match term) &body body)
-  "Executes BODY in a context where VAR is bound to the first submatch of
-MATCH that has symbol TERM.  If no solution is found BODY is not
-executed and NIL is returned."
-  `(alexandria:when-let ((,var (find ',term (sparql-parser:match-submatches ,match) :test (lambda (term match) (and (sparql-parser:match-p match) (eq term (sparql-parser:match-term match)))))))
-     ,@body))
-
-(defun extract-prefixes (query)
-  "Extract all prefixes from QUERY.
-Assumes a fixed BASE is determined before it is used, as our query
-processing should execute."
-  ;; Extracts all prefixes
-  (let ((answers (make-hash-table :test 'equal))
-        (current-base nil))
-    (flet ((extract-prefix-from-match (match)
-             ;; PrefixDecl ::= 'PREFIX' PNAME_NS IRIREF
-             (do-grouped-children (pname-ns iriref)
-                 (match :amount 2 :filter-terms (ebnf::|PNAME_NS| ebnf::|IRIREF|))
-               (let ((pname-ns-string (-> pname-ns
-                                        (sparql-parser:terminal-match-string)
-                                        (pname-ns-strip-colon)))
-                     (iriref-string (-> iriref
-                                      (sparql-parser:terminal-match-string)
-                                      (iriref-string-strip-markers)
-                                      (expand-uri current-base))))
-                 (setf (gethash pname-ns-string answers) iriref-string))))
-           (extract-basedecl-from-match (match)
-             ;; BaseDecl ::= 'BASE' IRIREF
-             (with-named-child (iriref)
-                 (match ebnf::|IRIREF|)
-               (setf current-base
-                     (-> iriref
-                       (sparql-parser:terminal-match-string)
-                       (iriref-string-strip-markers))))))
-      (loop-matches-symbol-case (match) query
-        (ebnf::|PrefixDecl| (extract-prefix-from-match match))
-        (ebnf::|BaseDecl| (extract-basedecl-from-match match)))
-      (make-query-prefixes :prefix-hash answers :base current-base))))
-
-(declaim (special *prefixes* *match-uri-mapping*))
-(defun (setf cached-expanded-uri) (uri-string match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
-  "Sets the CACHED-EXPANDED-URI for MATCH to URI-STRING and returns (coerced) URI-STRING."
-  (declare (ignore prefixes))
-  (setf (gethash match match-uri-mapping)
-        (coerce uri-string 'base-string)))
-
-(defun cached-expanded-uri (match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
-  "Yields the expanded URI for MATCH, given PREFIXES, caching it if it is not known yet."
-  (let ((term (sparql-parser:match-term match)))
-    (if (eq term 'ebnf::|IRIREF|)
-        (iriref-string-strip-markers (sparql-parser:terminal-match-string match))
-        (or (gethash match match-uri-mapping)
-            (flet ((set-uri-mapping (value)
-                     (setf (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)
-                           value)))
-              (case term
-                (ebnf::|PNAME_LN|
-                 (destructuring-bind (prefix following)
-                     (cl-utilities:split-sequence
-                      #\: (sparql-parser:terminal-match-string match)
-                      :count 2) ; TODO: cope with #\: in PN_LOCAL
-                   (cond ((string= prefix "")
-                          (set-uri-mapping (query-prefixes-base prefixes)))
-                         ((get-prefix prefixes prefix)
-                          (set-uri-mapping (concatenate 'string
-                                                        (get-prefix prefixes prefix)
-                                                        following)))
-                         (t (error "Missing prefix ~A" prefix)))))
-                (ebnf::|PNAME_NS|
-                 (let* ((matched-string (sparql-parser:terminal-match-string match))
-                        ;; cut off the : at the end
-                        (prefix (subseq matched-string 0 (1- (length matched-string)))))
-                   (cond ((string= prefix "")
-                          (set-uri-mapping (query-prefixes-base prefixes)))
-                         ((get-prefix prefixes prefix)
-                          (set-uri-mapping (get-prefix prefixes prefix)))
-                         (t (error "Missing prefix ~A" prefix)))))))))))
-
-(defun derive-expanded-uris (query prefixes)
-  "Expands all prefixed matches of QUERY based on PREFIXES."
-  (let ((match-uri-mapping (make-hash-table :test 'eq)))
-    ;; TODO: we could skip those mentioned in PREFIXES by extending the tooling
-    (loop-matches-symbol-case (match) query
-      (ebnf::|PNAME_LN| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping))
-      (ebnf::|PNAME_NS| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
-    match-uri-mapping))
-
 ;; These two parameters indicate what we know of the left and the right
 ;; parts of the path.
 ;;
@@ -294,60 +179,16 @@ PREFIXES for the expanded URIs."
              (when right-uri (setf (node-knowledge predicate :right-uri) right-uri))
              (when right-primitive (setf (node-knowledge predicate :right-primitive) right-primitive))
              ;; TODO: support predicate as a real path instead
-             (let ((*prefixes* prefixes)
-                   (*match-uri-mapping* match-uri-mapping))
-              (reasoner-term-info:add-subject-predicate-object match (or left-var left-uri) predicate (or right-var right-uri right-primitive)))))
+             (with-known-local-prefixes (:prefixes prefixes :uri-mapping match-uri-mapping)
+               (reasoner-term-info:add-subject-predicate-object match
+                                                                (or left-var left-uri)
+                                                                predicate
+                                                                (or right-var right-uri right-primitive)))))
     (loop-matches-symbol-case (match) query
       ;; Interpret subject
       ;; Drill down for predicate and object
       (ebnf::|TriplesSameSubjectPath| (process-subject match))
       (ebnf::|TriplesSameSubject| (process-subject match)))))
-
-(defparameter *information-distribution-approaches* nil
-  "All approaches for distributing information between nodes.")
-
-(defmacro define-handler (pattern &rest approaches)
-  `(alexandria:appendf
-    *information-distribution-approaches*
-    (list ',(intern (symbol-name pattern) (find-package :ebnf))
-          (list ,@(mapcar (lambda (term)
-                            `(function ,(intern (concatenate 'string "HANDLE-" (symbol-name term)))))
-                          approaches)))))
-
-(defun walk-distribute-match-1 (match)
-  "Runs all distribution efforts for MATCH once."
-  (when (match-p match)
-    (dolist (processor (getf *information-distribution-approaches*
-                             (match-term match)
-                             (list #'handle-down-pass)))
-      (funcall processor match))
-    (dolist (submatch (match-submatches match))
-      (walk-distribute-match-1 submatch))))
-
-;; Options
-;;
-;; down-pass :: any exposed information from our parent applies to our children but no information from the children applies to the parents (default)
-;; up-pass :: any exposed infornmation from our children applies to our parent
-;; peers-pass :: any exposed information on any of the children, applies to the other children
-;; up-options-pass :: each of our children represents a set of optional constraints which should be passed up
-;; up-negative-pass :: passes the constraints of our children (unioned) as not allowed in our parent (TODO)
-
-(define-handler |SelectQuery| down-pass peers-pass)
-(define-handler |WhereClause| up-pass down-pass)
-(define-handler |GroupGraphPattern| up-pass down-pass)
-(define-handler |SubSelect| down-pass peers-pass) ;; TODO: expand SubSelect
-(define-handler |GroupGraphPatternSub| peers-pass)
-(define-handler |GraphPatternNotTriples| down-pass) ;; default
-(define-handler |TriplesBlock| up-pass down-pass) ;; perhaps better custom behaviour?
-(define-handler |GroupOrUnionPattern| up-pass down-pass)
-(define-handler |GroupOrUnionGraphPattern| down-pass up-options-pass)
-(define-handler |OptionalGraphPattern| down-pass)
-(define-handler |MinusGraphPattern| down-pass up-negative-pass)
-(define-handler |GraphGrahpPattern| up-pass down-pass)
-(define-handler |ServiceGraphPattern| up-pass down-pass)
-(define-handler |Filter| up-pass down-pass)
-(define-handler |Bind| down-pass)
-(define-handler |InlineData| up-pass down-pass)
 
 ;; These properties can be used to push information through various levels
 (defparameter handler-pass-had-change nil
@@ -403,6 +244,52 @@ PREFIXES for the expanded URIs."
 
 (defun handle-custom (match)
   (handle-custom-term (sparql-parser:match-term match) match))
+
+(defun walk-distribute-match-1 (match)
+  "Runs all distribution efforts for MATCH once."
+  (when (match-p match)
+    (dolist (processor (getf *information-distribution-approaches*
+                             (match-term match)
+                             (list #'handle-down-pass)))
+      (funcall processor match))
+    (dolist (submatch (match-submatches match))
+      (walk-distribute-match-1 submatch))))
+
+(defparameter *information-distribution-approaches* nil
+  "All approaches for distributing information between nodes.")
+
+(defmacro define-handler (pattern &rest approaches)
+  `(alexandria:appendf
+    *information-distribution-approaches*
+    (list ',(intern (symbol-name pattern) (find-package :ebnf))
+          (list ,@(mapcar (lambda (term)
+                            `(function ,(intern (concatenate 'string "HANDLE-" (symbol-name term)))))
+                          approaches)))))
+
+;; Options
+;;
+;; down-pass :: any exposed information from our parent applies to our children but no information from the children applies to the parents (default)
+;; up-pass :: any exposed infornmation from our children applies to our parent
+;; peers-pass :: any exposed information on any of the children, applies to the other children
+;; up-options-pass :: each of our children represents a set of optional constraints which should be passed up
+;; up-negative-pass :: passes the constraints of our children (unioned) as not allowed in our parent (TODO)
+
+(define-handler |SelectQuery| down-pass peers-pass)
+(define-handler |WhereClause| up-pass down-pass)
+(define-handler |GroupGraphPattern| up-pass down-pass)
+(define-handler |SubSelect| down-pass peers-pass) ;; TODO: expand SubSelect
+(define-handler |GroupGraphPatternSub| peers-pass)
+(define-handler |GraphPatternNotTriples| down-pass) ;; default
+(define-handler |TriplesBlock| up-pass down-pass) ;; perhaps better custom behaviour?
+(define-handler |GroupOrUnionPattern| up-pass down-pass)
+(define-handler |GroupOrUnionGraphPattern| down-pass up-options-pass)
+(define-handler |OptionalGraphPattern| down-pass)
+(define-handler |MinusGraphPattern| down-pass up-negative-pass)
+(define-handler |GraphGrahpPattern| up-pass down-pass)
+(define-handler |ServiceGraphPattern| up-pass down-pass)
+(define-handler |Filter| up-pass down-pass)
+(define-handler |Bind| down-pass)
+(define-handler |InlineData| up-pass down-pass)
 
 ;; (define-handler |GroupOrUnionGraphPattern| :up alternatives)
 
