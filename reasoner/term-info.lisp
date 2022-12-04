@@ -105,6 +105,11 @@ distributed amongst matches."
       (setf (term-info match) value))
     value))
 
+(defun print-term-info (match &optional stream)
+  "Prints TERM-INFO for MATCH on STREAM"
+  (format stream ":or ~{~A~,^~&~}"
+          (mapcar #'alexandria:hash-table-plist (rest (term-info match)))))
+
 (defun add-subject-predicate-object (match subject predicate object &optional (also-set-backward t) (predicate-type :forward-predicates))
   "Adds the SUBJECT PREDICATE OBJECT combination to the known knowledge of MATCH."
   ;; types of predicates:

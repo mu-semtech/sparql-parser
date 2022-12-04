@@ -65,7 +65,8 @@
   (:export #:with-match-term-info
            #:term-info
            #:union-term-info
-           #:add-subject-predicate-object)
+           #:add-subject-predicate-object
+           #:print-term-info)
   (:import-from #:support
                 #:group-by))
 

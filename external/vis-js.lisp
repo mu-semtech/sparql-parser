@@ -44,6 +44,13 @@ representation of the edges."
                (when (match-p match)
                  (let ((rule (sparql-generator::find-rule (match-term match))))
                    (and rule (ebnf:rule-expansion rule)))))
+             (make-node-title (match)
+               (format nil "~A~%~A~%~A"
+                       (html-escape (sparql-generator::write-valid-match match))
+                       (alexandria:if-let ((rule-expansion (rule-expansion match)))
+                         (html-escape (princ-to-string rule-expansion))
+                         "UNKNOWN")
+                       (reasoner-term-info:print-term-info match nil)))
              (traverse-match (match &optional parent-id)
                (let ((id (new-id (typecase match
                                    (match (match-term match))
@@ -53,11 +60,7 @@ representation of the edges."
                      (push (jsown:new-js
                                ("id" id)
                                ("label" (as-string (match-term match)))
-                               ("title" (format nil "~A~%<br/>~A"
-                                                (html-escape (sparql-generator::write-valid-match match))
-                                                (alexandria:if-let ((rule-expansion (rule-expansion match)))
-                                                  (html-escape (princ-to-string rule-expansion))
-                                                  "UNKNOWN")))
+                               ("title" (make-node-title match))
                                ("color" (determine-color match);; (jsown:new-js
                                         ;; ("background" (determine-color match))
                                         ;; ("border" "rgb(233,233,233)"))
@@ -109,6 +112,7 @@ representation of the edges."
      bottom: 1px;
      border: 1px solid lightgray;
    }
+   div.vis-tooltip { white-space: pre }
   </style>
 </head>
 <body>
