@@ -160,7 +160,7 @@ distributed amongst matches."
     (when also-set-backward
       (sparql-manipulation:match-symbol-case object
         (ebnf::|ABSTRACT-IRI| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
-        (ebnf::|ABSTRACT-VARIABLE| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
+        (ebnf::|ABSTRACT-VAR| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
         (ebnf::|ABSTRACT-PRIMITIVE| nil
                ;; (format t "~&Not defining inverse predicate for primitive ~A~%"
                ;;         object-string)
