@@ -268,3 +268,13 @@ simplest form that represents the same contsraints."
    (mapcar (lambda (match)
              (term-info match (list :or (make-hash-table :test 'equal))))
            matches)))
+
+(defun join-or-term-info-statements (&rest term-info-statements)
+  "Joins a set of :OR term-info statements by combining them all into a big
+OR."
+  `(:or ,@(loop
+            for (or . sub-statements) in term-info-statements
+            if (eq or :or)
+              append sub-statements
+            else
+              do (error "Can only join :or info statements"))))

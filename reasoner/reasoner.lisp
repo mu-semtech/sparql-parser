@@ -223,9 +223,9 @@ PREFIXES for the expanded URIs."
   ;; find all option clauses from children
   ;; combine them x with parent
   (setf (term-info match)
-        (union-term-info `(:or ,@(loop for submatch in (match-match-submatches match)
-                                       append (rest (term-info submatch))))
-                         (term-info match))))
+        (union-term-info (apply #'term-info::join-or-term-info-statements
+                                (term-info match)
+                                (mapcar #'term-info (match-match-submatches match))))))
 
 (defun handle-up-negative-pass (match)
   "Constructs a negative pass, indicating the following is something that would *not* resolve."
