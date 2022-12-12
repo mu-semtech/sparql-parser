@@ -90,6 +90,8 @@ lists."
                     append (or (ebnf:abstract-token-expansion term) (list term)))
               body)))
          (dedup-clause (clause)
+           ;; TODO: case accepts a list as its first argument which
+           ;; would allow us not to repeat body
            (destructuring-bind (term-spec &rest body)
                clause
              (if (listp term-spec)

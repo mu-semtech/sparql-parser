@@ -223,9 +223,7 @@ PREFIXES for the expanded URIs."
   ;; find all option clauses from children
   ;; combine them x with parent
   (setf (term-info match)
-        (union-term-info (apply #'term-info::join-or-term-info-statements
-                                (term-info match)
-                                (mapcar #'term-info (match-match-submatches match))))))
+        (apply #'union-term-info match (match-match-submatches match))))
 
 (defun handle-up-negative-pass (match)
   "Constructs a negative pass, indicating the following is something that would *not* resolve."
@@ -291,49 +289,3 @@ PREFIXES for the expanded URIs."
 (define-handler |Bind| down-pass)
 (define-handler |InlineData| up-pass down-pass)
 
-;; (define-handler |GroupOrUnionGraphPattern| :up alternatives)
-
-;; (define-handler |QueryUnit| descend)
-;; (define-handler |Query| descend)
-;; (define-handler |Prologue| skip)
-;; (define-handler |ValuesClause| skip warn)
-;; (define-handler |SelectQuery| descend)
-;; (define-handler |SelectClause| skip)
-;; (define-handler |DatasetClause| skip)
-;; (define-handler |WhereClause| descend)
-;; (define-handler |SolutionModifier| skip)
-
-
-;; (define-handler |WhereClause| bidirectional)
-;; (define-handler |GroupGraphPattern| bidirectional)
-;; (define-handler |GroupGraphPatternSub| bidirectional)
-;; (define-handler |TriplesBlock| bidirectional)
-;; (define-handler |TriplesSameSubjectPath| todo)
-;; (define-handler |GraphPatternNotTriples| bidirectional)
-;; (define-handler |GroupOrUnionGraphPattern| constraints-down alternatives-up)
-;; (define-handler |OptionalGraphPattern| constraints-down)
-;; (define-handler |MinusGraphPattern| inverted-constraints-up)
-;; (define-handler |GraphGraphPattern| bidirectional)
-;; (define-handler |ServiceGraphPattern| warn)
-;; (define-handler |Filter| constraints-down) ; we can add custom behaviour too
-;; (define-hanlder |Bind| todo) ; TODO: try out a bind and see what it looks like in a parsed query
-;; (define-handler |InlineData| bidirectional)
-;; (define-handler |DataBlock| custom)
-
-(defun extract-derivation-tree (query)
-  ;; Figures out which dependencies are within the SPARQL bnf.
-
-  ;; Eg: a subject that's been reused must have the same constraints
-  ;; applied to it as other elements.  If some place says ?s a
-  ;; foaf:Person and another place says ?s ext:level ?over9000, then we
-  ;; know the ?over9000 must be related to a foaf:Person.  This is not
-  ;; bidirectional in all cases and the EBNF may not be the easiest to
-  ;; reason on.
-  )
-
-(defun derive-knowledge (extracted-info derivations domain-model expanded-uris)
-  ;; Extracts all knowledge from the tree based on the logical knowledge
-  ;; we have of the world.  This entails learning more and more
-  ;; information from the model until we've ran into a fixpoint in which
-  ;; there is no new knowledge learned.
-  )

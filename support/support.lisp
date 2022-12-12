@@ -79,3 +79,61 @@
         else
           do (push (list item) discovered-groups)
         finally (return discovered-groups)))
+
+
+;;;; derived types
+(defmacro with-derived-types ((&rest derived-type-specifications) &body body)
+  (let (outer-forms var-constraint-combinations)
+    (dolist (specifier derived-type-specifications)
+      (destructuring-bind (var-name (function-name . args)) specifier
+        (multiple-value-bind (outer-form type-specifier)
+            (apply function-name args)
+          (push outer-form outer-forms)
+          (push `(,var-name ',type-specifier) var-constraint-combinations))))
+    `(let (,@var-constraint-combinations)
+       (progn ,@outer-forms)
+       ,@body)))
+
+;; derived types constructions
+(defun typed-hash-table (key-type value-type)
+  (let ((typed-hash-table-function-sym (gensym "TYPED-HASH-TABLE-TEST")))
+    (values `(defun ,typed-hash-table-function-sym (hash-table)
+               (hash-table-has-types-p hash-table ',key-type ',value-type))
+            `(and hash-table (satisfies ,typed-hash-table-function-sym)))))
+
+(defun hash-table-has-types-p (hash-table key-type value-type)
+  ;; (format t "~&Checking if ~A is of type ~A => ~A~%" hash-table key-type value-type)
+  (loop for k being the hash-keys of hash-table
+        for v being the hash-values of hash-table
+        ;; do (format t "~&~A => ~A~%" k v)
+        when (or (not (typep k key-type))
+                 (not (typep v value-type)))
+          do (return nil)
+        finally (return t)))
+
+(defun typed-list (content-type)
+  (let ((typed-list-test-function-sym (gensym "TYPED-LIST-TEST")))
+    (values `(defun ,typed-list-test-function-sym (list)
+               ;; (format t "~&Checking ~A for items of type ~A~%" list ',content-type)
+               (every (lambda (item) (typep item ',content-type))
+                      list))
+            `(and (or null cons)
+                  (satisfies ,typed-list-test-function-sym)))))
+
+(defun typed-plist (key-type value-type &key (expand-length 0))
+  (let ((typed-plist-test-function-sym (gensym "TYPED-PLIST-TEST")))
+    (values `(defun ,typed-plist-test-function-sym (plist)
+               (loop for (k v) on plist by #'cddr
+                     unless (and (typep k ',key-type)
+                                 (typep v ',value-type))
+                       do (return nil)
+                     finally (return t)))
+            (labels ((expand-recursive (n &optional (final-cons-constraint 'null))
+                       (if (= n 0)
+                           final-cons-constraint
+                           `(cons ,key-type (cons ,value-type ,(expand-recursive (1- n)))))))
+              `(or ,@(loop for current-expansion-length from 0 to expand-length
+                           if (= current-expansion-length expand-length)
+                             collect (expand-recursive current-expansion-length `(satisfies ,typed-plist-test-function-sym))
+                           else
+                             collect (expand-recursive current-expansion-length)))))))

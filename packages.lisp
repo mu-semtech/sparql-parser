@@ -7,7 +7,11 @@
 
 (defpackage :support
   (:use :common-lisp)
-  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search #:group-by))
+  (:export #:-> #:debug-break #:embed-unicode-characters #:hex-char #:match-tree-search #:group-by
+           #:with-derived-types
+           #:typed-hash-table
+           #:typed-list
+           #:typed-plist))
 
 (defpackage :ebnf
   (:use :common-lisp)
@@ -81,8 +85,19 @@
            #:term-info
            #:union-term-info
            #:add-subject-predicate-object
-           #:print-term-info)
+           #:print-term-info
+           #:join-or-term-info-statements)
+  (:import-from #:sparql-parser
+                #:scanned-token
+                #:match)
+  (:import-from #:alexandria
+                #:set-equal
+                #:hash-table-keys)
   (:import-from #:support
+                #:typed-list
+                #:typed-plist
+                #:typed-hash-table
+                #:with-derived-types
                 #:->
                 #:group-by)
   (:import-from #:reasoner-prefixes
@@ -99,11 +114,14 @@
                 #:do-grouped-children
                 #:loop-matches-symbol-case)
   (:import-from #:alexandria
+                #:hash-table-keys
                 #:when-let)
   (:import-from #:reasoner-term-info
                 #:term-info
-                #:union-term-info)
+                #:union-term-info
+                #:join-or-term-info-statements)
   (:import-from #:sparql-parser
+                #:match
                 #:match-p
                 #:match-term
                 #:match-submatches)
