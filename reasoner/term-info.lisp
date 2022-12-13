@@ -1,7 +1,7 @@
 (in-package #:reasoner-term-info)
 
-;; (declaim (optimize (speed 0) (debug 3)))
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
+;; (declaim (optimize (speed 3) (safety 0) (debug 0)))
 
 ;;;; What does a constraint look like?
 ;;;;
@@ -81,138 +81,6 @@
 ;;;; simplification :: at any stage we may create multiple clauses that
 ;;;; express the same information.  any :or constraints that have the
 ;;;; same content can be folded.
-
-;;;; Effective storage model
-;;;;
-;;;; Top-level there is a hash-table to contain the information of each
-;;;; MATCH.  This is called a term-info-collection.
-;;;;
-;;;; term-info-collection :: HASH-TABLE match -> term-info-rule
-;;;; term-info-rule :: '(:or term-info-1 term-info-2)
-;;;; term-info :: HASH-TABLE primitive-subject ->
-;;;;                           :forward-predicates ((pred-1 obj*) (pred-2 obj*))
-;;;;                           :backward-predicates ((pred-3 obj*) (pred-4 obj*))
-
-
-;; high-level to low-level
-(with-derived-types ((term-info-collection-table (typed-hash-table match term-info-rule)))
-  (deftype term-info-collection ()
-    "Whole collection of information on all MATCH statements."
-    term-info-collection-table))
-
-(with-derived-types ((term-info-list (typed-list term-info)))
-  (deftype term-info-rule ()
-    "A single :or rule, currently one exists for a MATCH statement."
-    `(cons (member :or) ,term-info-list)))
-
-(with-derived-types ((term-info-hash-table (typed-hash-table primitive-expression term-info-directional)))
- (deftype term-info ()
-   "A set of constraints holding within one :or statement."
-   term-info-hash-table))
-
-(with-derived-types ((term-info-directional-plist (typed-plist predicate-direction-key term-info-predicates-info :expand-length 2)))
- (deftype term-info-directional ()
-   "Directional term info is the place that stores the links to forward and backward predicates."
-   term-info-directional-plist))
-
-(with-derived-types ((term-info-predicate-info-list (typed-list term-info-predicate-info)))
-  (deftype term-info-predicates-info ()
-    "List of predicates and their corresponding values.  This is stored as an alist."
-    term-info-predicate-info-list))
-
-(deftype term-info-predicate-info ()
-  "Information about an individual predicate."
-  '(cons primitive-predicate term-info-target-info))
-
-(with-derived-types ((primitive-target-list (typed-list primitive-target)))
-  (deftype term-info-target-info ()
-    "Information we have on the target of term-info."
-    primitive-target-list))
-
-;; basics
-(deftype primitive-expression ()
-  'string)
-
-(deftype primitive-source ()
-  "How we represent the source of a term-info."
-  'primitive-expression)
-
-(deftype primitive-predicate ()
-  "How we represent the predicate of a term-info."
-  'primitive-expression)
-
-(deftype primitive-target ()
-  "How we represent the target of a term-info."
-  'primitive-expression)
-
-(deftype predicate-direction-key ()
-  "Keys used to indicate the key of type of info we have on a subject."
-  '(member :forward-predicates :backward-predicates))
-
-
-;; (deftype term-info-collection ()
-;;   '(typed-hash-table match ))
-
-;; (defun hash-table-list-p (list)
-;;   "Truethy iff LIST contains only elements of type HASH-TABLE."
-;;   (every #'hash-table-p list))
-
-;; (defun term-info-collection-match-hash-table-p (hash-table)
-;;   (hash-table-has-types-p hash-table 'match 'term-info))
-
-;; (defun term-info-collection-match-hash-table-list-p (hash-table-list)
-;;   (every (lambda (hash-table)
-;;            (term-info-collection-match-hash-table-p hash-table))
-;;          hash-table-list))
-
-;; (deftype term-info-collection ()
-;;   '(cons
-;;     (member :or)
-;;     (satisfies term-info-collection-match-hash-table-list
-;;      ;; hash-table-list-p
-;;      )))
-
-(with-derived-types ((primitive-expression-list (typed-list primitive-target)))
-  (deftype term-info-collection-predicate-list ()
-    "List of predicates known by term-info-collection."
-    primitive-expression-list)
-
-  (deftype term-info-predicate-values ()
-    "Values describing the predicate information."
-    primitive-expression-list))
-
-(with-derived-types ((primitive-predicate-list (typed-list primitive-predicate)))
-  (deftype primitive-predicate-list ()
-    primitive-predicate-list))
-
-;; (defun string-list-p (list)
-;;   "Truethy iff LIST contains only strings."
-;;   (every #'stringp list))
-
-;; (deftype string-list ()
-;;   "List of strings."
-;;   '(satisfies string-list-p))
-
-;; (deftype term-info-predicate-values ()
-;;   "Values describing the predicate information."
-;;   'string-list)
-
-(deftype term-info-predicate-direction-key ()
-  "Keys used for predicate direction.
-Either forward-predicates or backward-predicates."
-  '(member :forward-predicates :backward-predicates))
-
-;; (deftype term-info-predicate ()
-;;   "Information we have to describe predicates."
-;;   '(cons string term-info-predicate-values))
-
-;; (deftype term-info ()
-;;   '(member nil
-;;     (cons term-info-predicate-direction-key
-;;      (cons term-info-predicate
-;;       (member nil
-;;        (cons term-info-predicate-direction-key
-;;         (cons term-info-predicate nil)))))))
 
 (defparameter *match-term-info* (make-hash-table :test 'eq)
   "Term info options at clause MATCH.
@@ -470,10 +338,6 @@ knowledge of both in a single :or constraint."
 simplest form that represents the same contsraints."
   ;; TODO: implement constraint folding
   constraint)
-
-(with-derived-types ((term-info-rule-list (typed-list term-info-rule)))
-  (deftype term-info-rule-list ()
-    term-info-rule-list))
 
 (declaim (ftype (function (term-info-rule-list) term-info-rule) union-term-info-for-or-constraints))
 (defun union-term-info-for-or-constraints (or-constraints)

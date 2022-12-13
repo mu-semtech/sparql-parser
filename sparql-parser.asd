@@ -17,6 +17,7 @@
                (:file "sparql-ast/manipulation")
                (:file "connection/globals")
                (:file "reasoner/prefixes")
+               (:file "reasoner/term-info-types")
                (:file "reasoner/term-info")
                (:file "reasoner/reasoner")
                (:file "acl/acl")

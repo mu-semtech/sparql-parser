@@ -90,9 +90,9 @@
             (apply function-name args)
           (push outer-form outer-forms)
           (push `(,var-name ',type-specifier) var-constraint-combinations))))
-    `(let (,@var-constraint-combinations)
-       (progn ,@outer-forms)
-       ,@body)))
+    `(progn ,@outer-forms
+            (let (,@var-constraint-combinations)
+              ,@body))))
 
 ;; derived types constructions
 (defun typed-hash-table (key-type value-type)
