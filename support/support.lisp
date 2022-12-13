@@ -82,6 +82,8 @@
 
 
 ;;;; derived types
+(defparameter *next* 0)
+
 (defmacro with-derived-types ((&rest derived-type-specifications) &body body)
   (let (outer-forms var-constraint-combinations)
     (dolist (specifier derived-type-specifications)
@@ -90,18 +92,20 @@
             (apply function-name args)
           (push outer-form outer-forms)
           (push `(,var-name ',type-specifier) var-constraint-combinations))))
-    `(progn ,@outer-forms
+    `(progn (eval-when (:compile-toplevel :load-toplevel :execute)
+              ,@outer-forms)
             (let (,@var-constraint-combinations)
               ,@body))))
 
 ;; derived types constructions
 (defun typed-hash-table (key-type value-type)
-  (let ((typed-hash-table-function-sym (gensym "TYPED-HASH-TABLE-TEST")))
+  (let ((typed-hash-table-function-sym (intern (format nil "TYPED-HASH-TABLE-TEST-~A" (incf *next*)))))
     (values `(defun ,typed-hash-table-function-sym (hash-table)
                (hash-table-has-types-p hash-table ',key-type ',value-type))
             `(and hash-table (satisfies ,typed-hash-table-function-sym)))))
 
 (defun hash-table-has-types-p (hash-table key-type value-type)
+  "Constructs expansion for checking HASH-TABLE with KEY-TYPE as keys and VALUE-TYPE as values."
   ;; (format t "~&Checking if ~A is of type ~A => ~A~%" hash-table key-type value-type)
   (loop for k being the hash-keys of hash-table
         for v being the hash-values of hash-table
@@ -112,16 +116,19 @@
         finally (return t)))
 
 (defun typed-list (content-type)
-  (let ((typed-list-test-function-sym (gensym "TYPED-LIST-TEST")))
+  "Constructs expansion for checking list of CONTENT-TYPE elements."
+  (let ((typed-list-test-function-sym (intern (format nil "TYPED-LIST-TEST-~A" (incf *next*)))))
+    ;; (format t "~&~A will check for type ~A~%" typed-list-test-function-sym content-type)
     (values `(defun ,typed-list-test-function-sym (list)
                ;; (format t "~&Checking ~A for items of type ~A~%" list ',content-type)
                (every (lambda (item) (typep item ',content-type))
                       list))
-            `(and (or null cons)
-                  (satisfies ,typed-list-test-function-sym)))))
+            `(or null
+                 (and cons
+                      (satisfies ,typed-list-test-function-sym))))))
 
 (defun typed-plist (key-type value-type &key (expand-length 0))
-  (let ((typed-plist-test-function-sym (gensym "TYPED-PLIST-TEST")))
+  (let ((typed-plist-test-function-sym (intern (format nil "TYPED-PLIST-TEST-~A" (incf *next*)))))
     (values `(defun ,typed-plist-test-function-sym (plist)
                (loop for (k v) on plist by #'cddr
                      unless (and (typep k ',key-type)
