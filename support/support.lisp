@@ -139,8 +139,9 @@
                        (if (= n 0)
                            final-cons-constraint
                            `(cons ,key-type (cons ,value-type ,(expand-recursive (1- n)))))))
-              `(or ,@(loop for current-expansion-length from 0 to expand-length
-                           if (= current-expansion-length expand-length)
-                             collect (expand-recursive current-expansion-length `(satisfies ,typed-plist-test-function-sym))
-                           else
-                             collect (expand-recursive current-expansion-length)))))))
+              `(and (or ,@(loop for current-expansion-length from 0 to expand-length
+                                if (= current-expansion-length expand-length)
+                                  collect (expand-recursive current-expansion-length `(satisfies ,typed-plist-test-function-sym))
+                                else
+                                  collect (expand-recursive current-expansion-length)))
+                    (satisfies ,typed-plist-test-function-sym))))))
