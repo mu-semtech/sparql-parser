@@ -1,7 +1,7 @@
 (in-package #:reasoner-term-info)
 
-(declaim (optimize (speed 0) (safety 3) (debug 3)))
-;; (declaim (optimize (speed 3) (safety 0) (debug 0)))
+;; (declaim (optimize (speed 0) (safety 3) (debug 3)))
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
 
 ;;;; What does a constraint look like?
 ;;;;
@@ -92,6 +92,45 @@ The term info options are collections of constraints that hold at the key MATCH.
   `(let ((*match-term-info* (make-hash-table :test 'eq)))
      ,@body))
 
+(defparameter *term-info-update-tracker* nil
+  "Container for the changed matches.
+
+When this exists, change-tracking for TERM-INFO of matches.")
+
+(defmacro with-term-info-change-tracking (&body body)
+  `(let ((*term-info-update-tracker* (make-hash-table :test 'eq)))
+     ,@body))
+
+(defun term-info-tracking-enabled ()
+  "Whether term-info-tracking is enabled."
+  (and *term-info-update-tracker* t))
+
+(defun term-info-tracking-add (match &optional (tracker *term-info-update-tracker*))
+  "Adds match to the items for which term-info-tracking is enabled."
+  (setf (gethash match tracker) t))
+
+(defun term-info-tracking-contains (match &optional (tracker *term-info-update-tracker*))
+  "Adds match to the items for which term-info-tracking is enabled."
+  (gethash match tracker))
+
+(defun term-info-tracking-tracked-matches (&optional (tracker *term-info-update-tracker*))
+  "Lists all items currently tracked."
+  (and tracker (hash-table-keys tracker)))
+
+(defun term-info-tracking-tracked-amount (&optional (tracker *term-info-update-tracker*))
+  "Returns the amount of items currently being tracked."
+  (length (term-info-tracking-tracked-matches tracker)))
+
+(defun term-info-tracking-empty-p (&optional (tracker *term-info-update-tracker*))
+  "Yields truethy iff the tracking table is empty."
+  (loop for k being the hash-keys of tracker
+        do (return nil)
+        finally (return t)))
+
+(defun term-info-tracking-get-current-tracker ()
+  *term-info-update-tracker*)
+
+
 (declaim (ftype (function (match &optional term-info-collection) term-info-rule) term-info-rule))
 (defun term-info (match &optional (default (list :or (make-hash-table :test 'equal))))
   "Yields known term information at MATCH.
@@ -107,6 +146,9 @@ indicating whether term info was available."
 (declaim (ftype (function (t sparql-parser:match &optional t) (values)) (setf term-info)))
 (defun (setf term-info) (value match &optional (default (list :or (make-hash-table :test 'equal))))
   "Sets the term-info for VALUE"
+  (when (term-info-tracking-enabled)
+    (unless (term-info-rule-equal value (term-info match))
+      (term-info-tracking-add match)))
   (setf (gethash match *match-term-info* default) value)
   (values))
 
@@ -131,9 +173,7 @@ the information differs."
                             for right-directional = (term-info-primitive-directional right-table primitive)
                             unless (flet 
                                        ((compare-directional-set (left-set right-set)
-                                          (set-equal
-                                           (term-info-forward-predicates left-set)
-                                           (term-info-forward-predicates right-set)
+                                          (set-equal left-set right-set
                                            :test (lambda (left-predicate right-predicate)
                                                    (and (primitive-term-equal (first left-predicate)
                                                                               (first right-predicate))
@@ -176,20 +216,20 @@ the information differs."
   (values (gethash primitive term-info)))
 
 (declaim (ftype (function (term-info-directional term-info-predicate-direction-key)
-                          (values term-info-collection-predicate-list &optional))
-                term-info-predicates))
+                          (values term-info-predicates-info &optional))
+                term-info-directional-predicates))
 (defun term-info-directional-predicates (term-info-directional predicate-key)
   "Predicates info for TERM-INFO."
   (getf term-info-directional predicate-key))
 
-(declaim (ftype (function (term-info-directional) (values term-info-predicate-values &optional)) term-info-forward-predicates term-info-backward-predicates))
+(declaim (ftype (function (term-info-directional) (values term-info-predicates-info &optional)) term-info-forward-predicates term-info-backward-predicates))
 (defun term-info-forward-predicates (term-info-directional)
   "Forward predicate info for TERM-INFO"
-  (term-info-predicates term-info-directional :forward-predicates))
+  (term-info-directional-predicates term-info-directional :forward-predicates))
 
 (defun term-info-backward-predicates (term-info-directional)
   "Forward predicate info for TERM-INFO"
-  (term-info-predicates term-info-directional :backward-predicates))
+  (term-info-directional-predicates term-info-directional :backward-predicates))
 
 (declaim (ftype (function (match (or match scanned-token) (or match scanned-token) (or match scanned-token) &optional (or null t) predicate-direction-key)
                           (values))

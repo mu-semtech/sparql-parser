@@ -86,7 +86,12 @@
            #:union-term-info
            #:add-subject-predicate-object
            #:print-term-info
-           #:join-or-term-info-statements)
+           #:join-or-term-info-statements
+           #:with-term-info-change-tracking
+           #:term-info-tracking-contains
+           #:term-info-tracking-enabled
+           #:term-info-tracking-empty-p
+           #:term-info-tracking-get-current-tracker)
   (:import-from #:sparql-parser
                 #:scanned-token
                 #:match)
@@ -114,9 +119,14 @@
                 #:do-grouped-children
                 #:loop-matches-symbol-case)
   (:import-from #:alexandria
+                #:rcurry
                 #:hash-table-keys
                 #:when-let)
   (:import-from #:reasoner-term-info
+                #:term-info-tracking-get-current-tracker
+                #:with-term-info-change-tracking
+                #:term-info-tracking-contains
+                #:term-info-tracking-empty-p
                 #:term-info
                 #:union-term-info
                 #:join-or-term-info-statements)

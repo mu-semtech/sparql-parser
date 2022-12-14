@@ -243,15 +243,40 @@ PREFIXES for the expanded URIs."
 (defun handle-custom (match)
   (handle-custom-term (sparql-parser:match-term match) match))
 
-(defun walk-distribute-match-1 (match)
-  "Runs all distribution efforts for MATCH once."
+(defun walk-distribute-match-1 (match &key (process-match-p (lambda (match) (declare (ignore match)) t)))
+  "Runs all distribution efforts for MATCH once.
+
+PROCESS-MATCH-P is called for each match to determine if it should be
+processed.  We also descend for discribution when this is false."
   (when (match-p match)
-    (dolist (processor (getf *information-distribution-approaches*
-                             (match-term match)
-                             (list #'handle-down-pass)))
-      (funcall processor match))
+    (when (funcall process-match-p match)
+      (dolist (processor (getf *information-distribution-approaches*
+                               (match-term match)
+                               (list #'handle-down-pass)))
+        (funcall processor match)))
     (dolist (submatch (match-submatches match))
-      (walk-distribute-match-1 submatch))))
+      (walk-distribute-match-1 submatch :process-match-p process-match-p))))
+
+(defun iterate-distribution-walk (match &optional tracker)
+  "Iterates through the distribution walking for any element that may need updating.
+
+When tracker is supplied, it should be a TERM-INFO-TRACKER which
+contains currently interesting items to track."
+  (let ((last-tracker nil)
+        (current-tracker tracker))
+    (loop for i from 0 below 10 ;; max 1000 iterations
+          do
+             (setf last-tracker current-tracker)
+             (with-term-info-change-tracking
+               (walk-distribute-match-1 match
+                                        :process-match-p
+                                        (lambda (match)
+                                          (or (not last-tracker)
+                                              (some (rcurry #'term-info-tracking-contains last-tracker)
+                                                    (cons match (match-match-submatches match))))))
+               ;; (format t "~&In iteration ~A we had ~A changes.~%" i (reasoner-term-info::term-info-tracking-tracked-amount))
+               (setf current-tracker (term-info-tracking-get-current-tracker)))
+          until (term-info-tracking-empty-p current-tracker))))
 
 (defparameter *information-distribution-approaches* nil
   "All approaches for distributing information between nodes.")
