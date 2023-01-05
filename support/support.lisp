@@ -81,6 +81,27 @@
         finally (return discovered-groups)))
 
 
+(defun pick-lists (left right &key pick single double)
+  "Picks elements from the list, executing selector.
+Pick should yield one of:
+- :left to consume the left element, :right to consume the right element, :both to consume both elements.
+
+SINGLE should process one element on the list.  The value returned is consed.
+
+DOUBLE is called when :both is returned.  It receives two
+elements.  The value returned is consed."
+  (loop
+    while (or left right)
+    append (cond ((null left)
+                  (loop while right collect (funcall single (pop right))))
+                 ((null right)
+                  (loop while left collect (funcall single (pop left))))
+                 (t (case (funcall pick (first left) (first right))
+                      (:left (list (funcall single (pop left))))
+                      (:right (list (funcall single (pop right))))
+                      (:both (list (funcall double (pop left) (pop right))))
+                      (otherwise (error "pick must yield one of :left, :right, :both")))))))
+
 ;;;; derived types
 (defparameter *next* 0)
 

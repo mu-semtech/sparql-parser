@@ -11,7 +11,8 @@
            #:with-derived-types
            #:typed-hash-table
            #:typed-list
-           #:typed-plist))
+           #:typed-plist
+           #:pick-lists))
 
 (defpackage :ebnf
   (:use :common-lisp)
