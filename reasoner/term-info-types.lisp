@@ -23,15 +23,25 @@
     "A single :or rule, currently one exists for a MATCH statement."
     `(cons (member :or) ,term-info-list)))
 
-(with-derived-types ((term-info-hash-table (typed-hash-table primitive-expression term-info-directional)))
- (deftype term-info ()
-   "A set of constraints holding within one :or statement."
-   term-info-hash-table))
+;; (with-derived-types ((term-info-hash-table (typed-hash-table primitive-expression term-info-directional)))
+;;  (deftype term-info ()
+;;    "A set of constraints holding within one :or statement."
+;;    term-info-hash-table))
 
-(with-derived-types ((term-info-directional-plist (typed-plist predicate-direction-key term-info-predicates-info :expand-length 2)))
- (deftype term-info-directional ()
-   "Directional term info is the place that stores the links to forward and backward predicates."
+(with-derived-types ((term-info-directional-plist (typed-plist primitive-expression term-info-directional :expand-length 4)))
+  (deftype term-info ()
+   "A set of constraints holding within one :or statement."
    term-info-directional-plist))
+
+;; (with-derived-types ((term-info-directional-plist (typed-plist predicate-direction-key term-info-predicates-info :expand-length 2)))
+;;  (deftype term-info-directional ()
+;;    "Directional term info is the place that stores the links to forward and backward predicates."
+;;    term-info-directional-plist))
+(deftype term-info-directional ()
+  "Directional term info is the place that stores the links to forward and backward predicates."
+  '(cons (or null term-info-predicates-info)
+         (or null term-info-predicates-info)))
+
 
 (with-derived-types ((term-info-predicate-info-list (typed-list term-info-predicate-info)))
   (deftype term-info-predicates-info ()

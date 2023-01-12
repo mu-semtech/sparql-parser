@@ -142,7 +142,9 @@ elements.  The value returned is consed."
     ;; (format t "~&~A will check for type ~A~%" typed-list-test-function-sym content-type)
     (values `(defun ,typed-list-test-function-sym (list)
                ;; (format t "~&Checking ~A for items of type ~A~%" list ',content-type)
-               (every (lambda (item) (typep item ',content-type))
+               (every (lambda (item) (let ((is-of-type (typep item ',content-type)))
+                                       ;; (format t "~&~A is ~:[NOT ~;~]of type ~A~%" item is-of-type ',content-type)
+                                       is-of-type))
                       list))
             `(or null
                  (and cons
@@ -159,7 +161,7 @@ elements.  The value returned is consed."
             (labels ((expand-recursive (n &optional (final-cons-constraint 'null))
                        (if (= n 0)
                            final-cons-constraint
-                           `(cons ,key-type (cons ,value-type ,(expand-recursive (1- n)))))))
+                           `(cons ,key-type (cons ,value-type ,(expand-recursive (1- n) final-cons-constraint))))))
               `(and (or ,@(loop for current-expansion-length from 0 to expand-length
                                 if (= current-expansion-length expand-length)
                                   collect (expand-recursive current-expansion-length `(satisfies ,typed-plist-test-function-sym))

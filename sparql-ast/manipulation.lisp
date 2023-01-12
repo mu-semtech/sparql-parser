@@ -208,7 +208,9 @@ themselves, like with an ObjectList."
            collect submatch)))
 
 (defun scan-deep-term-case* (match functor)
-  "Deeply scans match for a term, calling functor on the first term and yielding the result."
+  "Deeply scans match for a term, calling functor on the first term and yielding the result.
+
+Also see REASONER-TREE-MIRROR:TREE-SCAN-DEEP-TERM-CASE."
   (labels ((descend (match)
              (loop for sub-match in (sparql-parser:match-submatches match)
                    if (match-p sub-match)

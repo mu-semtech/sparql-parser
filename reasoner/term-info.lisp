@@ -131,8 +131,245 @@ When this exists, change-tracking for TERM-INFO of matches.")
   *term-info-update-tracker*)
 
 
-(declaim (ftype (function (match &optional term-info-collection) term-info-rule) term-info-rule))
-(defun term-info (match &optional (default (list :or (make-hash-table :test 'equal))))
+(declaim (ftype (function (primitive-expression primitive-expression) (or null t)) primitive-term-equal primitive-term-<))
+(defun primitive-term-equal (left right)
+  "Compares two primitive terms as used by the reasoner."
+  ;; this currently assumes a string as a value.  However, these could
+  ;; have a different representation in the future instead.  String
+  ;; comparison is sufficient for now.
+  (string= left right))
+
+(defun primitive-term-< (left right)
+  "Compares two primitive terms as used by the reasoner."
+  ;; like primitive-term-equal, this assumes both left and right are
+  ;; strings.
+  (string< left right))
+
+
+
+(declaim (ftype (function (&rest reasoner-ast) (values term-info-rule &optional)) union-term-info))
+(defun union-reasoner-asts (&rest reasoner-asts)
+  "For each of the matches, ensure the constraints are pushed down into each match."
+  ;; If there are multiple alternatives, they should be multiplied
+
+  ;; In order to combine the knowledge, we have to multiply each of the
+  ;; constraints.  This may explode.
+
+  ;; TODO: Only pass on relevant knowledge by analyzing the intersting
+  ;; bits early on, making this easier to analyze and substantially
+  ;; easier to process with multiple UNIONs
+  (loop for rast in (rest reasoner-asts)
+        for current = (and (first reasoner-asts)
+                           (reasoner-ast-term-info-list (first reasoner-asts)))
+          then (join-term-info (and rast (reasoner-ast-term-info-list rast)) current)
+        finally (return current)))
+
+(declaim (ftype (function (reasoner-ast reasoner-ast reasoner-ast reasoner-ast)
+                          (values))
+                add-subject-predicate-object))
+(defun add-subject-predicate-object (reasoner-ast subject predicate object)
+  "Adds the SUBJECT PREDICATE OBJECT combination to the known knowledge of MATCH."
+  ;; types of predicates:
+  ;; - :forward-predicates
+  ;; - :backward-predicates
+  ;;
+  ;; NOTE: the solution with also-set-backward and predicate-type is not
+  ;; the cleanest approach.  we could refactor this someday.
+  (let ((subject-string (or ; needs or because failure may be scanned-token instead
+                         (reasoner-tree-mirror:tree-match-symbol-case subject
+                           (ebnf::|ABSTRACT-IRI| (cached-expanded-uri (reasoner-tree-mirror:reasoner-ast-node subject))))
+                         (sparql-generator:write-valid-match (reasoner-tree-mirror:reasoner-ast-node subject))))
+        (predicate-string (sparql-generator:write-valid-match (reasoner-tree-mirror:reasoner-ast-node predicate)))
+        (object-string (or
+                        (reasoner-tree-mirror:tree-match-symbol-case object
+                          (ebnf::|ABSTRACT-IRI| (cached-expanded-uri (reasoner-tree-mirror:reasoner-ast-node object))))
+                        (sparql-generator:write-valid-match (reasoner-tree-mirror:reasoner-ast-node object)))))
+    (add-primitive-subject-predicate-object reasoner-ast subject-string predicate-string object-string)
+    (add-primitive-subject-predicate-object reasoner-ast subject-string predicate-string object-string t)))
+
+(defun add-primitive-subject-predicate-object (reasoner-ast subject predicate object &optional inverse-direction)
+  (format t "~%Adding ~A ~:[~;(inverse)~])~% to ~A:~&" (list subject predicate object) inverse-direction (term-info reasoner-ast nil))
+  (let ((source (if inverse-direction object subject))
+        (target (if inverse-direction subject object))
+        (direction-keyword (if inverse-direction :backward-predicates :forward-predicates)))
+    (let ((term-info-directional (ensure-term-info-list-directional-cell reasoner-ast source))
+          term-info-predicate-info)     ; set later
+      (setf (term-info-directional-direction term-info-directional direction-keyword)
+            (loop for predicate-info in (term-info-directional-direction term-info-directional direction-keyword)
+                  if (primitive-term-equal (term-info-predicate-predicate predicate-info) predicate)
+                    do
+                       ;; pushing the target and sorting the values happens later
+                       (setf term-info-predicate-info predicate-info)
+                       (return (term-info-directional-direction term-info-directional direction-keyword))
+                  finally (let ((predicate-info (make-term-info-predicate-info)))
+                            (setf (term-info-predicate-predicate predicate-info) predicate)
+                            (setf term-info-predicate-info predicate-info)
+                            (return (cons predicate-info (term-info-directional-direction term-info-directional direction-keyword))))))
+      ;; cope with sorting
+      (loop for object in (term-info-predicate-targets term-info-predicate-info)
+            when (primitive-term-equal object target)
+              do (return)
+            finally
+               (push target (term-info-predicate-targets term-info-predicate-info))
+               (mark-dirty reasoner-ast))))
+  (format t "~&  ~A~&" (term-info reasoner-ast nil)))
+
+(defun mark-dirty (reasoner-ast)
+  "Marks the reasoner-ast dirty and updates whatever state is needed to
+reflect that."
+  (unless (reasoner-ast-dirty-p reasoner-ast)
+    (setf (reasoner-ast-dirty-p reasoner-ast) t)
+    (when (term-info-tracking-enabled)
+      (term-info-tracking-add reasoner-ast))))
+
+
+;;;; term-info-directional
+(defun make-term-info-directional (&optional forward-predicates backward-predicates)
+  (cons forward-predicates backward-predicates))
+
+(defun term-info-directional-forward (term-info-directional)
+  (car term-info-directional))
+(defun (setf term-info-directional-forward) (value term-info-directional)
+  (setf (car term-info-directional) value))
+
+(defun term-info-directional-backward (term-info-directional)
+  (cdr term-info-directional))
+(defun (setf term-info-directional-backward) (value term-info-directional)
+  (setf (cdr term-info-directional) value))
+
+(defun term-info-directional-direction (term-info-directional direction-keyword)
+  (case direction-keyword
+    (:forward-predicates (term-info-directional-forward term-info-directional))
+    (:backward-predicates (term-info-directional-backward term-info-directional))
+    (otherwise (error "direction-keyword must be one of :forward-predicates or :backward-predicates"))))
+(defun (setf term-info-directional-direction) (value term-info-directional direction-keyword)
+  (case direction-keyword
+    (:forward-predicates (setf (term-info-directional-forward term-info-directional) value))
+    (:backward-predicates (setf (term-info-directional-backward term-info-directional) value))
+    (otherwise (error "direction-keyword must be one of :forward-predicates or :backward-predicates"))))
+
+(defun ensure-term-info-list-directional-cell (reasoner-ast term)
+  "Ensures the term-info-list cell exists for term exists in reasoner-ast and returns it.
+
+Ensures a single :OR solution exists with at least a cell for the
+predicate TERM.  Returns the on which :forward-predicates and
+:backward-predicates can be set for the predicate TERM."
+
+  ;; TODO: put predicate cell at the right spot by sorting
+  ; rest to skip over first :OR key.
+  (let ((current-condition (second (reasoner-ast-term-info-list reasoner-ast))))
+    ;; the current condition is either nil, or is the only option of the
+    ;; :OR clause because this function only understands a single
+    ;; element.
+    (loop for (source cell) on current-condition
+            by #'cddr
+          when (primitive-term-equal source term)
+            do (return cell)
+          finally (let ((cell (make-term-info-directional)))
+                    (setf (reasoner-ast-term-info-list reasoner-ast)
+                          `(:or (,term ,cell ,@current-condition)))
+                    (return cell)))))
+
+;; ;;;; term-info-predicate-cell
+;; (defun make-term-info-predicate-cell (&optional predicate term-info-list)
+;;   (cons predicate term-info-list))
+;; (defun term-info-predicate-predicate (term-info-predicate-cell)
+;;   (car term-info-predicate-cell))
+;; (defun term-info-predicate-info-list (term-info-predicate-cell)
+;;   (cdr term-info-predicate-cell))
+
+;;;; term-info-predicates-info
+(defun make-term-info-predicate-info (&key source targets)
+  (cons source targets))
+
+(defun term-info-predicate-predicate (term-info-predicate-info)
+  (car term-info-predicate-info))
+(defun (setf term-info-predicate-predicate) (value term-info-predicate-info)
+  (setf (car term-info-predicate-info) value))
+
+(defun term-info-predicate-targets (term-info-predicate-info)
+  (cdr term-info-predicate-info))
+(defun (setf term-info-predicate-targets) (value term-info-predicate-info)
+  (setf (cdr term-info-predicate-info) value))
+
+
+(defun cross-product* (left-list right-list functor)
+  "Constructs the cross-product of LEFT-LIST and RIGHT-LIST by calling
+FUNCTOR with a permutation of the elements in both."
+  (loop for left in left-list
+        append (loop for right in right-list
+                     collect (funcall functor left right))))
+
+(defmacro make-cross-product ((left-var right-var) (left-list right-list) &body body)
+  "Creates the cross-product of LEFT-LIST and RIGHT-LIST calling BODY with LEFT-VAR bound to each permutation of an element of LEFT-LIST bound to LEFT-VAR and an element of RIGHT-LIST bound to RIGHT-VAR."
+  `(cross-product* ,left-list ,right-list (lambda (,left-var ,right-var) ,@body)))
+
+(declaim (ftype (function (&rest term-info-rule) (values term-info-rule)) join-or-term-info-statements))
+(defun join-or-term-info-statements (&rest term-info-rules)
+  "Joins a set of :OR term-info statements by combining them all into a big
+OR."
+  (let ((current (first term-info-rules)))
+    (loop for rule in (rest term-info-rules)
+          unless (and (eq (first rule) :or)
+                      (eq (first current) :or))
+            do
+               (error "~A or ~A does not start with :or" current rule)
+          do (setf current
+                   (make-cross-product (left right)
+                       ((rest current) (rest rule))
+                     (pick-lists left right
+                                 :pick (lambda (left right)
+                                         (cond ((primitive-term-equal (first left) (first right))
+                                                :both)
+                                               ((primitive-term-< (first left) (first right))
+                                                :left)
+                                               (t :right)))
+                                 :single (lambda (x) x)
+                                 :double (lambda (a b) `(,(first a) ,@(merge-predicate-infos (rest a) (rest b))))))))
+    current))
+
+(defun merge-predicate-infos (left-term-info-directional right-term-info-directional)
+  ;; {DIRECTIONAL ((source . targets) (source . targets)) ((source . targets) (source . targets))}
+  (flet ((merge-direction (lefts rights)
+           (pick-lists lefts rights
+                       :pick (lambda (left right)
+                               (cond ((primitive-term-< (car left) (car right))
+                                      :left)
+                                     ((primitive-term-equal (car left) (car right))
+                                      :both)
+                                     (t :right)))
+                       :single (lambda (x) x)
+                       :double (lambda (x y) (cons (first x) (merge-primitive-lists (rest x) (rest y)))))))
+    (let ((forward (merge-direction (term-info-directional-forward left-term-info-directional)
+                                    (term-info-directional-forward right-term-info-directional)))
+          (backward (merge-direction (term-info-directional-backward left-term-info-directional)
+                                     (term-info-directional-backward right-term-info-directional))))
+      (make-term-info-directional forward backward))))
+
+(defun merge-primitive-lists (left right)
+  "Merges primitive lists in the right order."
+  (pick-lists left right
+              :pick (lambda (x y)
+                      (cond ((primitive-term-< x y) :left)
+                            ((primitive-term-< y x) :right)
+                            (t :both)))
+              :single (lambda (x) x)
+              :double (lambda (x y) (declare (ignore y)) x)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+(declaim (ftype (function (reasoner-tree-mirror:reasoner-ast &optional term-info-collection) term-info-rule) term-info-rule))
+(defun term-info (ast &optional (default (list :or nil)))
   "Yields known term information at MATCH.
 
 These are options of constraints that we know of at MATCH.  They are
@@ -140,16 +377,20 @@ distributed amongst matches.
 
 Returns two values, the first being the term-info and the second
 indicating whether term info was available."
-  (gethash match *match-term-info* default))
+  (or (reasoner-tree-mirror:reasoner-ast-term-info-list ast) default)
+  ;; (gethash match *match-term-info* default)
+  )
 
 ;; (declaim (ftype (function (term-info-rule sparql-parser:match &optional term-info-rule) (values)) (setf term-info)))
-(declaim (ftype (function (t sparql-parser:match &optional t) (values)) (setf term-info)))
-(defun (setf term-info) (value match &optional (default (list :or (make-hash-table :test 'equal))))
+(declaim (ftype (function (t reasoner-tree-mirror:reasoner-ast &optional t) (values)) (setf term-info)))
+(defun (setf term-info) (value ast &optional (default (list :or nil)))
   "Sets the term-info for VALUE"
+  (declare (ignore default))
   (when (term-info-tracking-enabled)
-    (unless (term-info-rule-equal value (term-info match))
-      (term-info-tracking-add match)))
-  (setf (gethash match *match-term-info* default) value)
+    (unless (term-info-rule-equal value (term-info ast))
+      (term-info-tracking-add ast)))
+  (setf (reasoner-tree-mirror:reasoner-ast-term-info-list ast) value)
+  ;; (setf (gethash match *match-term-info* default) value)
   (values))
 
 (declaim (ftype (function (term-info-rule term-info-rule) (member nil t))))
@@ -179,128 +420,146 @@ the information differs."
                                                                               (first right-predicate))
                                                         (set-equal (rest left-predicate) (rest right-predicate)
                                                                    :test #'primitive-term-equal))))))
-                                     (and (compare-directional-set (term-info-forward-predicates left-directional)
-                                                                   (term-info-forward-predicates right-directional))
-                                          (compare-directional-set (term-info-backward-predicates left-directional)
-                                                                   (term-info-backward-predicates right-directional))))
+                                     (and (compare-directional-set (term-info-directional-forward left-directional)
+                                                                   (term-info-directional-forward right-directional))
+                                          (compare-directional-set (term-info-directional-backward left-directional)
+                                                                   (term-info-directional-backward right-directional))))
                               do (return nil)
                             finally (return t))))))))
 
-(declaim (ftype (function (match) term-info-rule) ensure-term-info))
-(defun ensure-term-info (match)
+(declaim (ftype (function (reasoner-tree-mirror:reasoner-ast) term-info-rule) ensure-term-info))
+(defun ensure-term-info (ast)
   "Ensures term-info has a setting for MATCH and returns it."
   (multiple-value-bind (value foundp)
-      (term-info match)
+      (term-info ast)
     (unless foundp
-      (setf (term-info match) value))
+      (setf (term-info ast) value))
     value))
 
-(defun print-term-info (match &optional stream)
+(defun print-term-info (ast &optional stream)
   "Prints TERM-INFO for MATCH on STREAM"
   (format stream ":or~{|~{~{~& ~A~{~&  -> ~{~A~,^ ~}~}~{~&  <- ~{~A~,^ ~}~}~}~}~,^~&~}"
-          (loop for info in (rest (term-info match))
+          (loop for info in (rest (term-info ast))
                 collect
-                (loop for k being the hash-keys of info
+                (loop for k in (term-info-primitives info)
+                      for directional-info = (term-info-primitive-directional info k)
                       collect (list k
-                                    (getf (gethash k info) :forward-predicates)
-                                    (getf (gethash k info) :backward-predicates))))))
+                                    (term-info-directional-forward directional-info)
+                                    (term-info-directional-backward directional-info))))))
 
 (declaim (ftype (function (term-info) (values primitive-predicate-list &optional)) term-info-primitives))
 (defun term-info-primitives (term-info)
   "Yields all primitives known in term-info."
-  (hash-table-keys term-info))
+  (loop for k in term-info by #'cddr collect k))
 
-(declaim (ftype (function (term-info primitive-source) (values term-info-directional &optional)) term-info-primitive-directional))
+(declaim (ftype (function (term-info primitive-source) (values (or null term-info-directional) &optional)) term-info-primitive-directional))
 (defun term-info-primitive-directional (term-info primitive)
   "Yields the TERM-INFO-DIRECTIONAL belonging to TERM-INFO for PRIMITIVE."
-  (values (gethash primitive term-info)))
+  (loop for (k v) on term-info by #'cddr
+        if (primitive-term-equal k primitive)
+          return v))
 
-(declaim (ftype (function (term-info-directional term-info-predicate-direction-key)
-                          (values term-info-predicates-info &optional))
-                term-info-directional-predicates))
-(defun term-info-directional-predicates (term-info-directional predicate-key)
-  "Predicates info for TERM-INFO."
-  (getf term-info-directional predicate-key))
-
-(declaim (ftype (function (term-info-directional) (values term-info-predicates-info &optional)) term-info-forward-predicates term-info-backward-predicates))
+;; (declaim (ftype (function (term-info-directional) (values term-info-predicates-info &optional)) term-info-forward-predicates term-info-backward-predicates))
 (defun term-info-forward-predicates (term-info-directional)
   "Forward predicate info for TERM-INFO"
   (term-info-directional-predicates term-info-directional :forward-predicates))
 
-(defun term-info-backward-predicates (term-info-directional)
-  "Forward predicate info for TERM-INFO"
-  (term-info-directional-predicates term-info-directional :backward-predicates))
+;; (defun term-info-backward-predicates (term-info-directional)
+;;   "Forward predicate info for TERM-INFO"
+;;   (term-info-directional-predicates term-info-directional :backward-predicates))
 
-(declaim (ftype (function (match (or match scanned-token) (or match scanned-token) (or match scanned-token) &optional (or null t) predicate-direction-key)
-                          (values))
-                add-subject-predicate-object))
-(defun add-subject-predicate-object (match subject predicate object &optional (also-set-backward t) (predicate-type :forward-predicates))
-  "Adds the SUBJECT PREDICATE OBJECT combination to the known knowledge of MATCH."
-  ;; types of predicates:
-  ;; - :forward-predicates
-  ;; - :backward-predicates
-  ;;
-  ;; NOTE: the solution with also-set-backward and predicate-type is not
-  ;; the cleanest approach.  we could refactor this someday.
-  (let ((subject-string (or ; needs or because failure may be scanned-token instead
-                         (sparql-manipulation:match-symbol-case subject 
-                           (ebnf::|ABSTRACT-IRI| (cached-expanded-uri subject)))
-                         (sparql-generator:write-valid-match subject)))
-        (predicate-string (sparql-generator:write-valid-match predicate))
-        (object-string (or
-                        (sparql-manipulation:match-symbol-case object
-                          (ebnf::|ABSTRACT-IRI| (cached-expanded-uri object)))
-                        (sparql-generator:write-valid-match object))))
-    ;; subject exists with :forward-perdicates
-    (unless (assoc predicate-string
-                   (getf (gethash subject-string
-                                  (second (term-info match)))
-                         predicate-type)
-                   :test #'primitive-term-equal)
-      ;; subject exists but predicate is not known
-      (push (list predicate-string)
-            (getf (gethash subject-string
-                           (second (ensure-term-info match)))
-                  predicate-type)))
-    ;; we now know the subject-predicate combination exists
-    (let ((predicate-cell (assoc predicate-string
-                                 (getf (gethash subject-string
-                                                (second (term-info match)))
-                                       predicate-type)
-                                 :test #'primitive-term-equal)))
-      (if predicate-cell
-          (unless (find object-string (rest predicate-cell) :test #'primitive-term-equal)
-            (setf (cdr (last predicate-cell)) (list object-string)))
-          (push (list predicate object-string)
-                (getf (gethash subject-string
-                               (second (ensure-term-info match)))
-                      predicate-type))))
-    ;; if object represents an iri or a variable, we must set the backward-predicates too
-    ;; TODO: support RDFLiteral
-    (when also-set-backward
-      (sparql-manipulation:match-symbol-case object
-        (ebnf::|ABSTRACT-IRI| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
-        (ebnf::|ABSTRACT-VAR| (add-subject-predicate-object match object predicate subject nil :backward-predicates))
-        (ebnf::|ABSTRACT-PRIMITIVE| nil
-               ;; (format t "~&Not defining inverse predicate for primitive ~A~%"
-               ;;         object-string)
-               )
-        (t (warn "Received an unknown type of value in REASONER-TERM-INFO:ADD-SUBJECT-PREDICATE-OBJECT ~A" object))))))
+(defmacro update-term-info ((reasoner-ast ;; match
+                                &key var wrap-in-or) &body body)
+  "Update term-info of MATCH to the result of BODY.
 
-(declaim (ftype (function (primitive-expression primitive-expression) (or null t)) primitive-term-equal primitive-term-<))
-(defun primitive-term-equal (left right)
-  "Compares two primitive terms as used by the reasoner."
-  ;; this currently assumes a string as a value.  However, these could
-  ;; have a different representation in the future instead.  String
-  ;; comparison is sufficient for now.
-  (string= left right))
+Optionally assigns the current value to VAR within the scope of BODY.
+The resulting list is prefixed with :OR when WRAP-IN-OR is non-nil."
+  (let ((reasoner-ast-sym (gensym "MATCH")))
+    `(let ((,reasoner-ast-sym ,reasoner-ast))
+       (setf (term-info ,reasoner-ast-sym)
+             (append ,(when wrap-in-or '(list :or))
+                     ,@(if var
+                           `((let ((,var (term-info ,reasoner-ast-sym))) ,@body))
+                           body))))))
 
-(defun primitive-term-< (left right)
-  "Compares two primitive terms as used by the reasoner."
-  ;; like primitive-term-equal, this assumes both left and right are
-  ;; strings.
-  (string< left right))
+(defmacro with-term-info-source ((term-info primitive-string &key var) &body body)
+  "Executes body with  the given source, storing the current binding in var."
+  `(let ((,var (term-info-primitive-directional ,term-info ,primitive-string)))
+     ,@body))
 
+(defmacro update-term-info-source ((term-info primitive-string &key var) &body body)
+  "Executes body with  the given source, storing the current binding in var."
+  `(let ((,var (term-info-primitive-directional ,term-info ,primitive-string)))
+     ,@body))
+
+
+;; (declaim (ftype (function (reasoner-ast reasoner-ast reasoner-ast reasoner-ast
+;;                            &optional
+;;                            (or null t)
+;;                            predicate-direction-key)
+;;                           (values))
+;;                 add-subject-predicate-object))
+;; (defun add-subject-predicate-object (tree subject predicate object &optional (also-set-backward t) (predicate-type :forward-predicates))
+;;   "Adds the SUBJECT PREDICATE OBJECT combination to the known knowledge of TREE."
+;;   ;; types of predicates:
+;;   ;; - :forward-predicates
+;;   ;; - :backward-predicates
+;;   ;;
+;;   ;; NOTE: the solution with also-set-backward and predicate-type is not
+;;   ;; the cleanest approach.  we could refactor this someday.
+;;   (let ((subject-string (or ; needs or because failure may be scanned-token instead
+;;                          (sparql-manipulation:match-symbol-case subject 
+;;                            (ebnf::|ABSTRACT-IRI| (cached-expanded-uri (reasoner-tree-mirror:reasoner-ast-node subject))))
+;;                          (sparql-generator:write-valid-match (reasoner-tree-mirror:reasoner-ast-node subject))))
+;;         (predicate-string (sparql-generator:write-valid-match (reasoner-tree-mirror:reasoner-ast-node predicate)))
+;;         (object-string (or
+;;                         (sparql-manipulation:match-symbol-case object
+;;                           (ebnf::|ABSTRACT-IRI| (cached-expanded-uri (reasoner-tree-mirror:reasoner-ast-node object))))
+;;                         (sparql-generator:write-valid-match (reasoner-tree-mirror:reasoner-ast-node object)))))
+;;     ;; ;; information must be added to each term-info and we will construct a new term-info-rule for this
+;;     ;; (update-term-info (tree :var term-info-rule :wrap-in-or t)
+;;     ;;   (loop for term-info in (rest term-info-rule) ;; assume first is :or
+;;     ;;         collect
+;;     ;;         (update-term-info-source
+;;     ;;          (term-info subject-string :var primitive-directional)
+;;     ;;          )
+;;     ;;         )))
+
+;;     ;; subject exists with :forward-perdicates
+;;     (unless (assoc predicate-string
+;;                    (getf (gethash subject-string
+;;                                   (second (term-info tree)))
+;;                          predicate-type)
+;;                    :test #'primitive-term-equal)
+;;       ;; subject exists but predicate is not known
+;;       (push (list predicate-string)
+;;             (getf (gethash subject-string
+;;                            (second (ensure-term-info tree)))
+;;                   predicate-type)))
+;;     ;; we now know the subject-predicate combination exists
+;;     (let ((predicate-cell (assoc predicate-string
+;;                                  (getf (gethash subject-string
+;;                                                 (second (term-info tree)))
+;;                                        predicate-type)
+;;                                  :test #'primitive-term-equal)))
+;;       (if predicate-cell
+;;           (unless (find object-string (rest predicate-cell) :test #'primitive-term-equal)
+;;             (setf (cdr (last predicate-cell)) (list object-string)))
+;;           (push (list predicate object-string)
+;;                 (getf (gethash subject-string
+;;                                (second (ensure-term-info tree)))
+;;                       predicate-type))))
+;;     ;; if object represents an iri or a variable, we must set the backward-predicates too
+;;     ;; TODO: support RDFLiteral
+;;     (when also-set-backward
+;;       (sparql-manipulation:match-symbol-case object
+;;         (ebnf::|ABSTRACT-IRI| (add-subject-predicate-object tree object predicate subject nil :backward-predicates))
+;;         (ebnf::|ABSTRACT-VAR| (add-subject-predicate-object tree object predicate subject nil :backward-predicates))
+;;         (ebnf::|ABSTRACT-PRIMITIVE| nil
+;;                ;; (format t "~&Not defining inverse predicate for primitive ~A~%"
+;;                ;;         object-string)
+;;                )
+;;         (t (warn "Received an unknown type of value in REASONER-TERM-INFO:ADD-SUBJECT-PREDICATE-OBJECT ~A" object))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; uninioning term infos
@@ -319,25 +578,32 @@ the information differs."
                          :test #'primitive-term-equal)
           collect (cons key objects))))
 
-(declaim (ftype (function (term-info-directional term-info-directional) (values term-info-directional &optional)) join-constraint-primitives))
+(declaim (ftype (function ((or null term-info-directional) (or null term-info-directional)) (values term-info-directional &optional)) join-constraint-primitives))
 (defun join-constraint-primitives (left right)
   "Joins the constraint primitives of two primitves which have the same subject."
   ;; Both have a form like 
   ;; (:forward-predicates ((str str) (str))
   ;;  :backward-predicates ((str) (str str str)))
-  (list :forward-predicates
-        (join-constraint-primitive-predicates-constraint
-         (getf left :forward-predicates)
-         (getf right :forward-predicates))
-        :backward-predicates
-        (join-constraint-primitive-predicates-constraint
-         (getf left :backward-predicates)
-         (getf right :backward-predicates))))
+  (make-term-info-directional
+   (cond ((and left right)
+          (join-constraint-primitive-predicates-constraint
+           (term-info-directional-forward left)
+           (term-info-directional-forward right)))
+         (left (term-info-directional-forward left))
+         (right (term-info-directional-forward right))
+         (t nil))
+   (cond ((and left right)
+          (join-constraint-primitive-predicates-constraint
+           (term-info-directional-backward left)
+           (term-info-directional-backward right)))
+         (left (term-info-directional-backward left))
+         (right (term-info-directional-backward right))
+         (t nil))))
 
 (declaim (ftype (function (term-info term-info) (values term-info &optional)) join-or-constraints-2))
 (defun join-or-constraints-2 (left right)
   "Joins two term constraints."
-  ;; Both have a hash-table form like:
+  ;; Both have a plist form like:
   ;;
   ;; { uri-a => (:forward-predicates ((uri-q uri-r))
   ;;             :backward-predicates ((uri-s)))
@@ -345,16 +611,13 @@ the information differs."
   ;;
   ;; This function searches to combine the solutions of each uri from
   ;; left into right and vice-versa
-  (let ((result (make-hash-table :test 'equal)))
-    (loop for key in (union (alexandria:hash-table-keys left)
-                            (alexandria:hash-table-keys right)
-                            :test #'primitive-term-equal)
-          for left-value = (gethash key left)
-          for right-value = (gethash key right)
-          for combined-value = (join-constraint-primitives left-value right-value)
-          do
-             (setf (gethash key result) combined-value))
-    result))
+  (loop for key in (union (term-info-primitives left)
+                          (term-info-primitives right)
+                          :test #'primitive-term-equal)
+        for left-value = (term-info-primitive-directional left key)
+        for right-value = (term-info-primitive-directional right key)
+        for combined-value = (join-constraint-primitives left-value right-value)
+        append (list key combined-value)))
 
 (declaim (ftype (function (term-info-rule term-info-rule) term-info-rule)))
 (defun join-or-constraints (left right)
@@ -382,13 +645,18 @@ simplest form that represents the same contsraints."
 (declaim (ftype (function (term-info-rule-list) term-info-rule) union-term-info-for-or-constraints))
 (defun union-term-info-for-or-constraints (or-constraints)
   "unions a set of or-constraints, combining them be moving knowledge across."
-  (loop for new-constraint in or-constraints
-        for constraint = new-constraint
-          then (join-or-constraints constraint new-constraint)
-        finally (return constraint)))
+  (format t "~&Calculating u-t-i-f-o-c for ~A ..." or-constraints)
+  (let ((result
+          (loop for new-constraint in or-constraints
+                for constraint = new-constraint
+                  then (join-or-constraints constraint new-constraint)
+                finally (return constraint))))
+    (format t " DONE~&")
+    (format t " yielded ~A~%" result)
+    result))
 
-(declaim (ftype (function (&rest match) (values term-info-rule &optional)) union-term-info))
-(defun union-term-info (&rest matches)
+(declaim (ftype (function (&rest reasoner-tree-mirror:reasoner-ast) (values term-info-rule &optional)) union-term-info))
+(defun union-term-info (&rest trees)
   "For each of the matches, ensure the constraints are pushed down into each match."
   ;; If there are multiple alternatives, they should be multiplied
 
@@ -399,17 +667,17 @@ simplest form that represents the same contsraints."
   ;; bits early on, making this easier to analyze and substantially
   ;; easier to process with multiple UNIONs
   (union-term-info-for-or-constraints
-   (mapcar (lambda (match)
-             (term-info match (list :or (make-hash-table :test 'equal))))
-           matches)))
+   (mapcar (lambda (tree)
+             (term-info tree (list :or nil)))
+           trees)))
 
-(declaim (ftype (function (&rest term-info-rule) (values term-info-rule)) join-or-term-info-statements))
-(defun join-or-term-info-statements (&rest term-info-statements)
-  "Joins a set of :OR term-info statements by combining them all into a big
-OR."
-  `(:or ,@(loop
-            for (or . sub-statements) in term-info-statements
-            if (eq or :or)
-              append sub-statements
-            else
-              do (error "Can only join :or info statements"))))
+;; (declaim (ftype (function (&rest term-info-rule) (values term-info-rule)) join-or-term-info-statements))
+;; (defun join-or-term-info-statements (&rest term-info-statements)
+;;   "Joins a set of :OR term-info statements by combining them all into a big
+;; OR."
+;;   `(:or ,@(loop
+;;             for (or . sub-statements) in term-info-statements
+;;             if (eq or :or)
+;;               append sub-statements
+;;             else
+;;               do (error "Can only join :or info statements"))))

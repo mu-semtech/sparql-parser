@@ -31,7 +31,8 @@
   (:use :common-lisp)
   (:export #:sparql-ast #:sparql-ast-top-node #:sparql-ast-string #:clone-sparql-ast #:with-sparql-ast #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:scanned-token-effective-string #:terminalp)
   (:export #:parse-sparql-string #:with-parser-setup
-           #:terminal-match-string))
+           #:terminal-match-string
+           #:match-match-submatches))
 
 (defpackage #:sparql-generator
   (:use :common-lisp)
@@ -51,7 +52,8 @@
            #:loop-matches-symbol-case
            #:do-grouped-children
            #:match-symbol-case
-           #:with-named-child))
+           #:with-named-child
+           #:expanded-term-case))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -66,14 +68,45 @@
   (:import-from #:support #:->)
   (:export #:apply-access-rights))
 
+(defpackage #:reasoner-tree-mirror
+  (:use :common-lisp)
+  (:export #:construct-reasoner-ast
+           #:reasoner-ast-node
+           #:reasoner-ast-parent
+           #:reasoner-ast-children
+           #:reasoner-ast-term-info-list
+           #:reasoner-ast-dirty-p
+           #:reasoner-ast
+           #:tree-scan-deep-term-case
+           #:with-named-child-tree
+           #:do-grouped-tree-children
+           #:loop-tree-matches-symbol-case
+           #:tree-match-symbol-case)
+  (:import-from #:sparql-parser
+                #:match-term
+                #:match-p
+                #:sparql-ast
+                #:sparql-ast-top-node
+                #:match
+                #:match-match-submatches)
+  (:import-from #:alexandria
+                #:compose
+                #:when-let
+                #:rcurry))
+
 (defpackage #:reasoner-prefixes
   (:use :common-lisp)
   (:import-from #:sparql-manipulation
+                #:expanded-term-case
                 #:with-named-child
                 #:do-grouped-children
                 #:loop-matches-symbol-case)
   (:import-from #:support
                 #:->)
+  (:import-from #:reasoner-tree-mirror
+                #:reasoner-ast-node
+                #:loop-tree-matches-symbol-case
+                #:reasoner-ast-term-info-list)
   (:export :cached-expanded-uri
            :extract-prefixes
            :with-local-prefixes
@@ -82,24 +115,31 @@
 
 (defpackage #:reasoner-term-info
   (:use :common-lisp)
+  ;; accounting
   (:export #:with-match-term-info
-           #:term-info
+           #:print-term-info)
+  ;; inspecting
+  (:export #:term-info)
+  ;; operations
+  (:export #:join-or-term-info-statements
            #:union-term-info
-           #:add-subject-predicate-object
-           #:print-term-info
-           #:join-or-term-info-statements
-           #:with-term-info-change-tracking
+           #:add-subject-predicate-object)
+  ;; change tracking
+  (:export #:with-term-info-change-tracking
            #:term-info-tracking-contains
            #:term-info-tracking-enabled
            #:term-info-tracking-empty-p
            #:term-info-tracking-get-current-tracker)
+  ;; imports
   (:import-from #:sparql-parser
                 #:scanned-token
-                #:match)
+                #:match
+                #:match-match-submatches)
   (:import-from #:alexandria
                 #:set-equal
                 #:hash-table-keys)
   (:import-from #:support
+                #:pick-lists
                 #:typed-list
                 #:typed-plist
                 #:typed-hash-table
@@ -107,7 +147,11 @@
                 #:->
                 #:group-by)
   (:import-from #:reasoner-prefixes
-                #:cached-expanded-uri))
+                #:cached-expanded-uri)
+  (:import-from #:reasoner-tree-mirror
+                #:reasoner-ast-dirty-p
+                #:reasoner-ast
+                #:reasoner-ast-term-info-list))
 
 (defpackage #:reasoner
   (:use :common-lisp)
@@ -135,12 +179,20 @@
                 #:match
                 #:match-p
                 #:match-term
-                #:match-submatches)
+                #:match-submatches
+                #:match-match-submatches)
   (:import-from #:reasoner-prefixes
                 #:cached-expanded-uri
                 #:with-known-local-prefixes
                 #:derive-expanded-uris
-                #:extract-prefixes))
+                #:extract-prefixes)
+  (:import-from #:reasoner-tree-mirror
+                #:do-grouped-tree-children
+                #:with-named-child-tree
+                #:tree-scan-deep-term-case
+                #:reasoner-ast-node
+                #:reasoner-ast-children
+                #:construct-reasoner-ast))
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)

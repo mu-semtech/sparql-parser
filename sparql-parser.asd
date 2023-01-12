@@ -16,6 +16,7 @@
                (:file "sparql-ast/generator")
                (:file "sparql-ast/manipulation")
                (:file "connection/globals")
+               (:file "reasoner/tree-mirror")
                (:file "reasoner/prefixes")
                (:file "reasoner/term-info-types")
                (:file "reasoner/term-info")

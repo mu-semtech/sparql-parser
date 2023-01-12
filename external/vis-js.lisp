@@ -2,15 +2,16 @@
 
 (defparameter *render-tokens* nil "Render tokens in vis.js.  These are duplicate and it's likely simpler without.")
 
-(defun match-as-visjs-nodes-and-edges (match)
-  "Construct nodes and edges for MATCH to be rendered in a VISJS page.
+(defun tree-as-visjs-nodes-and-edges (tree)
+  "Construct nodes and edges for TREE to be rendered in a Visjs page.
 
 Returns two values, a JSOWN representation of the nodes and a JSOWN
 representation of the edges."
   ;; give each match a name
   ;; pick a label and text content for each match
   ;; construct the relationships table
-  (let ((index 0)
+  (let ((match (reasoner-tree-mirror:reasoner-ast-node tree))
+        (index 0)
         (node-descriptions)
         (edge-descriptions))
     (labels ((new-id (label)
@@ -44,14 +45,14 @@ representation of the edges."
                (when (match-p match)
                  (let ((rule (sparql-generator::find-rule (match-term match))))
                    (and rule (ebnf:rule-expansion rule)))))
-             (make-node-title (match)
+             (make-node-title (match tree)
                (format nil "~A~%~A~%~A"
                        (html-escape (sparql-generator::write-valid-match match))
                        (alexandria:if-let ((rule-expansion (rule-expansion match)))
                          (html-escape (princ-to-string rule-expansion))
                          "UNKNOWN")
-                       (reasoner-term-info:print-term-info match nil)))
-             (traverse-match (match &optional parent-id)
+                       (and tree (reasoner-term-info:print-term-info tree nil))))
+             (traverse-match (match tree &optional parent-id)
                (let ((id (new-id (typecase match
                                    (match (match-term match))
                                    (scanned-token (scanned-token-token match))))))
@@ -60,7 +61,7 @@ representation of the edges."
                      (push (jsown:new-js
                                ("id" id)
                                ("label" (as-string (match-term match)))
-                               ("title" (make-node-title match))
+                               ("title" (make-node-title match tree))
                                ("color" (determine-color match);; (jsown:new-js
                                         ;; ("background" (determine-color match))
                                         ;; ("border" "rgb(233,233,233)"))
@@ -72,8 +73,11 @@ representation of the edges."
                                ("from" parent-id)
                                ("to" id))
                              edge-descriptions))
-                     (dolist (submatch (match-submatches match))
-                       (traverse-match submatch id)))
+                     (let ((child-trees (and tree (reasoner-tree-mirror:reasoner-ast-children tree))))
+                       (dolist (submatch (match-submatches match))
+                         (traverse-match submatch
+                                         (find submatch child-trees :key #'reasoner-tree-mirror:reasoner-ast-node)
+                                         id))))
                    (scanned-token
                     ;; describe the token
                     ;; add reference to parent if parent exists
@@ -88,7 +92,7 @@ representation of the edges."
                                 ("from" parent-id)
                                 ("to" id))
                               edge-descriptions))))))))
-      (traverse-match match)
+      (traverse-match match tree)
       (values (jsown:to-json (reverse node-descriptions))
               (jsown:to-json (reverse edge-descriptions))))))
 
@@ -172,9 +176,9 @@ representation of the edges."
 </body>
 </html>"))
 
-(defun write-match-page (match path)
+(defun write-page-for-tree (tree path)
   "Writes MATCH as visible query to PATH html file."
   (with-open-file (out path :direction :output :if-exists :supersede :if-does-not-exist :create)
     (multiple-value-bind (nodes edges)
-        (match-as-visjs-nodes-and-edges match)
+        (tree-as-visjs-nodes-and-edges tree)
       (in-page nodes edges out))))

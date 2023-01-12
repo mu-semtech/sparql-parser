@@ -54,8 +54,8 @@ correctly for the functions in this module."
   (declare (ignore base))
   uri-string)
 
-(defun extract-prefixes (query)
-  "Extract all prefixes from QUERY.
+(defun extract-prefixes (reasoner-ast)
+  "Extract all prefixes from REASONER-AST.
 Assumes a fixed BASE is determined before it is used, as our query
 processing should execute."
   ;; Extracts all prefixes
@@ -81,9 +81,9 @@ processing should execute."
                      (-> iriref
                        (sparql-parser:terminal-match-string)
                        (iriref-string-strip-markers))))))
-      (loop-matches-symbol-case (match) query
-        (ebnf::|PrefixDecl| (extract-prefix-from-match match))
-        (ebnf::|BaseDecl| (extract-basedecl-from-match match)))
+      (loop-tree-matches-symbol-case (ast) reasoner-ast
+        (ebnf::|PrefixDecl| (extract-prefix-from-match (reasoner-ast-node ast)))
+        (ebnf::|BaseDecl| (extract-basedecl-from-match (reasoner-ast-node ast))))
       (make-query-prefixes :prefix-hash answers :base current-base))))
 
 (defun (setf cached-expanded-uri) (uri-string match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
@@ -124,11 +124,11 @@ processing should execute."
                           (set-uri-mapping (get-prefix prefixes prefix)))
                          (t (error "Missing prefix ~A" prefix)))))))))))
 
-(defun derive-expanded-uris (query prefixes)
+(defun derive-expanded-uris (ast prefixes)
   "Expands all prefixed matches of QUERY based on PREFIXES."
   (let ((match-uri-mapping (make-hash-table :test 'eq)))
     ;; TODO: we could skip those mentioned in PREFIXES by extending the tooling
-    (loop-matches-symbol-case (match) query
-      (ebnf::|PNAME_LN| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping))
-      (ebnf::|PNAME_NS| (cached-expanded-uri match :prefixes prefixes :match-uri-mapping match-uri-mapping)))
+    (loop-tree-matches-symbol-case (tree) ast
+      (ebnf::|PNAME_LN| (cached-expanded-uri (reasoner-ast-node tree) :prefixes prefixes :match-uri-mapping match-uri-mapping))
+      (ebnf::|PNAME_NS| (cached-expanded-uri (reasoner-ast-node tree) :prefixes prefixes :match-uri-mapping match-uri-mapping)))
     match-uri-mapping))

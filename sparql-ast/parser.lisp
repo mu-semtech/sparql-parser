@@ -76,6 +76,11 @@ those.  Allows for manipulation without destroying the original."
     (make-sparql-ast :string (sparql-ast-string sparql-ast)
                      :top-node (clone-match (sparql-ast-top-node sparql-ast)))))
 
+(defun match-match-submatches (match)
+  "Yields all submatches of match which are a match themselves as per MATCH-P"
+  (when (sparql-parser:match-p match)
+    (remove-if-not #'sparql-parser:match-p (sparql-parser:match-submatches match))))
+
 ;;;;;;;;;;;;;;
 ;;;; Constants
 
