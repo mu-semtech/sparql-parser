@@ -188,7 +188,7 @@ When this exists, change-tracking for TERM-INFO of matches.")
     (add-primitive-subject-predicate-object reasoner-ast subject-string predicate-string object-string t)))
 
 (defun add-primitive-subject-predicate-object (reasoner-ast subject predicate object &optional inverse-direction)
-  (format t "~%Adding ~A ~:[~;(inverse)~])~% to ~A:~&" (list subject predicate object) inverse-direction (term-info reasoner-ast nil))
+  ;; (format t "~%Adding ~A ~:[~;(inverse)~])~% to ~A:~&" (list subject predicate object) inverse-direction (term-info reasoner-ast nil))
   (let ((source (if inverse-direction object subject))
         (target (if inverse-direction subject object))
         (direction-keyword (if inverse-direction :backward-predicates :forward-predicates)))
@@ -212,7 +212,8 @@ When this exists, change-tracking for TERM-INFO of matches.")
             finally
                (push target (term-info-predicate-targets term-info-predicate-info))
                (mark-dirty reasoner-ast))))
-  (format t "~&  ~A~&" (term-info reasoner-ast nil)))
+  ;; (format t "~&  ~A~&" (term-info reasoner-ast nil))
+  )
 
 (defun mark-dirty (reasoner-ast)
   "Marks the reasoner-ast dirty and updates whatever state is needed to
@@ -645,14 +646,14 @@ simplest form that represents the same contsraints."
 (declaim (ftype (function (term-info-rule-list) term-info-rule) union-term-info-for-or-constraints))
 (defun union-term-info-for-or-constraints (or-constraints)
   "unions a set of or-constraints, combining them be moving knowledge across."
-  (format t "~&Calculating u-t-i-f-o-c for ~A ..." or-constraints)
+  ;; (format t "~&Calculating u-t-i-f-o-c for ~A ..." or-constraints)
   (let ((result
           (loop for new-constraint in or-constraints
                 for constraint = new-constraint
                   then (join-or-constraints constraint new-constraint)
                 finally (return constraint))))
-    (format t " DONE~&")
-    (format t " yielded ~A~%" result)
+    ;; (format t " DONE~&")
+    ;; (format t " yielded ~A~%" result)
     result))
 
 (declaim (ftype (function (&rest reasoner-tree-mirror:reasoner-ast) (values term-info-rule &optional)) union-term-info))

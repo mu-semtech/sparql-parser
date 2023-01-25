@@ -281,7 +281,7 @@ contains currently interesting items to track."
                                           (or (not last-tracker)
                                               (some (rcurry #'term-info-tracking-contains last-tracker)
                                                     (cons tree (reasoner-tree-mirror:reasoner-ast-children tree))))))
-               (format t "~&In iteration ~A we had ~A changes.~%" i (reasoner-term-info::term-info-tracking-tracked-amount))
+               ;; (format t "~&In iteration ~A we had ~A changes.~%" i (reasoner-term-info::term-info-tracking-tracked-amount))
                (setf current-tracker (term-info-tracking-get-current-tracker)))
           until (term-info-tracking-empty-p current-tracker))))
 
