@@ -53,7 +53,7 @@
             (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
             (,response)))))))
 
-(defun boot (&key (port 8080) (worker-count 32))
+(defun boot (&key (port 8890) (worker-count 32))
   (bordeaux-threads:make-thread
    (lambda ()
      (woo:run (lambda (env) (acceptor env))
