@@ -53,7 +53,8 @@
            #:do-grouped-children
            #:match-symbol-case
            #:with-named-child
-           #:expanded-term-case))
+           #:expanded-term-case
+           #:iriref))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -202,6 +203,11 @@
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
   (:import-from #:alexandria
                 #:when-let))
+
+(defpackage #:detect-quads
+  (:use :common-lisp)
+  (:import-from #:sparql-parser
+                #:match-term))
 
 (defpackage #:sparql-visjs
   (:use :common-lisp)

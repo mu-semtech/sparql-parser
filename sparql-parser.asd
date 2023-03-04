@@ -8,21 +8,31 @@
   :serial t
   :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown)
   :components ((:file "packages")
+               ;; supporting code
                (:file "support/support")
                (:file "support/tree-db")
+               ;; parsing an EBNF tree
                (:file "sparql-ast/ebnf")
                (:file "sparql-ast/terminals")
                (:file "sparql-ast/parser")
-               (:file "sparql-ast/generator")
+               (:file "sparql-ast/generator") ; output manipulated AST
                (:file "sparql-ast/manipulation")
+               ;; sparql http - part 1
                (:file "connection/globals")
+               ;; access control definitions
+               (:file "acl/acl")
+               (:file "acl/config")
+               ;; reasoning to determine graphs
                (:file "reasoner/tree-mirror")
                (:file "reasoner/prefixes")
                (:file "reasoner/term-info-types")
                (:file "reasoner/term-info")
                (:file "reasoner/reasoner")
-               (:file "acl/acl")
-               (:file "acl/config")
+               ;; updates
+               (:file "updates/framework")
+               (:file "updates/detect-quads")
+               ;; visualizing resulting reasonings
+               (:file "external/vis-js")
+               ;; sparql http - part 2
                (:file "connection/server")
-               (:file "connection/client")
-               (:file "external/vis-js")))
+               (:file "connection/client")))
