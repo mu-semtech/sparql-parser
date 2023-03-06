@@ -1,5 +1,29 @@
 (in-package #:detect-quads)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Detect quads framework
+;;;;
+;;;; Provides abstractions on how to interpret the SPARQL EBNF for
+;;;; detecting quads.
+;;;;
+;;;; Processing the EBNF requires passing content down, up and sideways.
+;;;; However, it seems feasible to process content depth-first
+;;;; left-to-right assuming each step in between gets its say in the
+;;;; down and up-pass.
+;;;;
+;;;; To support this an info object is supplied.  This can provide a
+;;;; value for each setting.  Its properties can be intiialized at each
+;;;; level which means the property is scoped to children.
+;;;;
+;;;; Each level creates a function which can be called directly in order
+;;;; to process that level.
+;;;;
+;;;; The entry-point is the handle macro.  This constructs a function to
+;;;; initialize the state and provides various approaches to handle the
+;;;; term.  The most commonly used is :process which is a list of terms
+;;;; for which the responsibility is passed down.  See the comment for
+;;;; more information in this macro.
+
 (defpackage #:detect-quads-processing-handlers)
 
 (defstruct info
@@ -61,25 +85,23 @@ struct with similarly named accessor functions."
   (intern (symbol-name term) (find-package '#:detect-quads-processing-handlers)))
 
 (defmacro handle (term &key function note todo process accept local-context process-functions not-supported after &allow-other-keys)
+  "We assume symbols are coming from a single other package.  This is correct in our setting but would otherwise be a strange way of using these symbols.
+
+ - local-context :: properties to set/reset on *info* struct
+ - function :: function to process the match, everything below is ignored in this case
+ - process :: list of submatch terms that should be handled through this system
+ - process-functions :: functions used to specifically process certain submatch types
+ - accept :: accept a result without further descending, if this is the last result it is returned
+ - after :: function which is called after calculations are made and which can alter the response
+ - not-supported :: list of submatch terms that are explicitly not supported, throws error on match
+ - note :: a note, ignored
+ - todo :: a note on desired actions, ignored"
   (declare (ignore note todo))
   (let ((function-name (term-handler-symbol term))
         (match-gensym (gensym "MATCH"))
         (submatch-gensym (gensym "SUBMATCH"))
         (loop-result-gensym (gensym "LOOP-RESULT"))
         (result-gensym (gensym "RESULT")))
-    ;; We assume symbols are coming from a single other package.  This
-    ;; is correct in our setting but would otherwise be a strange way of
-    ;; using these symbols.
-    ;;
-    ;; - local-context :: properties to set/reset on *info* struct
-    ;; - function :: function to process the match, everything below is ignored in this case
-    ;; - process :: list of submatch terms that should be handled through this system
-    ;; - process-functions :: functions used to specifically process certain submatch types
-    ;; - accept :: accept a result without further descending, if this is the last result it is returned
-    ;; - after :: function which is called after calculations are made and which can alter the response
-    ;; - not-supported :: list of submatch terms that are explicitly not supported, throws error on match
-    ;; - note :: a note, ignored
-    ;; - todo :: a note on desired actions, ignored
     `(defun ,function-name (,match-gensym)
        ;; check if the term is what we expect it to be
        (assert (eq (match-term ,match-gensym) ',term))
