@@ -126,12 +126,13 @@ variables."
   `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id))))
      ,@body))
 
-(defun graphs-for-tokens (tokens)
+(defun graphs-for-tokens (tokens usage)
   "Yields the graphs which can be accessed from TOKENS."
   (let* ((grant-info (loop for token in tokens
                            for token-name = (name (access-token-access token))
                            append (loop for right in *rights*
-                                        when (eq (access-grant-access right) token-name)
+                                        when (and (eq (access-grant-access right) token-name)
+                                                  (find usage (access-grant-usage right) :test #'eq))
                                           append (loop for graph-specification in *graphs*
                                                        for granted-graph-spec-name = (access-grant-graph-spec right)
                                                        when (eq granted-graph-spec-name
@@ -142,7 +143,7 @@ variables."
                           (graph-specification-base-graph graph-specification)
                           (access-token-parameters token)))))
 
-(defun apply-access-rights (query-ast)
+(defun apply-access-rights (query-ast &key (usage :read))
   "Applies current access rights to MATCH.
 
 MATCH may be updated in place but updated MATCH is returned."
@@ -151,4 +152,4 @@ MATCH may be updated in place but updated MATCH is returned."
       (remove-dataset-clauses)
       (remove-graph-graph-patterns)
       (add-default-base-decl-to-prologue)
-      (add-from-graphs (graphs-for-tokens tokens)))))
+      (add-from-graphs (graphs-for-tokens tokens usage)))))
