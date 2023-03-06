@@ -6,10 +6,13 @@
   (prefixes)
   (base)
   (pname-ns)
+  (operations)
   (quads)
   (graph)
   (subject)
-  (predicate))
+  (predicate)
+  (delete-quad-patterns)
+  (insert-quad-patterns))
 
 (declaim (special *info*))
 

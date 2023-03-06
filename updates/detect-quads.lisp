@@ -8,13 +8,17 @@
 ;;;; query.
 
 (handle ebnf::|UpdateUnit|
-        :process (ebnf::|Update|))
+        :local-context (:operations nil)
+        :process (ebnf::|Update|)
+        :after ((response match)
+                (declare (ignore response match))
+                (info-operations *info*)))
 (handle ebnf::|Update|
         :note "An update has a (possibly empty) prologue.  This data structure needs to be extended for each update passed down."
         :note "Cycling back to update means we should only determine the next query after this set of quads was fully processed.  In the future this will create its own set of challenges in terms of locking because we can't know what is to be stored where."
         :todo "ebnf::|Update| should understand nested updates (split with a ';' semicolon) and provide an execution path for them."
-        :not-supported (ebnf::|Update|)
-        :process (ebnf::|Prologue| ebnf::|Update1|)
+        ;; :not-supported (ebnf::|Update|)
+        :process (ebnf::|Prologue| ebnf::|Update1| ebnf::|Update|)
         :local-context (:prefixes nil ;; I don't think we should reset this when hitting update again but rather should extend it.
                         :base nil))
 (handle ebnf::|Prologue|
@@ -36,11 +40,20 @@
         :not-supported (ebnf::|Load| ebnf::|Clear| ebnf::|Drop| ebnf::|Move| ebnf::|Copy| ebnf::|Create|))
 (handle ebnf::|InsertData|
         :local-context (:quads nil)
-        :todo "Collect all quads and return them as quads-to-insert"
         :process (ebnf::|QuadData|)
         :after ((response match)
                 (declare (ignore response match))
-                `(:operation (:insert-triples ,(info-quads *info*)))))
+                (alexandria:appendf
+                 (info-operations *info*)
+                 `((:insert-triples ,(info-quads *info*))))))
+(handle ebnf::|DeleteData|
+        :local-context (:quads nil)
+        :process (ebnf::|QuadData|)
+        :after ((response match)
+                (declare (ignore response match))
+                (alexandria:appendf
+                 (info-operations *info*)
+                 `((:delete-triples ,(info-quads *info*))))))
 (handle ebnf::|QuadData|
         :process (ebnf::|Quads|))
 (handle ebnf::|Quads|
@@ -102,8 +115,9 @@
         :process (ebnf::|PrefixedName|)
         :accept (ebnf::|IRIREF|))
 (handle ebnf::|PrefixedName|
-        ;; TODO implement extraction of information from prefixed name based on prefixes
-        )
+        :process (ebnf::|PNAME_LN| ebnf::|PNAME_NS|)
+        :todo "Implement PrefixedName to yield an expanded URI."
+        :note "Prefixed")
 (handle ebnf::|NumericLiteral|
         :process (ebnf::|NumericLiteralUnsigned| ebnf::|NumericLiteralPositive| ebnf::|NumericLiteralNegative|))
 (handle ebnf::|NumericLiteralUnsigned|
@@ -114,3 +128,30 @@
         :accept (ebnf::|INTEGER_NEGATIVE| ebnf::|DECIMAL_NEGATIVE| ebnf::|DOUBLE_NEGATIVE|))
 (handle ebnf::|Var|
         :accept (ebnf::|VAR1| ebnf::|VAR2|))
+
+(handle ebnf::|Modify|
+        :local-context (:delete-quad-patterns nil
+                        :insert-quad-patterns nil
+                        :quads nil)
+        :process-functions ((ebnf::|DeleteClause| (delete-clause)
+                                   (detect-quads-processing-handlers::|DeleteClause| delete-clause)
+                                   (setf (info-delete-quad-patterns *info*)
+                                         (info-quads *info*))
+                                   (setf (info-quads *info*) nil))
+                            (ebnf::|InsertClause| (insert-clause)
+                                   (detect-quads-processing-handlers::|InsertClause| insert-clause)
+                                   (setf (info-insert-quad-patterns *info*)
+                                         (info-quads *info*))
+                                   (setf (info-quads *info*) nil))
+                            (ebnf::|GroupGraphPattern| (group-graph-pattern)
+                                   (let ((modify `((:modify (:delete-patterns ,(info-delete-quad-patterns *info*)
+                                                             :insert-patterns ,(info-insert-quad-patterns *info*)
+                                                             :where-group-graph-pattern ,group-graph-pattern)))))
+                                     (alexandria:appendf (info-operations *info*) modify))))
+        :not-supported (ebnf::|iri| ebnf::|UsingClause|))
+(handle ebnf::|DeleteClause|
+        :process (ebnf::|QuadPattern|))
+(handle ebnf::|InsertClause|
+        :process (ebnf::|QuadPattern|))
+(handle ebnf::|QuadPattern|
+        :process (ebnf::|Quads|))
