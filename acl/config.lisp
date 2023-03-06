@@ -67,11 +67,11 @@
 ;; What data resides where?
 (setf *graphs*
       (list (make-graph-specification
-             :name 'public
+             :name 'public-data
              :base-graph "http://mu.semte.ch/graphs/public"
              :constraints nil)
             (make-graph-specification
-             :name 'user
+             :name 'user-specific
              :base-graph "http://mu.semte.ch/graphs/user/"
              :constraints nil)))
 ;; (define-graph application ("http://mu.semte.ch/application")
@@ -84,8 +84,12 @@
 (setf *rights*
       (list (make-access-grant
              :usage '(:read)
-             :graph-spec 'public
-             :access 'public)))
+             :graph-spec 'public-data
+             :access 'public)
+            (make-access-grant
+             :usage '(:read :write)
+             :graph-spec 'user-specific
+             :access 'user)))
 
 ;; granting access to groups within scopes
 
