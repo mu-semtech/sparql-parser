@@ -32,7 +32,9 @@
   (:export #:sparql-ast #:sparql-ast-top-node #:sparql-ast-string #:clone-sparql-ast #:with-sparql-ast #:match #:match-p #:match-term #:print-match #:rule #:rule-p #:match-rule #:match-submatches #:scanned-token #:scanned-token-start #:scanned-token-end #:scanned-token-string #:scanned-token-token #:scanned-token-effective-string #:terminalp)
   (:export #:parse-sparql-string #:with-parser-setup
            #:terminal-match-string
-           #:match-match-submatches))
+           #:match-match-submatches
+           #:make-sparql-ast
+           #:*scanning-string*))
 
 (defpackage #:sparql-generator
   (:use :common-lisp)

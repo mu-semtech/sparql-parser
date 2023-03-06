@@ -46,6 +46,14 @@
                 (alexandria:appendf
                  (info-operations *info*)
                  `((:insert-triples ,(info-quads *info*))))))
+(handle ebnf::|DeleteWhere|
+        :local-context (:quads nil)
+        :process-functions ((ebnf::|QuadPattern| (quad-pattern)
+                                   (detect-quads-processing-handlers::|QuadPattern| quad-pattern)
+                                   (alexandria:appendf
+                                    (info-operations *info*)
+                                    `((:modify (:delete-patterns ,(info-quads *info*))
+                                               (:where ,(make-select-query-for-patterns quad-pattern (info-quads *info*)))))))))
 (handle ebnf::|DeleteData|
         :local-context (:quads nil)
         :process (ebnf::|QuadData|)
@@ -133,21 +141,24 @@
         :local-context (:delete-quad-patterns nil
                         :insert-quad-patterns nil
                         :quads nil)
-        :process-functions ((ebnf::|DeleteClause| (delete-clause)
-                                   (detect-quads-processing-handlers::|DeleteClause| delete-clause)
-                                   (setf (info-delete-quad-patterns *info*)
-                                         (info-quads *info*))
-                                   (setf (info-quads *info*) nil))
-                            (ebnf::|InsertClause| (insert-clause)
-                                   (detect-quads-processing-handlers::|InsertClause| insert-clause)
-                                   (setf (info-insert-quad-patterns *info*)
-                                         (info-quads *info*))
-                                   (setf (info-quads *info*) nil))
-                            (ebnf::|GroupGraphPattern| (group-graph-pattern)
-                                   (let ((modify `((:modify (:delete-patterns ,(info-delete-quad-patterns *info*)
-                                                             :insert-patterns ,(info-insert-quad-patterns *info*)
-                                                             :where-group-graph-pattern ,group-graph-pattern)))))
-                                     (alexandria:appendf (info-operations *info*) modify))))
+        :process-functions
+        ((ebnf::|DeleteClause| (delete-clause)
+                (detect-quads-processing-handlers::|DeleteClause| delete-clause)
+                (setf (info-delete-quad-patterns *info*)
+                      (info-quads *info*))
+                (setf (info-quads *info*) nil))
+         (ebnf::|InsertClause| (insert-clause)
+                (detect-quads-processing-handlers::|InsertClause| insert-clause)
+                (setf (info-insert-quad-patterns *info*)
+                      (info-quads *info*))
+                (setf (info-quads *info*) nil))
+         (ebnf::|GroupGraphPattern| (group-graph-pattern)
+                (let ((delete-patterns (info-delete-quad-patterns *info*))
+                      (insert-patterns (info-insert-quad-patterns *info*)))
+                  (let ((modify `((:modify (:delete-patterns ,delete-patterns
+                                            :insert-patterns ,insert-patterns
+                                            :query ,(make-select-query-for-patterns group-graph-pattern insert-patterns delete-patterns))))))
+                    (alexandria:appendf (info-operations *info*) modify)))))
         :not-supported (ebnf::|iri| ebnf::|UsingClause|))
 (handle ebnf::|DeleteClause|
         :process (ebnf::|QuadPattern|))
@@ -155,3 +166,23 @@
         :process (ebnf::|QuadPattern|))
 (handle ebnf::|QuadPattern|
         :process (ebnf::|Quads|))
+
+(defun make-select-query-for-patterns (group-graph-pattern &rest quad-pattern-groups)
+  "Constructs a sparql-ast which can be executed as a query to extract patterns for quads."
+  ;; TODO: cope with case in which there are no variables to scan for.
+  (let ((variables (delete-duplicates
+                    (loop for quad-patterns in quad-pattern-groups
+                          append
+                          (loop for quad-pattern in quad-patterns
+                                append
+                                (loop for (k v) on quad-pattern by #'cddr
+                                      when (find (sparql-parser:match-term v) '(ebnf::|VAR1| ebnf::|VAR2|))
+                                        collect (sparql-parser:terminal-match-string v))))
+                    :test #'string=))
+        (group-graph-pattern-as-string (sparql-generator:write-valid (sparql-parser::make-sparql-ast
+                                                                      :top-node group-graph-pattern
+                                                                      :string sparql-parser::*scanning-string*))))
+    (sparql-parser:with-parser-setup
+      (sparql-parser:parse-sparql-string (coerce (format nil "SELECT ~{~A ~} WHERE ~A"
+                                                         variables group-graph-pattern-as-string)
+                                                 'base-string)))))
