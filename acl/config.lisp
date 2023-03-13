@@ -39,7 +39,7 @@
 ;;;; determine the scope and find out what is necessary.  
 
 (setf *access-specifications*
-      (list (make-instance 'always-accessible :name 'public)
+      (list (make-instance 'always-accessible :name "public")
             (make-instance 'access-by-query
                            :name 'user
                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
@@ -69,27 +69,42 @@
       (list (make-graph-specification
              :name 'public-data
              :base-graph "http://mu.semte.ch/graphs/public"
-             :constraints nil)
+             :constraints '((:predicate (:value "http://bar"))
+                            (:subject (:type "http://subject-type"))
+                            (:object (:type "http://object-type"))))
             (make-graph-specification
              :name 'user-specific
              :base-graph "http://mu.semte.ch/graphs/user/"
-             :constraints nil)))
+             :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person")
+                             :predicate (:value "http://xmlns.com/foaf/0.1/mbox"))
+                            (:subject (:type "http://xmlns.com/foaf/0.1/Person")
+                             :predicate (:value "http://xmlns.com/foaf/0.1/firstName"))
+                            (:subject (:type "http://xmlns.com/foaf/0.1/Person")
+                             :predicate (:value "http://xmlns.com/foaf/0.1/lastName"))))))
 ;; (define-graph application ("http://mu.semte.ch/application")
 ;;   ("nfo:FileDataObject"))
 ;;
 ;; (define-graph private ("http://mu.semte.ch/graphs/user/")
 ;;   ("foaf:Person" :predicates ("foaf:givenName" "foaf:familyName" "foaf:mbox"))
 ;;   ("veeakker:Basket"))
+;;
+;; (define-graph user-specific ("http://mu.semte.ch/graphs/user")
+;;   (foaf:Person
+;;      (-> "foaf:firstName" "foaf:lastName" "schema:email" "foaf:mbox")
+;;      (<- "veeakker:hasBAsket"))
+;;   (foaf:OnlineAccount
+;;      (-> "foaf:accountServiceHomepage" "foaf:accountName")
+;;      (<- "foaf:holdsAccount")))
 
 (setf *rights*
       (list (make-access-grant
-             :usage '(:read)
+             :usage '(:read :write)
              :graph-spec 'public-data
-             :access 'public)
+             :access "public")
             (make-access-grant
              :usage '(:read :write)
              :graph-spec 'user-specific
-             :access 'user)))
+             :access "user")))
 
 ;; granting access to groups within scopes
 

@@ -18,15 +18,31 @@
       (sparql-parser::make-match :term term
                                  :submatches (mapcar #'transform-submatch submatches)))))
 
+(defun make-iri (uri)
+  "Constructs an IRI with IRIREF in it."
+  (sparql-parser:make-match
+   :term 'ebnf::|iri|
+   :submatches (list (iriref uri))))
+
 (defun iriref (uri)
   "Constructs an IRIREF for GRAPH-STRING."
-  (sparql-parser::make-match
+  (sparql-parser:make-match
    :term 'ebnf::|IRIREF|
    :submatches
-   (list (sparql-parser::make-scanned-token
+   (list (sparql-parser:make-scanned-token
           :start 0 :end 0
           :string (concatenate 'string "<" uri ">")
           :token 'ebnf::|IRIREF|))))
+
+(defun make-word-match (string)
+  "Constructs a match for fixed content in the EBNF.
+
+  Eg: the string \"GRAPH\" or \"INSERT DATA\"."
+  (sparql-parser:make-match
+   :term string :rule nil
+   :submatches (list (sparql-parser::make-scanned-token
+                      :start 0 :end 0
+                      :string string :token string))))
 
 (defmacro update-submatches ((thing submatches-var) &body body)
   "Set submatches of THING when it's a MATCH."

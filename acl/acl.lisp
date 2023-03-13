@@ -18,7 +18,9 @@
 (defgeneric access-string-name (access)
   (:documentation "String variant of the name of the access right.")
   (:method ((access access))
-    (string-downcase (symbol-name (name access)))))
+    (name access)
+    ;; (string-downcase (symbol-name (name access)))
+    ))
 
 (defun find-access-by-name (name)
   "Find access by name."
@@ -89,7 +91,7 @@
 (defstruct access-grant
   (usage (list :read))
   (graph-spec (error "Must supply graph spec") :type symbol)
-  (access (error "Must supply which grant allows access") :type symbol))
+  (access (error "Must supply which grant allows access") :type string))
 
 (defparameter *active-access-rights* nil
   ;; TODO: currently not used.  Not sure if this should be globally
@@ -98,7 +100,9 @@
 
 (defun access-tokens-from-allowed-groups (mu-auth-allowed-groups)
   "Calculates access rights formthe mu-auth-allowed-groups string."
-  (loop for group in (jsown:parse mu-auth-allowed-groups)
+  (loop for group in (if (stringp mu-auth-allowed-groups)
+                         (jsown:parse mu-auth-allowed-groups)
+                         mu-auth-allowed-groups)
         for access = (find-access-by-name (jsown:val group "name"))
         when access
           collect
@@ -109,6 +113,10 @@
   "Calculates the access rights from the mu-session-id."
   (loop for access in *access-specifications*
         append (calculate-access-tokens access :mu-session-id mu-session-id)))
+
+(defmacro with-test-code-json-access-tokens ((json-token-string) &body body)
+  `(let ((*test-code-access-tokens* (access-tokens-from-allowed-groups ,json-token-string)))
+     ,@body))
 
 (defun calculate-and-cache-access-tokens (mu-auth-allowed-groups mu-session-id)
   "Calculates the access rights based on the mu-auth-allowed-groups string or mu-session-id."
@@ -126,30 +134,186 @@ variables."
   `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id))))
      ,@body))
 
+(defun accessible-graphs-with-tokens (tokens usage)
+  "Yields a list of (CONS TOKEN GRAPH-SPECIFICATION) for the set of supplied tokens."
+  (loop for token in tokens
+        for token-name = (name (access-token-access token))
+        append (loop for right in *rights*
+                     when (and (eq (access-grant-access right) token-name)
+                               (find usage (access-grant-usage right) :test #'eq))
+                       append (loop for graph-specification in *graphs*
+                                    for granted-graph-spec-name = (access-grant-graph-spec right)
+                                    when (eq granted-graph-spec-name
+                                             (graph-specification-name graph-specification))
+                                      collect (cons token graph-specification)))))
+
 (defun graphs-for-tokens (tokens usage)
   "Yields the graphs which can be accessed from TOKENS."
-  (let* ((grant-info (loop for token in tokens
-                           for token-name = (name (access-token-access token))
-                           append (loop for right in *rights*
-                                        when (and (eq (access-grant-access right) token-name)
-                                                  (find usage (access-grant-usage right) :test #'eq))
-                                          append (loop for graph-specification in *graphs*
-                                                       for granted-graph-spec-name = (access-grant-graph-spec right)
-                                                       when (eq granted-graph-spec-name
-                                                                (graph-specification-name graph-specification))
-                                                         collect (cons token graph-specification))))))
-    (loop for (token . graph-specification) in grant-info
-          collect (format nil "~A~{~A~,^/~}"
-                          (graph-specification-base-graph graph-specification)
-                          (access-token-parameters token)))))
+  (loop for (token . graph-specification) in (accessible-graphs-with-tokens tokens usage)
+        collect (token-graph-specification-graph token graph-specification)))
+
+(defun token-graph-specification-graph (token graph-specification)
+  "Assuming token belongs to graph-specification, yields the corresponding graph URL."
+  (format nil "~A~{~A~,^/~}"
+          (graph-specification-base-graph graph-specification)
+          (access-token-parameters token)))
 
 (defun apply-access-rights (query-ast &key (usage :read))
   "Applies current access rights to MATCH.
 
 MATCH may be updated in place but updated MATCH is returned."
-  (with-access-tokens (tokens)
-    (-> query-ast
-      (remove-dataset-clauses)
-      (remove-graph-graph-patterns)
-      (add-default-base-decl-to-prologue)
-      (add-from-graphs (graphs-for-tokens tokens usage)))))
+  (sparql-parser:with-sparql-ast query-ast
+    (with-access-tokens (tokens)
+      (-> query-ast
+        (remove-dataset-clauses)
+        (remove-graph-graph-patterns)
+        (add-default-base-decl-to-prologue)
+        (add-from-graphs (graphs-for-tokens tokens usage))))))
+
+(defmacro do-graph-constraint ((graph-constraint &optional (collection 'do)) (position kind value) &body body)
+  "Executes BODY on each constraint of GRAPH-CONSTRAINT optionally collecting through COLLECTION and filtering on KIND.
+  
+- POSITION is a variable that will be bound to one of :subject :predicate :object :graph.
+- KIND is either a variable that will be bound to the KIND of constraint or otherwise a keyword (being :VALUE or :TYPE) to be used as a constraint.
+- VALUE is a variable that will be bound to the specific VALUE."
+  (let ((kind-sym (if (keywordp kind) (gensym "KIND") kind)))
+    `(loop for (,position (,kind-sym ,value)) on ,graph-constraint by #'cddr
+           ,@(if (keywordp kind) `(when (eq ,kind ,kind-sym)))
+           ,collection ,@body)))
+
+(defun dispatch-quads (quads)
+  "Applies current access rights to quads and updates them to contain the
+desired graphs."
+  (let ((known-type-uri-index (make-hash-table :test 'equal))
+        (types-to-fetch (make-hash-table :test 'equal))
+        (dispatched-quads nil))
+    ;; The type is either T (it has this type) NIL (it does not have
+    ;; this type) or it is not set (and therefore unknown)
+    (labels
+        ((set-known-type (uri type yes-no)
+           ;; sets a type to be known in the type index
+           (multiple-value-bind (table-for-type table-for-type-p)
+               (gethash type known-type-uri-index (make-hash-table :test 'equal))
+             (unless table-for-type-p
+               (setf (gethash type known-type-uri-index) table-for-type))
+             (setf (gethash uri table-for-type) yes-no)))
+         (ensure-future-type-known (uri type)
+           "Ensures the type will be known in the future"
+           (multiple-value-bind (type-hash found-typehash-p)
+               (gethash type known-type-uri-index)
+             (unless (and found-typehash-p
+                          (second (multiple-value-list (gethash uri type-hash))))
+               (setf (gethash uri types-to-fetch) t))))
+         (fetch-types-to-fetch ()
+           "Fetches the types to fetch and populates the known-type-uri-index."
+           (alexandria:when-let*
+               ((types-to-fetch (alexandria:hash-table-keys types-to-fetch))
+                (query
+                 (sparql-parser:with-parser-setup
+                   (let* ((ast
+                            (sparql-parser:parse-sparql-string
+                             (coerce "SELECT ?graph ?thing ?type WHERE { VALUES ?thing { <http://a> } GRAPH ?graph { ?thing a ?type. } }"
+                                     'base-string)))
+                          (inline-data-one-var
+                            (first
+                             (sparql-manipulation::follow-path
+                              (sparql-parser:sparql-ast-top-node ast)
+                              '(ebnf::|QueryUnit|
+                                (ebnf::|Query|
+                                 (ebnf::|SelectQuery|
+                                  (ebnf::|WhereClause|
+                                   (ebnf::|GroupGraphPattern|
+                                    (ebnf::|GroupGraphPatternSub|
+                                     (ebnf::|GraphPatternNotTriples|
+                                            (ebnf::|InlineData|
+                                                   (ebnf::|DataBlock|))))))))))))
+                          (data-submatches (sparql-parser:match-submatches inline-data-one-var))
+                          (data-block-value (third data-submatches)))
+                     (setf (sparql-parser:match-submatches inline-data-one-var)
+                           `(,(first data-submatches)
+                             ,(second data-submatches)
+                             ,@(loop
+                                 for resource in types-to-fetch
+                                 collect (sparql-parser::make-match
+                                          :term 'ebnf::|DataBlockValue|
+                                          :rule (sparql-parser:match-rule data-block-value)
+                                          :submatches (list (make-iri resource))))
+                             ,(fourth data-submatches)))
+                     (and (sparql-generator:is-valid ast)
+                          ast)))))
+             (client:batch-map-solutions-for-select-query (query :for :fetch-types-for-insert :usage :read) (bindings)
+                                        ; note that :usage :read removes the graph again, we're okay with that for now
+               (loop for binding in bindings
+                     for uri = (jsown:filter bindings "resource" "value")
+                     for typeObj = (jsown:val bindings "type")
+                     when (string= (jsown:val typeObj "type") "uri")
+                       do (set-known-type uri (jsown:val typeObj "value") t)))))
+         (uri-has-type (uri type)
+           ;; only usable after fetching types
+           (multiple-value-bind (table-for-type table-for-type-p)
+               (gethash type known-type-uri-index)
+             (and table-for-type-p  (gethash uri table-for-type))))
+         (all-value-constraints-hold-p (quad constraint)
+           "Non-nil iff all value constraints hold."
+           ;; search for failing constraints and invert result
+           (not
+            (do-graph-constraint (constraint) (position :value value)
+              (unless (detect-quads:quad-term-uri= (getf quad position) value)
+                (return t)))))
+         (quad-matches-constraint (quad constraint)
+           (not (do-graph-constraint (constraint) (position type value)
+                  (case type
+                    (:value (unless (detect-quads:quad-term-uri= (getf quad position) value)
+                              (return t)))
+                    (:type (unless (uri-has-type (detect-quads:quad-term-uri (getf quad position))
+                                                 value)
+                             (return t)))
+                    (otherwise
+                     (format t "~&Did not understand typet ~A as constaint~%" type)
+                     (return t))))))
+         (move-quad (quad graph)
+           (let ((new-quad (copy-seq quad)))
+             (setf (getf new-quad :graph) (sparql-manipulation:iriref graph))
+             new-quad))
+         (mark-quad-to-store (quad)
+           (push quad dispatched-quads))
+         (s-p-o-is-uri-p (quad)
+           ;; inverse logic for fast exiting
+           (not (loop for (k v) on quad by #'cddr
+                      unless (eq k :graph)
+                        when (not (detect-quads:quad-term-uri v))
+                          do (return t)))))
+      (with-access-tokens (tokens)
+        ;; Initialize type index with all types mentioned in this set of quads
+        (loop for quad in quads
+              for pred-string = (detect-quads:quad-term-uri (getf quad :predicate))
+              when (and pred-string
+                        (s-p-o-is-uri-p quad)
+                        (detect-quads:quad-term-uri= (getf quad :predicate) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
+                do (set-known-type (detect-quads:quad-term-uri (getf quad :subject))
+                                   (detect-quads:quad-term-uri (getf quad :object))
+                                   t))
+        ;; Find all extra knowledge we need to have on the quad's types
+
+        ;; we need the combination of each quad and each graph constraint to
+        ;; figure out what information we need
+        (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
+          (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
+            ;; find all quads for which any value constraints hold, these are hard requirements
+            (loop for quad in quads
+                  when (all-value-constraints-hold-p quad constraint)
+                    do (do-graph-constraint (constraint) (position :type value)
+                         (alexandria:when-let ((uri (detect-quads:quad-term-uri (getf quad position))))
+                           ;; ask for information on the types
+                           (ensure-future-type-known uri value))))))
+        (fetch-types-to-fetch)
+        ;; now we know we have all relevant types, we can go over the
+        ;; computations and determine in which graphs each quad should be stored
+        (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
+          (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification))))
+            ;; TODO: check each quad so we only add it once
+            (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
+              (dolist (quad quads)
+                (when (quad-matches-constraint quad constraint)
+                  (mark-quad-to-store (move-quad quad graph)))))))
+        dispatched-quads))))

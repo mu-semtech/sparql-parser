@@ -19,6 +19,7 @@
                (:file "sparql-ast/manipulation")
                ;; sparql http - part 1
                (:file "connection/globals")
+               (:file "connection/client")
                ;; access control definitions
                (:file "acl/acl")
                (:file "acl/config")
@@ -31,8 +32,8 @@
                ;; updates
                (:file "updates/framework")
                (:file "updates/detect-quads")
+               (:file "updates/handle-update-unit")
                ;; visualizing resulting reasonings
                (:file "external/vis-js")
                ;; sparql http - part 2
-               (:file "connection/server")
-               (:file "connection/client")))
+               (:file "connection/server")))

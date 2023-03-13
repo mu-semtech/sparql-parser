@@ -47,6 +47,10 @@ We accept strings and uppercase symbols as terminals."
     (symbol (terminal-p-scanner (symbol-name thing)))
     (t nil)))
 
+(defun match-term-p (match &rest terms)
+  "Yields truthy iff MATCH has MATCH-TERM in TERMS."
+  (find (match-term match) terms :test #'eq))
+
 (defun scanned-token-effective-string (scanned-token)
   "Yields the effectively matched string of SCANNED-TOKEN within the current context.
 

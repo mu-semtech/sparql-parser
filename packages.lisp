@@ -34,7 +34,10 @@
            #:terminal-match-string
            #:match-match-submatches
            #:make-sparql-ast
-           #:*scanning-string*))
+           #:*scanning-string*
+           #:match-term-p
+           #:make-match
+           #:make-scanned-token))
 
 (defpackage #:sparql-generator
   (:use :common-lisp)
@@ -56,7 +59,9 @@
            #:match-symbol-case
            #:with-named-child
            #:expanded-term-case
-           #:iriref))
+           #:iriref
+           #:make-iri
+           #:make-word-match))
 
 ;; Server and client
 (defpackage #:connection-globals
@@ -69,7 +74,9 @@
 (defpackage #:acl
   (:use :common-lisp #:sparql-manipulation #:connection-globals)
   (:import-from #:support #:->)
-  (:export #:apply-access-rights))
+  (:export #:apply-access-rights
+           #:with-test-code-json-access-tokens
+           #:dispatch-quads))
 
 (defpackage #:reasoner-tree-mirror
   (:use :common-lisp)
@@ -100,6 +107,7 @@
 (defpackage #:reasoner-prefixes
   (:use :common-lisp)
   (:import-from #:sparql-manipulation
+                #:make-iri
                 #:expanded-term-case
                 #:with-named-child
                 #:do-grouped-children
@@ -199,7 +207,8 @@
 
 (defpackage #:client
   (:use :common-lisp #:connection-globals)
-  (:export #:query #:bindings))
+  (:export #:query #:bindings
+           #:batch-map-solutions-for-select-query))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
@@ -209,11 +218,28 @@
 (defpackage #:detect-quads
   (:use :common-lisp)
   (:import-from #:sparql-parser
-                #:match-term))
+                #:match-term)
+  (:export
+   #:operation-type
+   #:operation-data
+   #:operation-data-subfield
+   #:quad-term-uri=
+   #:quad-term-uri))
+
+(defpackage #:handle-update-unit
+  (:use :common-lisp)
+  (:import-from #:detect-quads
+                #:operation-data-subfield
+                #:quad-term-uri
+                #:operation-type
+                #:operation-data)
+  (:import-from #:sparql-parser 
+                #:make-match))
 
 (defpackage #:sparql-visjs
   (:use :common-lisp)
   (:import-from #:sparql-parser
+                #:make-match
                 #:scanned-token-effective-string
                 #:scanned-token-token
                 #:match-p

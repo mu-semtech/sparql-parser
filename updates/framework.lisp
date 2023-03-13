@@ -24,7 +24,8 @@
 ;;;; for which the responsibility is passed down.  See the comment for
 ;;;; more information in this macro.
 
-(defpackage #:detect-quads-processing-handlers)
+(defpackage #:detect-quads-processing-handlers
+  (:export #:|UpdateUnit|))
 
 (defstruct info
   (prefixes)

@@ -6,21 +6,31 @@
 ;;;; Processes an EBNF under the assumption that it is correctly
 ;;;; constructed.  Yields the quads that can be extracted from the
 ;;;; query.
+;;;;
+;;;; The detection of operations can yield quads.  These can contain the
+;;;; following elements: ebnf::|VAR1| , ebnf::|VAR2| , ebnf::|IRIREF| ,
+;;;; (CONS ebnf::|PNAME_LN| URI-STRING) , (CONS ebnf::|PNAME_NS| URI-STRING) ,
+;;;; ebnf::|RDFLiteral| , ebnf::|BooleanLiteral| , ebnf::|NumericLiteral|
+;;;;
+;;;; Note the enrichment of PNAME_LN and PNAME_NS in which their string
+;;;; representation is overwritten by the full URI representation.
+
 
 (handle ebnf::|UpdateUnit|
-        :local-context (:operations nil)
+        :local-context (:operations nil
+                        :prefixes nil ;; TODO: verify Prefixes and Base should stick through Update portions separated by ;
+                        :base nil)
         :process (ebnf::|Update|)
         :after ((response match)
                 (declare (ignore response match))
+                (format t "~&PREFIXES are ~A~%" (info-prefixes *info*))
                 (info-operations *info*)))
 (handle ebnf::|Update|
         :note "An update has a (possibly empty) prologue.  This data structure needs to be extended for each update passed down."
         :note "Cycling back to update means we should only determine the next query after this set of quads was fully processed.  In the future this will create its own set of challenges in terms of locking because we can't know what is to be stored where."
         :todo "ebnf::|Update| should understand nested updates (split with a ';' semicolon) and provide an execution path for them."
         ;; :not-supported (ebnf::|Update|)
-        :process (ebnf::|Prologue| ebnf::|Update1| ebnf::|Update|)
-        :local-context (:prefixes nil ;; I don't think we should reset this when hitting update again but rather should extend it.
-                        :base nil))
+        :process (ebnf::|Prologue| ebnf::|Update1| ebnf::|Update|))
 (handle ebnf::|Prologue|
         :process (ebnf::|BaseDecl| ebnf::|PrefixDecl|))
 (handle ebnf::|BaseDecl|
@@ -36,8 +46,8 @@
                                         (info-prefixes *info*)))))
 
 (handle ebnf::|Update1|
-        :process (ebnf::|InsertData| ebnf::|DeleteData| ebnf::|DeleteWhere| ebnf::|Modify| ebnf::|Add|)
-        :not-supported (ebnf::|Load| ebnf::|Clear| ebnf::|Drop| ebnf::|Move| ebnf::|Copy| ebnf::|Create|))
+        :process (ebnf::|InsertData| ebnf::|DeleteData| ebnf::|DeleteWhere| ebnf::|Modify|)
+        :not-supported (ebnf::|Load| ebnf::|Clear| ebnf::|Drop| ebnf::|Move| ebnf::|Copy| ebnf::|Create| ebnf::|Add|))
 (handle ebnf::|InsertData|
         :local-context (:quads nil)
         :process (ebnf::|QuadData|)
@@ -45,15 +55,15 @@
                 (declare (ignore response match))
                 (alexandria:appendf
                  (info-operations *info*)
-                 `((:insert-triples ,(info-quads *info*))))))
+                 `((:insert-triples ,@(info-quads *info*))))))
 (handle ebnf::|DeleteWhere|
         :local-context (:quads nil)
         :process-functions ((ebnf::|QuadPattern| (quad-pattern)
                                    (detect-quads-processing-handlers::|QuadPattern| quad-pattern)
                                    (alexandria:appendf
                                     (info-operations *info*)
-                                    `((:modify (:delete-patterns ,(info-quads *info*))
-                                               (:where ,(make-select-query-for-patterns quad-pattern (info-quads *info*)))))))))
+                                    `((:modify (:delete-patterns ,(info-quads *info*)
+                                                :query ,(make-select-query-for-patterns quad-pattern (info-prefixes *info*) (info-base *info*) (info-quads *info*)))))))))
 (handle ebnf::|DeleteData|
         :local-context (:quads nil)
         :process (ebnf::|QuadData|)
@@ -61,7 +71,7 @@
                 (declare (ignore response match))
                 (alexandria:appendf
                  (info-operations *info*)
-                 `((:delete-triples ,(info-quads *info*))))))
+                 `((:delete-triples ,@(info-quads *info*))))))
 (handle ebnf::|QuadData|
         :process (ebnf::|Quads|))
 (handle ebnf::|Quads|
@@ -123,17 +133,37 @@
         :process (ebnf::|PrefixedName|)
         :accept (ebnf::|IRIREF|))
 (handle ebnf::|PrefixedName|
-        :process (ebnf::|PNAME_LN| ebnf::|PNAME_NS|)
-        :todo "Implement PrefixedName to yield an expanded URI."
-        :note "Prefixed")
+        :process (ebnf::|PNAME_LN| ebnf::|PNAME_NS|))
+(handle ebnf::|PNAME_LN|
+        :function ((pname-ln)
+                   (let* ((string (primitive-match-string pname-ln))
+                          (split-idx (search ":" string))
+                          (pname-ns (subseq string 0 (1+ split-idx)))
+                          (pn-local (subseq string (1+ split-idx)))
+                          (found-prefix (find pname-ns (info-prefixes *info*)
+                                              :key (alexandria:compose #'primitive-match-string #'car)
+                                              :test #'string=)))
+                     (assert found-prefix)
+                     (let ((prefix-uri-representation (primitive-match-string (cdr found-prefix))))
+                       (format t "~&Found prefix uri representation ~A with pn-local ~A~%" prefix-uri-representation pn-local)
+                       (cons pname-ln
+                             (concatenate 'string
+                                          (subseq prefix-uri-representation 1 (length prefix-uri-representation))
+                                          pn-local))))))
+(handle ebnf::|PNAME_NS|
+        :function ((pname-ns)
+                   (let* ((string (primitive-match-string pname-ns))
+                          (found-prefix (find string (info-prefixes *info*)
+                                              :key (alexandria:compose #'primitive-match-string #'car)
+                                              :test #'string=)))
+                     (assert found-prefix)
+                     (let ((pname-ns-uri-representation (primitive-match-string (cdr found-prefix))))
+                       (cons pname-ns
+                             (concatenate 'string
+                                          (subseq pname-ns-uri-representation 1 (1- (length pname-ns-uri-representation)))
+                                          string))))))
 (handle ebnf::|NumericLiteral|
-        :process (ebnf::|NumericLiteralUnsigned| ebnf::|NumericLiteralPositive| ebnf::|NumericLiteralNegative|))
-(handle ebnf::|NumericLiteralUnsigned|
-        :accept (ebnf::|INTEGER| ebnf::|DECIMAL| ebnf::|DOUBLE|))
-(handle ebnf::|NumericLiteralPositive|
-        :accept (ebnf::|INTEGER_POSITIVE| ebnf::|DECIMAL_POSITIVE| ebnf::|DOUBLE_POSITIVE|))
-(handle ebnf::|NumericLiteralNegative|
-        :accept (ebnf::|INTEGER_NEGATIVE| ebnf::|DECIMAL_NEGATIVE| ebnf::|DOUBLE_NEGATIVE|))
+        :accept (ebnf::|NumericLiteralUnsigned| ebnf::|NumericLiteralPositive| ebnf::|NumericLiteralNegative|))
 (handle ebnf::|Var|
         :accept (ebnf::|VAR1| ebnf::|VAR2|))
 
@@ -157,7 +187,7 @@
                       (insert-patterns (info-insert-quad-patterns *info*)))
                   (let ((modify `((:modify (:delete-patterns ,delete-patterns
                                             :insert-patterns ,insert-patterns
-                                            :query ,(make-select-query-for-patterns group-graph-pattern insert-patterns delete-patterns))))))
+                                            :query ,(make-select-query-for-patterns group-graph-pattern (info-prefixes *info*) (info-base *info*) insert-patterns delete-patterns))))))
                     (alexandria:appendf (info-operations *info*) modify)))))
         :not-supported (ebnf::|iri| ebnf::|UsingClause|))
 (handle ebnf::|DeleteClause|
@@ -167,22 +197,95 @@
 (handle ebnf::|QuadPattern|
         :process (ebnf::|Quads|))
 
-(defun make-select-query-for-patterns (group-graph-pattern &rest quad-pattern-groups)
+(defun make-select-query-for-patterns (group-graph-pattern prefixes base &rest quad-pattern-groups)
   "Constructs a sparql-ast which can be executed as a query to extract patterns for quads."
-  ;; TODO: cope with case in which there are no variables to scan for.
+  ;; TODO: cope with case in which there are no variables to select for
   (let ((variables (delete-duplicates
                     (loop for quad-patterns in quad-pattern-groups
                           append
                           (loop for quad-pattern in quad-patterns
                                 append
                                 (loop for (k v) on quad-pattern by #'cddr
-                                      when (find (sparql-parser:match-term v) '(ebnf::|VAR1| ebnf::|VAR2|))
-                                        collect (sparql-parser:terminal-match-string v))))
+                                      for v-match = (if (consp v) (car v) v)
+                                      ;; when (sparql-parser:match-term-p v-match 'ebnf::|Var|)
+                                      ;;   collect v-match
+                                      when (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                                        collect v-match
+                                        ;; collect (primitive-match-string v-match)
+                                      )))
+                    :key #'primitive-match-string
+                    ;; (lambda (var)
+                    ;;   (primitive-match-string (first (sparql-parser:match-submatches var))))
                     :test #'string=))
-        (group-graph-pattern-as-string (sparql-generator:write-valid (sparql-parser::make-sparql-ast
-                                                                      :top-node group-graph-pattern
-                                                                      :string sparql-parser::*scanning-string*))))
-    (sparql-parser:with-parser-setup
-      (sparql-parser:parse-sparql-string (coerce (format nil "SELECT ~{~A ~} WHERE ~A"
-                                                         variables group-graph-pattern-as-string)
-                                                 'base-string)))))
+        ;; (group-graph-pattern-as-string (sparql-generator:write-valid (sparql-parser::make-sparql-ast
+        ;;                                                               :top-node group-graph-pattern
+        ;;                                                               :string sparql-parser::*scanning-string*)))
+        )
+    (break "Found variables ~A" variables)
+    (sparql-parser:make-sparql-ast
+     :string sparql-parser:*scanning-string*
+     :top-node (handle-update-unit::make-nested-match
+                `(ebnf::|QueryUnit|
+                        (ebnf::|Query|
+                               (ebnf::|Prologue|
+                                      ,@(when base `(ebnf::|BaseDecl| "BASE" ,base))
+                                      ,@(loop for (prefix . iriref) in prefixes
+                                              collect
+                                              `(ebnf::|PrefixDecl| "PREFIX" ,prefix ,iriref)))
+                               (ebnf::|SelectQuery|
+                                      (ebnf::|SelectClause|
+                                             "SELECT"
+                                             ,@(loop for var in variables collect `(ebnf::|Var| ,var)))
+                                      (ebnf::|WhereClause|
+                                             "WHERE"
+                                             ,group-graph-pattern)
+                                      (ebnf::|SolutionModifier|))
+                               (ebnf::|ValuesClause|)))))
+    ;; (sparql-parser:with-parser-setup
+    ;;   (sparql-parser:parse-sparql-string (coerce (format nil "SELECT ~{~A ~} WHERE ~A"
+    ;;                                                      variables group-graph-pattern-as-string)
+    ;;                                              'base-string)))
+    ))
+
+(defun primitive-match-string (match)
+  "We consider a primitive match to be a match which has a
+sparql-parser:scanned-token as its only child element.  This returns its
+string representation."
+  (assert (and (typep (first (sparql-parser:match-submatches match)) 'sparql-parser:scanned-token)
+               (= (length (sparql-parser:match-submatches match)) 1)))
+  (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
+
+(defun quad-term-uri (quad-term)
+  "Yields the quad-term's URI representation if that exists."
+  (cond ((consp quad-term)
+         (cdr quad-term))
+        ((sparql-parser:match-term-p quad-term 'ebnf::|IRIREF|)
+         (let ((str (primitive-match-string quad-term)))
+           (subseq str 1 (1- (length str)))))))
+
+(defun quad-term-uri= (quad-term uri-string)
+  "Checks whether uri-string is the same as the quad-term."
+  ;; The quad-uri-string is wrapped in < and > but the uri-string is
+  ;; not, so we need to unwrap.
+  (let* ((quad-uri-string (quad-term-uri quad-term)))
+    (if quad-uri-string
+        (string= uri-string quad-uri-string))))
+
+;;;;;;;;;;;
+;;; helpers
+;;;
+
+(defun operation-type (operation)
+  "Yields the type of the operation, one of :insert-triples :delete-triples or :modify."
+  (car operation))
+
+(defun operation-data (operation)
+  "Yields the data belonging to the operation."
+  (cdr operation))
+
+(defun operation-data-subfield (operation subfield)
+  "Yields the subfield of an operation.
+This only exists for :modify and it supports :delete-patterns
+:insert-patterns :query.  If one could not be found an empty list is
+returned."
+  (getf (car (operation-data operation)) subfield))

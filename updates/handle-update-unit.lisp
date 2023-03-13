@@ -1,0 +1,317 @@
+(in-package #:handle-update-unit)
+
+(defun make-nested-match (specification)
+  "Constructs a nested match through an abbreviated interface.
+
+SPECIFICATION is either (TERM &REST CHILDREN) or TERM.
+
+- When term is a symbol, a match is constructed with the same symbol.
+- When term is a string, a word match is constructed.
+- Any nil children are ignored
+- Any other resource is consumed verbatim.
+
+Children is a list that will be mapped through nested match under the
+same logic to construct the submatches."
+  ;; TODO: move this to supporting code and update detect-quads.lisp for it
+  (flet ((make-match (term)
+           (cond 
+             ((symbolp term)
+              (make-match :term term
+                          :rule nil
+                          :submatches nil))
+             ((stringp term)
+              (sparql-manipulation:make-word-match term))
+             (t term))))
+   (if (listp specification)
+       (destructuring-bind (term &rest children)
+           specification
+         (let ((match (make-match term)))
+           (when children
+             (setf (sparql-parser:match-submatches match)
+                   (mapcar #'make-nested-match
+                           (remove-if-not #'identity children))))
+           match))
+       (make-match specification))))
+
+(defun sparql-escape-string (string)
+  "Generate an escaped SPARQL string."
+  (cl-ppcre:regex-replace-all "([\"\\\\])" string "\\\\\\1"))
+
+(defun make-token-match (term string)
+  "Makes a token match for the given string.  This is a MATCH which has a SCANNED-TOKEN as a match."
+  `(,term
+    ,(sparql-parser:make-scanned-token
+      :start 0 :end 0
+      :string string
+      :token term)))
+
+(defun binding-as-match (solution)
+  "Constructs a match statement which corresponds to SOLUTION binding."
+  (let ((type (jsown:val solution "type"))
+        (value (jsown:val solution "value")))
+    (flet ((make-string-literal ()
+             `(ebnf::|String|
+                     ,(make-token-match 'ebnf::|STRING_LITERAL_LONG2|
+                                        (sparql-escape-string value)))))
+      (cond ((string= type "uri")
+             ;; uri
+             (sparql-manipulation:make-iri value))
+            ((and (jsown:val-safe solution "xml:lang")
+                  (string= type "literal"))
+             ;; language typed strings
+             (make-nested-match
+              `(ebnf::|RDFLiteral|
+                      ,(make-string-literal)
+                      ,(make-token-match 'ebnf::|LANGTAG|
+                                         (concatenate 'string "@" (jsown:val solution "xml:lang"))))))
+            ((and (jsown:val-safe solution "datatype")
+                  (string= type "literal"))
+             ;; datatype based strings
+             `(ebnf::|RDFLiteral|
+                     ,(make-string-literal)
+                     "^^"
+                     ,(sparql-manipulation:make-iri (jsown:val solution "datatype"))))
+            ((and (string= type "literal"))
+             ;; handle string
+             `(ebnf::|RDFLiteral| ,(make-string-literal)))
+            ((and (string= type "bnode"))
+             ;; support blank node
+             `(ebnf::|BlankNode|
+                     ,(make-token-match 'ebnf::|BLANK_NODE_LABEL|
+                                        (concatenate 'string "_:" value))))
+            (t (error "Unknown solution to turn into match statement ~A" solution))))))
+
+;;;; This is the entrypoint for executing update queries
+;;;;
+;;;; This file coordinates the detection of changed quads, informing any
+;;;; necessary schedulers, sending out the updates to the triplestore,
+;;;; as well as informing other units that an update has occurred
+;;;; (namely the delta notifier and anything to clear caches).
+
+(defun make-quads-not-triples (quads)
+  "Constructs a list of ebnf:|QuadsNotTriples| statements for the given set of quads."
+  (labels ((make-triples-template-match (graphed-group)
+             (when graphed-group
+               (let* ((quad (first graphed-group))
+                      (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
+                      (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
+                      (object-match ;; TODO: support other types of resources than IRIs
+                        (sparql-manipulation:make-iri (quad-term-uri (getf quad :object)))))
+                 (make-nested-match
+                  `(ebnf::|TriplesTemplate|
+                          (ebnf::|TriplesSameSubject|
+                                 (ebnf::|VarOrTerm| (ebnf::|GraphTerm| ,subject-iri))
+                                 (ebnf::|PropertyListNotEmpty|
+                                        (ebnf::|Verb|
+                                               (ebnf::|VarOrIri| ,predicate-iri))
+                                        (ebnf::|ObjectList|
+                                               (ebnf::|Object|
+                                                      (ebnf::|GraphNode|
+                                                             (ebnf::|VarOrTerm|
+                                                                    (ebnf::|GraphTerm|
+                                                                           ,object-match)))))))
+                          "."
+                          ,(make-quads-not-triples (rest graphed-group))))))))
+    (loop for graphed-group
+            in (support:group-by quads #'string=
+                                 :key (lambda (quad)
+                                        (quad-term-uri (getf quad :graph))))
+          for graph = (quad-term-uri (getf (first quads) :graph))
+          collect
+          (make-nested-match
+           `(ebnf::|QuadsNotTriples|
+                   "GRAPH"
+                   (ebnf::|VarOrIri| ,(sparql-manipulation:make-iri graph))
+                   "{"
+                   ,(make-triples-template-match graphed-group)
+                   "}")))))
+
+(defun insert-data-query-from-quads-not-triples (quads-not-triples) 
+ "Constructs an ebnf:|InsertData| query to store the list of quads-not-triples."
+  (let ((match (make-nested-match
+                `(ebnf::|UpdateUnit|
+                        (ebnf::|Update|
+                               ebnf::|Prologue|
+                               (ebnf::|Update1|
+                                      (ebnf::|InsertData|
+                                             "INSERT DATA"
+                                             (ebnf::|QuadData|
+                                                    "{"
+                                                    (ebnf::|Quads| ,@quads-not-triples)
+                                                    "}"))))))))
+    (sparql-parser:make-sparql-ast :top-node match :string sparql-parser:*scanning-string*)))
+
+(defun delete-data-query-from-quads-not-triples (quads-not-triples)
+  "Constructs an ebnf:|InsertData| query to store the list of quads-not-triples."
+  (let ((match (make-nested-match
+                `(ebnf::|UpdateUnit|
+                        (ebnf::|Update|
+                               ebnf::|Prologue|
+                               (ebnf::|Update1|
+                                      (ebnf::|DeleteData|
+                                             "DELETE DATA"
+                                             (ebnf::|QuadData|
+                                                    "{"
+                                                    (ebnf::|Quads| ,@quads-not-triples)
+                                                    "}"))))))))
+    (sparql-parser:make-sparql-ast :top-node match :string sparql-parser:*scanning-string*)))
+
+(defun insert-data-query-for-quads (quads)
+  (format t "~&TODO: Make insert data for~% Quads: ~A~%" quads)
+  (let* ((quads-not-triples (make-quads-not-triples quads))
+         (quads-not-triples-strings
+           (mapcar (lambda (x)
+                     (if (sparql-generator::is-valid-match
+                          x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
+                         (sparql-generator::write-valid-match x)
+                         (prog1 ""
+                           (break "~A is not a valid match" x))))
+                   quads-not-triples))
+         (query (insert-data-query-from-quads-not-triples quads-not-triples))
+         (query-string (sparql-generator:write-when-valid query)))
+    (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
+    (format t "~&Query is:~% ~A~%" query-string)
+    (break query-string)
+    (coerce query-string 'base-string)))
+
+(defun delete-data-query-for-quads (quads)
+  (format t "~&TODO: Make delete data for~% Quads: ~A~%" quads)
+  (let* ((quads-not-triples (make-quads-not-triples quads))
+         (quads-not-triples-strings
+           (mapcar (lambda (x)
+                     (if (sparql-generator::is-valid-match
+                          x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
+                         (sparql-generator::write-valid-match x)
+                         (prog1 ""
+                           (break "~A is not a valid match" x))))
+                   quads-not-triples))
+         (query (insert-data-query-from-quads-not-triples quads-not-triples))
+         (query-string (sparql-generator:write-when-valid query)))
+    (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
+    (format t "~&Query is:~% ~A~%" query-string)
+    (break query-string)
+    query-string))
+
+(defun make-combined-delete-insert-data-query (quads-to-delete quads-to-insert)
+  "Constructs a SPARQL query for the combination of QUADS-TO-DELETE and QUADS-TO-INSERT."
+  (let ((delete-quads-not-triples (make-quads-not-triples quads-to-delete))
+        (insert-quads-not-triples (make-quads-not-triples quads-to-insert)))
+    (let ((match (make-nested-match
+                  `(ebnf::|UpdateUnit|
+                          (ebnf::|Update|
+                                 ebnf::|Prologue|
+                                 (ebnf::|Update1|
+                                        (ebnf::|DeleteData|
+                                               "DELETE DATA"
+                                               (ebnf::|QuadData|
+                                                      "{"
+                                                      (ebnf::|Quads| ,@delete-quads-not-triples)
+                                                      "}")))
+                                 ";"
+                                 (ebnf::|Update|
+                                        ebnf::|Prologue|
+                                        (ebnf::|Update1|
+                                               (ebnf::|InsertData|
+                                                      "INSERT DATA"
+                                                      (ebnf::|QuadData|
+                                                             "{"
+                                                             (ebnf::|Quads| ,@insert-quads-not-triples)
+                                                             "}")))))))))
+      (sparql-generator:write-when-valid
+       (sparql-parser:make-sparql-ast :top-node match :string sparql-parser:*scanning-string*)))))
+
+(defun filled-in-patterns (patterns bindings)
+  "Creates a set of QUADS for the given patterns and bindings.
+
+Any pattern which has no variables will be returned as is.  Any pattern
+with bindings will be filled in for each discovered binding.  If any
+variables are missing this will not lead to a pattern."
+  (flet ((pattern-has-variables (pattern)
+           (loop for (place match) on pattern by #'cddr
+                 when (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                   return t))
+         (fill-in-pattern (pattern bindings)
+           (loop for (place match) on pattern by #'cddr
+                 if (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                   append (list place
+                                (let ((solution (jsown:val bindings (subseq (sparql-parser:terminal-match-string match) 1))))
+                                  (if solution
+                                      (binding-as-match solution)
+                                      match)))
+                 else
+                   append (list place match))))
+   (let* ((patterns-without-bindings (remove-if #'pattern-has-variables patterns))
+          (patterns-with-bindings (set-difference patterns patterns-without-bindings :test #'eq)))
+     (concatenate
+      'list
+      patterns-without-bindings        ; pattern without binding is quad
+      (loop for binding in bindings
+            append
+            (loop for pattern in patterns-with-bindings
+                  for filled-in-pattern = (fill-in-pattern pattern bindings)
+                  unless (pattern-has-variables filled-in-pattern)
+                    collect filled-in-pattern))))))
+
+(defun delta-notify (&key inserts deletes)
+  (format t "~&TODO: Notify others on quads having been written:~% Inserted Quads: ~A~% Deleted Quads: ~A~%" inserts deletes)
+  "")
+
+(defun handle-sparql-update-unit (update-unit)
+  "Handles the processing of an update-unit EBNF."
+  ;; TODO: verify insert-triples and delete-triples don't contain any more variables
+  ;; TODO: execute where block if it exists
+  (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
+    (case (operation-type operation)
+      (:insert-triples
+       (let* ((data (operation-data operation))
+              (quads (acl:dispatch-quads data)))
+         (assert-no-variables-in-quads data)
+         (break "Received quads ~A" quads)
+         (let ((query (insert-data-query-for-quads quads)))
+           (client:query query)
+           (break "Sent query ~A~% " query))
+         (delta-notify :inserts quads)))
+      (:delete-triples
+       (let* ((data (operation-data operation))
+              (quads (acl:dispatch-quads data)))
+         (assert-no-variables-in-quads data)
+         (break "Received quads ~A" quads)
+         (client:query (delete-data-query-for-quads (acl:dispatch-quads data)))
+         (delta-notify :deletes quads)))
+      (:modify
+       (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
+             (delete-patterns (operation-data-subfield operation :delete-patterns)))
+         ;; TODO: verify the logic that we can execute insert-patterns
+         ;; and delete-patterns in batches because anything static will
+         ;; be inserted and deleted in the batch too.
+         (break "Going to treat the select query")
+         (client:batch-map-solutions-for-select-query ((operation-data-subfield operation :query) :for :modify :usage :read) (bindings)
+           (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
+                 (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
+             (let ((query (make-combined-delete-insert-data-query deletes inserts)))
+               (client:query query))
+             (delta-notify :deletes deletes :inserts inserts))))))))
+
+(defun unfold-prefixed-quads (quads)
+  "Unfolds the prefixed quads (represented by a CONS cell) into a match
+which houses a primitive IRI."
+  (flet ((unfold (value)
+           (sparql-parser::make-match
+            :term 'ebnf::|IRIREF|
+            :submatches (list (sparql-parser::make-scanned-token
+                               :start 0 :end 0
+                               :string (cdr value)
+                               :token 'ebnf::|IRIREF|)))))
+    (loop for quad in quads
+          collect (loop for (k v) on quad by #'cddr
+                        if (consp v)
+                          append (list k (unfold v))
+                        else
+                          append (list k v)))))
+
+(defun assert-no-variables-in-quads (quads)
+  "Asserts there are no variables in this quad."
+  (dolist (quad quads)
+    (loop for (k v) on quad by #'cddr
+          do
+             (assert (not (find (sparql-parser:match-term v) '(ebnf::|VAR1| ebnf::|VAR2|) :test #'eq))))))
