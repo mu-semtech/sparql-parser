@@ -37,7 +37,8 @@
            #:*scanning-string*
            #:match-term-p
            #:make-match
-           #:make-scanned-token))
+           #:make-scanned-token
+           #:copy-match))
 
 (defpackage #:sparql-generator
   (:use :common-lisp)
@@ -213,7 +214,9 @@
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
   (:import-from #:alexandria
-                #:when-let))
+                #:when-let)
+  (:export
+   #:execute-query-for-context))
 
 (defpackage #:detect-quads
   (:use :common-lisp)

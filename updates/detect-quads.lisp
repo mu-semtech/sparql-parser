@@ -126,8 +126,8 @@
 (handle ebnf::|GraphTerm|
         :todo "Further expand boolean literal."
         :todo "Document RDFLiteral not being processed further."
-        :process (ebnf::|iri| ebnf::|NumericLiteral|)
-        :accept (ebnf::|RDFLiteral| ebnf::|BooleanLiteral|)
+        :process (ebnf::|iri|)
+        :accept (ebnf::|RDFLiteral| ebnf::|BooleanLiteral| ebnf::|NumericLiteral|)
         :not-supported (ebnf::|BlankNode| ebnf::|NIL|))
 (handle ebnf::|iri|
         :process (ebnf::|PrefixedName|)
@@ -148,7 +148,7 @@
                        (format t "~&Found prefix uri representation ~A with pn-local ~A~%" prefix-uri-representation pn-local)
                        (cons pname-ln
                              (concatenate 'string
-                                          (subseq prefix-uri-representation 1 (length prefix-uri-representation))
+                                          (subseq prefix-uri-representation 1 (1- (length prefix-uri-representation)))
                                           pn-local))))))
 (handle ebnf::|PNAME_NS|
         :function ((pname-ns)
@@ -209,7 +209,7 @@
                                       for v-match = (if (consp v) (car v) v)
                                       ;; when (sparql-parser:match-term-p v-match 'ebnf::|Var|)
                                       ;;   collect v-match
-                                      when (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                                      when (and v-match (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|))
                                         collect v-match
                                         ;; collect (primitive-match-string v-match)
                                       )))

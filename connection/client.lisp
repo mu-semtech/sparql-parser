@@ -1,7 +1,8 @@
 (in-package #:client)
 
-(defparameter *backend* "http://localhost:8890/sparql")
-(defparameter *log-sparql-query-roundtrip* nil)
+(defparameter *backend* "http://localhost:8891/sparql")
+
+(defparameter *log-sparql-query-roundtrip* t)
 
 (defun query (string)
   "Sends a query to the backend and responds with the response body."
@@ -37,7 +38,8 @@ of JSOWN compatible BINDINGS."
                               (acl:apply-access-rights query :usage usage)
                               query))
            (query-string (sparql-generator:write-valid altered-query)))
-      (break "Batch mapping ~A" query-string)
+      ;; (break "Batch mapping ~A" query-string)
+      (format t "~&Batch mapping ~A~%" query-string)
       (client:bindings (client:query query-string)))))
 
 (defmacro batch-map-solutions-for-select-query ((query &key for batch-size usage) (bindings) &body body)

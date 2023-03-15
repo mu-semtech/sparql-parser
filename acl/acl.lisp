@@ -57,20 +57,25 @@
     (list (make-access-token :access access)))
   (:method ((access access-by-query) &key mu-session-id)
     (when mu-session-id ; ignore when no mu-session-id supplied
-      (sparql-parser:with-sparql-ast (query access)
-        (let ((query (replace-iriref (query access) :from "SESSION_ID" :to mu-session-id)))
-          (unless (sparql-generator:is-valid query)
-            (error "Generated invalid access query"))
-          (loop for binding
-                  in (-> query
-                       (sparql-generator:write-valid)
-                       (client:query)
-                       (client:bindings))
-                collect
-                (make-access-token
-                 :access access
-                 :parameters (mapcar (lambda (var) (jsown:filter binding var "value"))
-                                     (variables access)))))))))
+      (let ((copied-ast (sparql-parser:make-sparql-ast
+                      :string (sparql-parser:sparql-ast-string (query access))
+                      :top-node (sparql-parser:copy-match
+                                 (sparql-parser:sparql-ast-top-node (query access))
+                                 t))))
+        (sparql-parser:with-sparql-ast copied-ast
+          (let ((new-query (replace-iriref copied-ast :from "SESSION_ID" :to mu-session-id)))
+            (unless (sparql-generator:is-valid new-query)
+              (error "Generated invalid access query"))
+            (loop for binding
+                    in (-> new-query
+                         (sparql-generator:write-valid)
+                         (client:query)
+                         (client:bindings))
+                  collect
+                  (make-access-token
+                   :access access
+                   :parameters (mapcar (lambda (var) (jsown:filter binding var "value"))
+                                       (variables access))))))))))
 
 (defun access-token-jsown (token)
   "Yields a jsown representation of the access token."
@@ -83,9 +88,22 @@
   (make-access-token :access (find-access-by-name (jsown:val jsown "name"))
                      :parameters (jsown:val jsown "variables")))
 
+;; NOTE: the approach we take here to Constraints is insufficient.  A
+;; skos:ConceptScheme with skos:Concept resources is a clear example of
+;; paths which would need to be followed instead of determining the
+;; location based on a single triple.  Better basic constructs should be
+;; discovered for experimenting with such purposes.
 (defstruct graph-specification
   (name (error "Must supply name to graph name") :type symbol)
   (base-graph (error "Must supply base graph string") :type string)
+  ;; NOTE: the constraints are currently a list of triple-constraints
+  ;; which means there is a lot of repetition in them.  This approach is
+  ;; computationally rather intensive, but it would lead to a feasible
+  ;; optimization using matrix calculation both for extra information
+  ;; which we would need to discover as well as for calculating the
+  ;; applicable constraints.  Check https://github.com/quil-lang/magicl
+  ;; and https://quickref.common-lisp.net/3d-matrices.html#g_t_276828_2769
+  ;; in that case.
   (constraints nil))
 
 (defstruct access-grant
@@ -212,7 +230,7 @@ desired graphs."
                  (sparql-parser:with-parser-setup
                    (let* ((ast
                             (sparql-parser:parse-sparql-string
-                             (coerce "SELECT ?graph ?thing ?type WHERE { VALUES ?thing { <http://a> } GRAPH ?graph { ?thing a ?type. } }"
+                             (coerce "SELECT ?graph ?resource ?type WHERE { VALUES ?resource { <http://a> } GRAPH ?graph { ?resource a ?type. } }"
                                      'base-string)))
                           (inline-data-one-var
                             (first
@@ -244,8 +262,8 @@ desired graphs."
              (client:batch-map-solutions-for-select-query (query :for :fetch-types-for-insert :usage :read) (bindings)
                                         ; note that :usage :read removes the graph again, we're okay with that for now
                (loop for binding in bindings
-                     for uri = (jsown:filter bindings "resource" "value")
-                     for typeObj = (jsown:val bindings "type")
+                     for uri = (jsown:filter binding "resource" "value")
+                     for typeObj = (jsown:val binding "type")
                      when (string= (jsown:val typeObj "type") "uri")
                        do (set-known-type uri (jsown:val typeObj "value") t)))))
          (uri-has-type (uri type)

@@ -55,7 +55,7 @@ same logic to construct the submatches."
                                         (sparql-escape-string value)))))
       (cond ((string= type "uri")
              ;; uri
-             (sparql-manipulation:make-iri value))
+             (sparql-manipulation:iriref value))
             ((and (jsown:val-safe solution "xml:lang")
                   (string= type "literal"))
              ;; language typed strings
@@ -95,8 +95,12 @@ same logic to construct the submatches."
                (let* ((quad (first graphed-group))
                       (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
                       (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
+                      (quad-object (getf quad :object))
                       (object-match ;; TODO: support other types of resources than IRIs
-                        (sparql-manipulation:make-iri (quad-term-uri (getf quad :object)))))
+                        (if (and (sparql-parser:match-p quad-object)
+                                 (sparql-parser:match-term-p quad-object 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral|))
+                            quad-object
+                            (sparql-manipulation:make-iri (quad-term-uri quad-object)))))
                  (make-nested-match
                   `(ebnf::|TriplesTemplate|
                           (ebnf::|TriplesSameSubject|
@@ -111,7 +115,7 @@ same logic to construct the submatches."
                                                                     (ebnf::|GraphTerm|
                                                                            ,object-match)))))))
                           "."
-                          ,(make-quads-not-triples (rest graphed-group))))))))
+                          ,(make-triples-template-match (rest graphed-group))))))))
     (loop for graphed-group
             in (support:group-by quads #'string=
                                  :key (lambda (quad)
@@ -164,14 +168,14 @@ same logic to construct the submatches."
                      (if (sparql-generator::is-valid-match
                           x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
                          (sparql-generator::write-valid-match x)
-                         (prog1 ""
+                         (prog1 "" ;; TODO: provide better error path
                            (break "~A is not a valid match" x))))
                    quads-not-triples))
          (query (insert-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
     (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
     (format t "~&Query is:~% ~A~%" query-string)
-    (break query-string)
+    ;; (break query-string)
     (coerce query-string 'base-string)))
 
 (defun delete-data-query-for-quads (quads)
@@ -182,14 +186,14 @@ same logic to construct the submatches."
                      (if (sparql-generator::is-valid-match
                           x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
                          (sparql-generator::write-valid-match x)
-                         (prog1 ""
+                         (prog1 "" ;; TODO: provide better error path
                            (break "~A is not a valid match" x))))
                    quads-not-triples))
          (query (insert-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
     (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
     (format t "~&Query is:~% ~A~%" query-string)
-    (break query-string)
+    ;; (break query-string)
     query-string))
 
 (defun make-combined-delete-insert-data-query (quads-to-delete quads-to-insert)
@@ -228,11 +232,13 @@ with bindings will be filled in for each discovered binding.  If any
 variables are missing this will not lead to a pattern."
   (flet ((pattern-has-variables (pattern)
            (loop for (place match) on pattern by #'cddr
-                 when (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                 when (and (sparql-parser:match-p match)
+                           (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|))
                    return t))
          (fill-in-pattern (pattern bindings)
            (loop for (place match) on pattern by #'cddr
-                 if (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                 if (and (sparql-parser:match-p match)
+                         (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|))
                    append (list place
                                 (let ((solution (jsown:val bindings (subseq (sparql-parser:terminal-match-string match) 1))))
                                   (if solution
@@ -248,7 +254,7 @@ variables are missing this will not lead to a pattern."
       (loop for binding in bindings
             append
             (loop for pattern in patterns-with-bindings
-                  for filled-in-pattern = (fill-in-pattern pattern bindings)
+                  for filled-in-pattern = (fill-in-pattern pattern binding)
                   unless (pattern-has-variables filled-in-pattern)
                     collect filled-in-pattern))))))
 
@@ -261,21 +267,26 @@ variables are missing this will not lead to a pattern."
   ;; TODO: verify insert-triples and delete-triples don't contain any more variables
   ;; TODO: execute where block if it exists
   (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
+    (format t "~&Treating operation ~A~%" operation)
+    ;; (break "Got operation ~A" operation)
     (case (operation-type operation)
       (:insert-triples
        (let* ((data (operation-data operation))
               (quads (acl:dispatch-quads data)))
          (assert-no-variables-in-quads data)
-         (break "Received quads ~A" quads)
+         ;; (break "Received quads ~A" quads)
+         (format t "~&Received quads for insert-triples ~A~%" quads)
          (let ((query (insert-data-query-for-quads quads)))
            (client:query query)
-           (break "Sent query ~A~% " query))
+           ;; (break "Sent query ~A~% " query)
+           )
          (delta-notify :inserts quads)))
       (:delete-triples
        (let* ((data (operation-data operation))
               (quads (acl:dispatch-quads data)))
          (assert-no-variables-in-quads data)
-         (break "Received quads ~A" quads)
+         ;; (break "Received quads ~A" quads)
+         (format t "~&Received quads for delete-triples ~A~%" quads)
          (client:query (delete-data-query-for-quads (acl:dispatch-quads data)))
          (delta-notify :deletes quads)))
       (:modify
@@ -313,5 +324,6 @@ which houses a primitive IRI."
   "Asserts there are no variables in this quad."
   (dolist (quad quads)
     (loop for (k v) on quad by #'cddr
+          when (sparql-parser:match-p v) ;; ignore nil graph and cons with expanded prefix
           do
              (assert (not (find (sparql-parser:match-term v) '(ebnf::|VAR1| ebnf::|VAR2|) :test #'eq))))))

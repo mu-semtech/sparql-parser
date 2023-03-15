@@ -33,6 +33,20 @@
       (sparql-generator:write-valid match)
       (error "Match is invalid ~A" match)))
 
+(defun execute-query-for-context (query)
+  "Executes the string QUERY in the current context, applying al relevant access rights and shipping off the query."
+  (with-parser-setup
+    (let ((ast (parse-sparql-string (coerce query 'base-string))))
+      (if (sparql-parser:match-term-p (sparql-parser:sparql-ast-top-node ast) 'ebnf::|UpdateUnit|)
+          ;; update
+          (let ((detect-quads::*info* (detect-quads::make-info)))
+            (handle-update-unit::handle-sparql-update-unit
+             (sparql-parser:sparql-ast-top-node ast)))
+          ;; query
+          (client::query
+           (generate-query
+            (manipulate-query ast)))))))
+
 (defun acceptor (env)
   ;; (declare (ignore env))
   ;; '(200 (:content-type "application/sparql-results+json") ("HELLO HELLO HELLO"))
@@ -44,11 +58,8 @@
                         :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
                         :mu-call-scope (gethash "mu-call-scope" headers))
       (with-parser-setup
-        (let ((response
-                (client::query
-                 (generate-query
-                  (manipulate-query
-                   (parse-sparql-string (extract-query-string env (gethash "content-type" headers))))))))
+        (let* ((query-string (extract-query-string env (gethash "content-type" headers)))
+               (response (execute-query-for-context query-string)))
           `(200
             (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
             (,response)))))))

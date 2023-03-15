@@ -12,6 +12,20 @@
   (rule nil :type (or null rule))        ; nil when rule is not known yet
   (submatches nil :type list))
 
+(defun copy-match (match &optional deep-p)
+  "Copies MATCH.
+
+If DEEP-P is non-nil submatches are copied recursively through
+submatches provided they are of type MATCH."
+  (if (match-p match)
+      (make-match :term (match-term match)
+                  :rule (match-rule match)
+                  :submatches (if deep-p
+                                  (mapcar (alexandria:rcurry #'copy-match deep-p)
+                                          (match-submatches match))
+                                  (match-submatches match)))
+      match))
+
 (defstruct sparql-ast
   (top-node nil :type (or null match))
   (string (error "Must supply base-string when creating sparql-match") :type base-string))
