@@ -220,5 +220,18 @@
           favorites:me ext:hasFavoriteAuthor ?author.
         } WHERE {
           books:abundance schema:creator ?author.
-        }"
-       ))))
+        }")
+      ;; this data has no place to live, the target must be a foaf:Person and it is a book.
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        INSERT {
+          favorites:me ext:hasFavoriteAuthor ?book.
+        } WHERE {
+          books:abundance schema:creator/^schema:creator ?book.
+        }"))))
