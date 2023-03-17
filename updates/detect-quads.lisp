@@ -221,7 +221,7 @@
         ;;                                                               :top-node group-graph-pattern
         ;;                                                               :string sparql-parser::*scanning-string*)))
         )
-    (break "Found variables ~A" variables)
+    ;; (break "Found variables ~A" variables)
     (sparql-parser:make-sparql-ast
      :string sparql-parser:*scanning-string*
      :top-node (handle-update-unit::make-nested-match

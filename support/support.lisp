@@ -17,10 +17,10 @@
   "Puts in a break statement at the start and end of the body."
   (let ((result (gensym)))
     `(progn
-       (break "Running ~A~&~A" ,name ',body)
+       ;; (break "Running ~A~&~A" ,name ',body)
        (let ((,result
                (multiple-value-list (progn ,@body))))
-         (break "Results from ~A: ~A~& ran ~A" ',name ,result ',body)
+         ;; (break "Results from ~A: ~A~& ran ~A" ',name ,result ',body)
          (apply #'values ,result)))))
 
 (defun embed-unicode-characters (string)

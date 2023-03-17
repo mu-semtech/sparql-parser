@@ -169,7 +169,8 @@ same logic to construct the submatches."
                           x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
                          (sparql-generator::write-valid-match x)
                          (prog1 "" ;; TODO: provide better error path
-                           (break "~A is not a valid match" x))))
+                           ;; (break "~A is not a valid match" x)
+                           )))
                    quads-not-triples))
          (query (insert-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
@@ -187,7 +188,8 @@ same logic to construct the submatches."
                           x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
                          (sparql-generator::write-valid-match x)
                          (prog1 "" ;; TODO: provide better error path
-                           (break "~A is not a valid match" x))))
+                           ;; (break "~A is not a valid match" x)
+                           )))
                    quads-not-triples))
          (query (insert-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
@@ -295,7 +297,7 @@ variables are missing this will not lead to a pattern."
          ;; TODO: verify the logic that we can execute insert-patterns
          ;; and delete-patterns in batches because anything static will
          ;; be inserted and deleted in the batch too.
-         (break "Going to treat the select query")
+         ;; (break "Going to treat the select query")
          (client:batch-map-solutions-for-select-query ((operation-data-subfield operation :query) :for :modify :usage :read) (bindings)
            (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
                  (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
