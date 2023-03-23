@@ -33,6 +33,8 @@
                (:file "updates/framework")
                (:file "updates/detect-quads")
                (:file "updates/handle-update-unit")
+               ;; messenger
+               (:file "delta/messenger")
                ;; visualizing resulting reasonings
                (:file "external/vis-js")
                ;; sparql http - part 2

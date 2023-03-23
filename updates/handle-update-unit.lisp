@@ -81,6 +81,58 @@ same logic to construct the submatches."
                                         (concatenate 'string "_:" value))))
             (t (error "Unknown solution to turn into match statement ~A" solution))))))
 
+(defun match-as-binding (match)
+  "Converts a MATCH statement to a binding.
+
+This is the inverse of binding-as-match and can be used to create delta messages."
+;;;; The supported match elements may have any of the following, plus
+;;;; whatever binding-as-match may return.  At the point of writing
+;;;; 20230323153815 this means we have the following options:
+;;;;
+;;;; ebnf::|VAR1| , ebnf::|VAR2|
+;;;; , ebnf::|IRIREF| (CONS ebnf::|PNAME_LN| URI-STRING) , (CONS
+;;;; ebnf::|PNAME_NS| URI-STRING) , ebnf::|RDFLiteral| ,
+;;;; ebnf::|BooleanLiteral| , ebnf::|NumericLiteral|
+  (if (consp match)
+      ;; it must be something url-like, and the cdr is the uri
+      (jsown:new-js ("type" "uri") ("value" (cdr match)))
+      (case (sparql-parser:match-term match)
+        (ebnf::|IRIREF| (jsown:new-js
+                          ("type" "uri")
+                          ("value" (detect-quads::primitive-match-string match))))
+        (ebnf::|RDFLiteral|
+         ;; we can extract all cases by destructuring
+         (destructuring-bind (ebnf-value-string &optional langtag-or-hathat hathat-iri)
+             (sparql-parser:match-submatches match)
+           ;; TODO: ensure hathatiri has an expandad iri in its primitive string when expanding if it is a prefixed name
+           (let ((value-string (detect-quads::primitive-match-string ebnf-value-string))
+                 (langtag-or-hathat-string (and langtag-or-hathat
+                                                (detect-quads::primitive-match-string langtag-or-hathat)))
+                 (hathat-iri-string (and hathat-iri
+                                         (detect-quads::primitive-match-string hathat-iri))))
+             (cond (hathat-iri (jsown:new-js
+                                ("value" value-string)
+                                ("datatype" hathat-iri-string)
+                                ("type" "literal")))
+                   (langtag-or-hathat ; must be langtag
+                    (jsown:new-js
+                      ("value" value-string)
+                      ("xml:lang" (subseq langtag-or-hathat-string 1)) ; cut off @
+                      ("type" "literal")))
+                   (t (jsown:new-js
+                        ("value" value-string)
+                        ("type" "literal")))))))
+        (ebnf::|BooleanLiteral| (jsown:new-js
+                                  ("value" (detect-quads::primitive-match-string match)) ; TODO: convert to current interpretation of boolean, a limited set of values are realstic here and this is a good place to convert.
+                                  ("datatype" "http://www.w3.org/2001/XMLSchema#boolean")
+                                  ("type" "literal")))
+        (ebnf::|NumericLiteral| (jsown:new-js
+                                  ("value" (detect-quads::primitive-match-string match))
+                                  ("datatype" "http://www.w3.org/2001/XMLSchema#number"))) ; TODO: convert to current interpretation of boolean, a limited set of submatches are realistic here which helps select the necessary type.
+        (ebnf::|VAR1| (error "Cannot make binding for variable"))
+        (ebnf::|VAR2| (error "Cannot make binding for variable"))
+        (otherwise (error "Unknown match ~A encountered to convert to binding." match)))))
+
 ;;;; This is the entrypoint for executing update queries
 ;;;;
 ;;;; This file coordinates the detection of changed quads, informing any
@@ -260,10 +312,6 @@ variables are missing this will not lead to a pattern."
                   unless (pattern-has-variables filled-in-pattern)
                     collect filled-in-pattern))))))
 
-(defun delta-notify (&key inserts deletes)
-  (format t "~&TODO: Notify others on quads having been written:~% Inserted Quads: ~A~% Deleted Quads: ~A~%" inserts deletes)
-  "")
-
 (defun handle-sparql-update-unit (update-unit)
   "Handles the processing of an update-unit EBNF."
   ;; TODO: verify insert-triples and delete-triples don't contain any more variables
@@ -282,7 +330,7 @@ variables are missing this will not lead to a pattern."
            (client:query query)
            ;; (break "Sent query ~A~% " query)
            )
-         (delta-notify :inserts quads)))
+         (delta-messenger:delta-notify :inserts quads)))
       (:delete-triples
        (let* ((data (operation-data operation))
               (quads (acl:dispatch-quads data)))

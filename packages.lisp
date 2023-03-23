@@ -251,3 +251,9 @@
                 #:scanned-token
                 #:match)
   (:export #:match-as-visjs))
+
+(defpackage :delta-messenger
+  (:use :common-lisp)
+  (:export :send-quads
+           :delta-notify
+           :add-delta-messenger))
