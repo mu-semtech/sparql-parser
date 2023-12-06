@@ -1,5 +1,7 @@
 (in-package #:reasoner-tree-mirror)
 
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 (defstruct reasoner-ast
   "Replication of MATCH for TERM-INFO which can be used to walk around solutions.
 

@@ -1,5 +1,7 @@
 (in-package #:reasoner)
 
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 ;; Much can be derived from a basic knowledge base.  This component aims
 ;; to derive as much as possible from the query itself, so the
 ;; information can later be used to make the query faster, and thus

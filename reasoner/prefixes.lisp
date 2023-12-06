@@ -10,6 +10,8 @@
 ;;;; used in a single thread at any time.  The module can be used in
 ;;;; multiple threads when ran in a separate WITH-LOCAL-PREFIXES block.
 
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 (declaim (special *prefixes* *match-uri-mapping*))
 
 (defmacro with-known-local-prefixes ((&key

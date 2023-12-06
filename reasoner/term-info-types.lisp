@@ -1,5 +1,7 @@
 (in-package #:reasoner-term-info)
 
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 ;;;; Effective storage model
 ;;;;
 ;;;; Top-level there is a hash-table to contain the information of each

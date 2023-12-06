@@ -2,6 +2,7 @@
 
 ;; (declaim (optimize (speed 0) (safety 3) (debug 3)))
 (declaim (optimize (speed 3) (safety 0) (debug 0)))
+;; (declaim (inline primitive-term-equal))
 
 ;;;; What does a constraint look like?
 ;;;;
