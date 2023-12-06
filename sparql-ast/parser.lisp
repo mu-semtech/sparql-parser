@@ -171,9 +171,12 @@ those.  Allows for manipulation without destroying the original."
                       (t (error "Found rule expansion which is neither sequence nor alternative."))))))))
 
 (defparameter *transition-table*
-  (alexandria:plist-hash-table
-   (construct-transition-table-from-parsed-bnf (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.bnfsxp"))
-   :synchronized t))
+  (let ((bnfsxp-location
+          (asdf:system-relative-pathname :sparql-parser
+                                         "external/sparql.bnfsxp")))
+    (alexandria:plist-hash-table
+     (construct-transition-table-from-parsed-bnf (ebnf:read-bnfsexp-from-file bnfsxp-location))
+     :synchronized t)))
 
 
 ;;;;;;;;;;;;;;;;;;

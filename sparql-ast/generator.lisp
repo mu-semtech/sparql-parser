@@ -9,7 +9,10 @@
 ;;;; consistently select "the right" element by traversing the EBNF
 ;;;; together with the AST.
 
-(defparameter *sparql-ebnf* (ebnf:read-bnfsexp-from-file "~/code/lisp/sparql-parser/external/sparql.ebnfsxp"))
+(defparameter *sparql-ebnf*
+  (ebnf:read-bnfsexp-from-file
+   (asdf:system-relative-pathname :sparql-parser
+                                  "external/sparql.ebnfsxp")))
 
 (defparameter *sparql-ebnf-hash*
   (alexandria:alist-hash-table (mapcar (lambda (rule) (cons (ebnf:rule-name rule) rule)) *sparql-ebnf*)))
