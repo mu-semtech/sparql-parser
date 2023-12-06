@@ -1,6 +1,9 @@
 (in-package #:client)
 
-(defparameter *backend* "http://localhost:8891/sparql")
+(defparameter *backend*
+  (if (find :docker *features*)
+      "http://triplestore:8890/sparql"
+      "http://localhost:8891/sparql"))
 
 (defparameter *log-sparql-query-roundtrip* t)
 
