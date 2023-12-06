@@ -71,3 +71,7 @@
               :address "0.0.0.0"
               :port port
               :worker-num worker-count))))
+
+(when (find :docker *features*)
+  (boot))
+
