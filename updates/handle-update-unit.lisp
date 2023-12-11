@@ -242,7 +242,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
     ;; (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
     ;; (format t "~&Query is:~% ~A~%" query-string)
     ;; (break query-string)
-    (coerce query-string 'base-string)))
+    (coerce query-string #-be-cautious 'base-string #+be-cautious 'string)))
 
 (defun delete-data-query-for-quads (quads)
   ;; (format t "~&TODO: Make delete data for~% Quads: ~A~%" quads)

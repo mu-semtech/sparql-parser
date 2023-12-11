@@ -39,7 +39,7 @@
                    }
                    GRAPH ?g { ?s ?p ?o. }
                  }"
-                 'base-string)))
+                 #-be-cautious 'base-string #+be-cautious 'string)))
 
 (defmacro with-acl-config (&body body)
   "Executes body with the access rights specification required for these tests."
@@ -130,7 +130,7 @@
                       accounts:adminuuid1 ext:hasRole ext:Administrator.
                     }
                   }"
-                 'base-string)))
+                 #-be-cautious 'base-string #+be-cautious 'string)))
 
 ;;;; Scenario
 ;;;; Boot up a container using:

@@ -390,8 +390,8 @@ FROM and TO are both expected to be strings.
 Used to replace <SESSION_URI> in access calculation."
   ;; from: source-iriref-string
   ;; to: target-iriref-string
-  (let ((from (coerce (concatenate 'string "<" from ">") 'base-string))
-        (to (iriref (coerce to 'base-string))))
+  (let ((from (coerce (concatenate 'string "<" from ">") #-be-cautious 'base-string #+be-cautious 'string))
+        (to (iriref (coerce to #-be-cautious 'base-string #+be-cautious 'string))))
     (update-matches-symbol-case (match) sparql-ast
       (ebnf::|IRIREF|
              (if (string= from (sparql-parser:terminal-match-string match))

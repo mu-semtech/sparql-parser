@@ -28,7 +28,7 @@ submatches provided they are of type MATCH."
 
 (defstruct sparql-ast
   (top-node nil :type (or null match))
-  (string (error "Must supply base-string when creating sparql-match") :type base-string))
+  (string (error "Must supply base-string|string (be-cautious feature) when creating sparql-match") :type #-be-cautious base-string #+be-cautious string))
 
 (defstruct scanned-token
   "Represents a scanned token."
@@ -124,7 +124,7 @@ those.  Allows for manipulation without destroying the original."
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
   (flet ((mk-key (key)
-           (cons key (sparql-terminals:scanner-for (if (stringp key) (coerce key 'base-string) key)))))
+           (cons key (sparql-terminals:scanner-for (if (stringp key) (coerce key #-be-cautious 'base-string #+be-cautious 'string) key)))))
     (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
       (loop
         for rule in parsed-bnf
@@ -363,7 +363,7 @@ as the starting point in STRING."
       (let* ((stack-top (match-term (car *stack*)))
              (next-token-list
                (if (terminalp stack-top)
-                   (list (cons stack-top (sparql-terminals:scanner-for (if (stringp stack-top) (coerce stack-top 'base-string) stack-top))))
+                   (list (cons stack-top (sparql-terminals:scanner-for (if (stringp stack-top) (coerce stack-top #-be-cautious 'base-string #+be-cautious 'string) stack-top))))
                    (let ((transition-descriptions (gethash stack-top *transition-table*)))
                      (loop for (term . rest) on transition-descriptions
                              by #'cddr

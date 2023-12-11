@@ -244,7 +244,7 @@
     ;; (sparql-parser:with-parser-setup
     ;;   (sparql-parser:parse-sparql-string (coerce (format nil "SELECT ~{~A ~} WHERE ~A"
     ;;                                                      variables group-graph-pattern-as-string)
-    ;;                                              'base-string)))
+    ;;                                              #-be-cautious 'base-string #+be-cautious 'string)))
     ))
 
 (defun primitive-match-string (match)

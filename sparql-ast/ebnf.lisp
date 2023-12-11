@@ -67,7 +67,7 @@
           do (return-from rule-values-for
                (values (mapcar (lambda (thing)
                                  (if (typep thing 'string)
-                                     (coerce thing 'base-string)
+                                     (coerce thing #-be-cautious 'base-string #+be-cautious 'string)
                                      thing))
                                (rest props))
                        t)))

@@ -13,16 +13,16 @@
         (read-sequence arr (getf env :raw-body))
         (let ((body-string (flex:octets-to-string arr)))
           (if (equal content-type "application/sparql-update")
-              (coerce body-string 'base-string)
+              (coerce body-string #-be-cautious 'base-string #+be-cautious 'string)
               (let ((params (quri:url-decode-params body-string)))
                 (coerce (string-trim (list #\Newline #\Space #\Tab #\Return)
                                      (cdr (or (assoc "query" params :test #'equal)
                                               (assoc "update" params :test #'equal))))
-                        'base-string)))))
+                        #-be-cautious 'base-string #+be-cautious 'string)))))
       ;; get should have query in query parameter
       (when-let ((query-assoc (assoc "query" (quri:url-decode-params (getf env :query-string ""))
                                      :test #'string=)))
-        (coerce (string-trim (list #\Newline #\Space #\Tab #\Return) (cdr query-assoc)) 'base-string))))
+        (coerce (string-trim (list #\Newline #\Space #\Tab #\Return) (cdr query-assoc)) #-be-cautious 'base-string #+be-cautious 'string))))
 
 (defun manipulate-query (ast)
   "Manipulates the requested query for current access rights."
@@ -37,7 +37,7 @@
 (defun execute-query-for-context (query)
   "Executes the string QUERY in the current context, applying al relevant access rights and shipping off the query."
   (with-parser-setup
-    (let ((ast (parse-sparql-string (coerce query 'base-string))))
+    (let ((ast (parse-sparql-string (coerce query #-be-cautious 'base-string #+be-cautious 'string))))
       (if (sparql-parser:match-term-p (sparql-parser:sparql-ast-top-node ast) 'ebnf::|UpdateUnit|)
           ;; update
           (let ((detect-quads::*info* (detect-quads::make-info)))

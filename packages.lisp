@@ -1,5 +1,7 @@
 (in-package :cl-user)
 
+(push :be-cautious *features*)
+
 (defpackage :tree-db
   (:use :common-lisp)
   (:shadow :equal)

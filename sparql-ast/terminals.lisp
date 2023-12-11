@@ -153,8 +153,8 @@ failure."
 
          ;; We can roughly interpret this as "read any ECHAR specially" plus
          ;; "count the quotes".
-         (declare (type base-char quote-char)
-                  (type base-string string)
+         (declare (type #-be-cautious base-char #+be-cautious character)
+                  (type #-be-cautious base-string #+be-cautious string string)
                   (type fixnum start))
          (let ((position start)
                (string-length (length string)))
@@ -512,7 +512,8 @@ failure."
 (defun tree-scan-pname-ln (string start)
   (let* ((string-length (length string))
          (position (tree-scan-pname-ns string start string-length)))
-    (declare (type fixnum position string-length))
+    (declare (type fixnum string-length)
+             (type (or fixnum null) position))
     (when position
       ;; (PN_CHARS_U | ':' | [0-9] | PLX ) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX) )?
       (labels ((is-hex (char)
@@ -946,7 +947,7 @@ failure."
            ,@operations))
       `(progn ,@body)))
 
-(declaim (ftype (function ((or base-string symbol)) (function (base-string fixnum) (or null fixnum))) scanner-for))
+(declaim (ftype (function ((or #-be-cautious base-string #+be-cautious string symbol)) (function (#-be-cautious base-string #+be-cautious string fixnum) (or null fixnum))) scanner-for))
 (defun scanner-for (token)
   (cond ((eq token 'ebnf:|_eof|)
          (lambda (string start)
@@ -1006,9 +1007,9 @@ failure."
                  end))
              (error "Could not find token scanner for ~A" token)))))
 
-(declaim (ftype (function ((or base-string symbol) fixnum base-string) (or null fixnum)) scan))
+(declaim (ftype (function ((or #-be-cautious base-string #+be-cautious string symbol) fixnum #-be-cautious base-string #+be-cautious string) (or null fixnum)) scan))
 (defun scan (token start string)
   ;; (incf (gethash token *token-history* 0))
   (with-internal-runtime-processing (time-spent nil)
       ((incf (the fixnum (gethash token *token-history* 0)) time-spent))
-    (funcall (scanner-for (if (stringp token) (coerce token 'base-string) token)) string start)))
+    (funcall (scanner-for (if (stringp token) (coerce token '#-be-cautious base-string #+be-cautious string) token)) string start)))

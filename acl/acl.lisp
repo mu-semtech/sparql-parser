@@ -40,7 +40,7 @@
 (defmethod initialize-instance :after ((access access-by-query) &key &allow-other-keys)
   (sparql-parser:with-parser-setup
     (setf (slot-value access 'query)
-          (sparql-parser:parse-sparql-string (coerce (query access) 'base-string)))))
+          (sparql-parser:parse-sparql-string (coerce (query access) #-be-cautious 'base-string #+be-cautious 'string)))))
 
 (defclass always-accessible (access)
   ()
@@ -242,7 +242,7 @@ desired graphs."
                    (let* ((ast
                             (sparql-parser:parse-sparql-string
                              (coerce "SELECT ?graph ?resource ?type WHERE { VALUES ?resource { <http://a> } GRAPH ?graph { ?resource a ?type. } }"
-                                     'base-string)))
+                                     #-be-cautious 'base-string #+be-cautious 'string)))
                           (inline-data-one-var
                             (first
                              (sparql-manipulation::follow-path

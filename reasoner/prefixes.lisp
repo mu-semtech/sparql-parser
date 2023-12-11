@@ -31,17 +31,17 @@ correctly for the functions in this module."
 (defun iriref-string-strip-markers (string)
   (if (and (char= (elt string 0) #\<)
            (char= (elt string (1- (length string))) #\>))
-      (coerce (subseq string 1 (1- (length string))) 'base-string)
+      (coerce (subseq string 1 (1- (length string))) #-be-cautious 'base-string #+be-cautious 'string)
       (error "Cannot strip iriref string markers from STRING it does not have any, for: ~A" string)))
 
 (defun pname-ns-strip-colon (string)
   (if (char= (elt string (1- (length string))) #\:)
-      (coerce (subseq string 0 (1- (length string))) 'base-string)
+      (coerce (subseq string 0 (1- (length string))) #-be-cautious 'base-string #+be-cautious 'string)
       (error "Cannot strip pname-ns colon from STRING it does not end with colon, for: ~A" string)))
 
 (defstruct query-prefixes
   (prefix-hash (make-hash-table :test 'equal))
-  (base (coerce "http://mu.semte.ch/local/" 'base-string) :type base-string))
+  (base (coerce "http://mu.semte.ch/local/" #-be-cautious 'base-string #+be-cautious 'string) :type #-be-cautious base-string #+be-cautious base-string))
 
 (defun get-prefix (query-prefixes prefix)
   "Gets a prefix from the query-prefixes information."
@@ -92,7 +92,7 @@ processing should execute."
   "Sets the CACHED-EXPANDED-URI for MATCH to URI-STRING and returns (coerced) URI-STRING."
   (declare (ignore prefixes))
   (setf (gethash match match-uri-mapping)
-        (coerce uri-string 'base-string)))
+        (coerce uri-string #-be-cautious 'base-string #+be-cautious 'string)))
 
 (defun cached-expanded-uri (match &key (prefixes *prefixes*) (match-uri-mapping *match-uri-mapping*))
   "Yields the expanded URI for MATCH, given PREFIXES, caching it if it is not known yet."
