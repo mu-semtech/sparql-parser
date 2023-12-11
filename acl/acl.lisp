@@ -47,7 +47,7 @@
   (:documentation "An entity which is always accessible.  Used for public resources."))
 
 (defstruct access-token
-  (access (error "Must supply ACCESS when creating ACCESS-TOKEN") :type access)
+  (access (error "Must supply ACCESS when creating ACCESS-TOKEN") :type access-grant)
   (parameters nil :type list))
 
 (defgeneric calculate-access-tokens (access &key mu-session-id)
@@ -80,12 +80,12 @@
 (defun access-token-jsown (token)
   "Yields a jsown representation of the access token."
   (jsown:new-js
-    ("name" (name (access-token-access token)))
+    ("name" (access-grant-access (access-token-access token)))
     ("variables" (access-token-parameters token))))
 
 (defun jsown-access-token (jsown)
   "Yields an ACCESS-TOKEN from the JSOWN specification."
-  (make-access-token :access (find-access-by-name (jsown:val jsown "name"))
+  (make-access-token :access (find-access-grant-by-name (jsown:val jsown "name"))
                      :parameters (jsown:val jsown "variables")))
 
 ;; NOTE: the approach we take here to Constraints is insufficient.  A
@@ -116,12 +116,18 @@
   ;; available as contextual information.
   "List of the current call's access rights.")
 
+(defun find-access-grant-by-name (name)
+  "Find access right by name."
+  (find name *rights*
+        :test #'string=
+        :key #'access-grant-access))
+
 (defun access-tokens-from-allowed-groups (mu-auth-allowed-groups)
   "Calculates access rights formthe mu-auth-allowed-groups string."
   (loop for group in (if (stringp mu-auth-allowed-groups)
                          (jsown:parse mu-auth-allowed-groups)
                          mu-auth-allowed-groups)
-        for access = (find-access-by-name (jsown:val group "name"))
+        for access = (find-access-grant-by-name (jsown:val group "name"))
         when access
           collect
           (make-access-token :access access
@@ -155,7 +161,7 @@ variables."
 (defun accessible-graphs-with-tokens (tokens usage)
   "Yields a list of (CONS TOKEN GRAPH-SPECIFICATION) for the set of supplied tokens."
   (loop for token in tokens
-        for token-name = (name (access-token-access token))
+        for token-name = (access-grant-access (access-token-access token))
         append (loop for right in *rights*
                      when (and (eq (access-grant-access right) token-name)
                                (find usage (access-grant-usage right) :test #'eq))
@@ -180,13 +186,18 @@ variables."
   "Applies current access rights to MATCH.
 
 MATCH may be updated in place but updated MATCH is returned."
-  (sparql-parser:with-sparql-ast query-ast
-    (with-access-tokens (tokens)
-      (-> query-ast
-        (remove-dataset-clauses)
-        (remove-graph-graph-patterns)
-        (add-default-base-decl-to-prologue)
-        (add-from-graphs (graphs-for-tokens tokens usage))))))
+  (if (mu-auth-sudo)
+      query-ast
+      (sparql-parser:with-sparql-ast query-ast
+        (with-access-tokens (tokens)
+          (-> query-ast
+            (remove-dataset-clauses)
+            (remove-graph-graph-patterns)
+            (add-default-base-decl-to-prologue)
+            ;; TODO: cope with empty usage rights
+            (add-from-graphs (graphs-for-tokens tokens usage))
+            ;; (prog1 (format t "Added FROM graphs as ~A~%" (graphs-for-tokens tokens usage)))
+            )))))
 
 (defmacro do-graph-constraint ((graph-constraint &optional (collection 'do)) (position kind value) &body body)
   "Executes BODY on each constraint of GRAPH-CONSTRAINT optionally collecting through COLLECTION and filtering on KIND.
@@ -301,37 +312,39 @@ desired graphs."
                       unless (eq k :graph)
                         when (not (detect-quads:quad-term-uri v))
                           do (return t)))))
-      (with-access-tokens (tokens)
-        ;; Initialize type index with all types mentioned in this set of quads
-        (loop for quad in quads
-              for pred-string = (detect-quads:quad-term-uri (getf quad :predicate))
-              when (and pred-string
-                        (s-p-o-is-uri-p quad)
-                        (detect-quads:quad-term-uri= (getf quad :predicate) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
-                do (set-known-type (detect-quads:quad-term-uri (getf quad :subject))
-                                   (detect-quads:quad-term-uri (getf quad :object))
-                                   t))
-        ;; Find all extra knowledge we need to have on the quad's types
-
-        ;; we need the combination of each quad and each graph constraint to
-        ;; figure out what information we need
-        (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
-          (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
-            ;; find all quads for which any value constraints hold, these are hard requirements
+      (if (mu-auth-sudo)
+          quads
+          (with-access-tokens (tokens)
+            ;; Initialize type index with all types mentioned in this set of quads
             (loop for quad in quads
-                  when (all-value-constraints-hold-p quad constraint)
-                    do (do-graph-constraint (constraint) (position :type value)
-                         (alexandria:when-let ((uri (detect-quads:quad-term-uri (getf quad position))))
-                           ;; ask for information on the types
-                           (ensure-future-type-known uri value))))))
-        (fetch-types-to-fetch)
-        ;; now we know we have all relevant types, we can go over the
-        ;; computations and determine in which graphs each quad should be stored
-        (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
-          (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification))))
-            ;; TODO: check each quad so we only add it once
-            (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
-              (dolist (quad quads)
-                (when (quad-matches-constraint quad constraint)
-                  (mark-quad-to-store (move-quad quad graph)))))))
-        dispatched-quads))))
+                  for pred-string = (detect-quads:quad-term-uri (getf quad :predicate))
+                  when (and pred-string
+                            (s-p-o-is-uri-p quad)
+                            (detect-quads:quad-term-uri= (getf quad :predicate) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
+                    do (set-known-type (detect-quads:quad-term-uri (getf quad :subject))
+                                       (detect-quads:quad-term-uri (getf quad :object))
+                                       t))
+            ;; Find all extra knowledge we need to have on the quad's types
+
+            ;; we need the combination of each quad and each graph constraint to
+            ;; figure out what information we need
+            (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
+              (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
+                ;; find all quads for which any value constraints hold, these are hard requirements
+                (loop for quad in quads
+                      when (all-value-constraints-hold-p quad constraint)
+                        do (do-graph-constraint (constraint) (position :type value)
+                             (alexandria:when-let ((uri (detect-quads:quad-term-uri (getf quad position))))
+                               ;; ask for information on the types
+                               (ensure-future-type-known uri value))))))
+            (fetch-types-to-fetch)
+            ;; now we know we have all relevant types, we can go over the
+            ;; computations and determine in which graphs each quad should be stored
+            (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
+              (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification))))
+                ;; TODO: check each quad so we only add it once
+                (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
+                  (dolist (quad quads)
+                    (when (quad-matches-constraint quad constraint)
+                      (mark-quad-to-store (move-quad quad graph)))))))
+            dispatched-quads)))))

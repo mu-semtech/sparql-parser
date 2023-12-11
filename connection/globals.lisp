@@ -8,6 +8,8 @@
 
 (defparameter *mu-auth-allowed-groups* nil
   "Allowed groups in jsown form.")
+(defparameter *mu-auth-sudo* nil
+  "T or NIL indicating if mu-auth-sudo was provided.")
 (defparameter *mu-call-id* nil
   "Call id in string form.")
 (defparameter *mu-session-id* nil
@@ -16,9 +18,15 @@
   "Call scope for the current request.  This is nil for microservices not
 providing a call scope.")
 
-(defmacro with-call-context ((&key mu-call-id mu-session-id mu-auth-allowed-groups mu-call-scope) &body body)
+(defmacro with-call-context ((&key mu-call-id
+                                mu-session-id
+                                mu-auth-sudo
+                                mu-auth-allowed-groups
+                                mu-call-scope)
+                             &body body)
   `(let ((*mu-call-id* ,mu-call-id)
          (*mu-session-id* ,mu-session-id)
+         (*mu-auth-sudo* ,mu-auth-sudo)
          (*mu-auth-allowed-groups* ,mu-auth-allowed-groups)
          (*mu-call-scope* ,mu-call-scope))
      ,@body))
@@ -36,6 +44,10 @@ providing a call scope.")
 
 (defun (setf mu-session-id) (value)
   (setf *mu-session-id* value))
+
+(defun mu-auth-sudo ()
+  "Truethy iff mu-auth-sudo was set on this request."
+  *mu-auth-sudo*)
 
 (defun mu-auth-allowed-groups ()
   "SETF-able mu-auth-allowed-groups for the current request."
