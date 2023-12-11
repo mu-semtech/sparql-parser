@@ -54,7 +54,8 @@
   (:documentation "Yields truethy iff the given access is accessible within the current access context.")
   (:method ((access always-accessible) &key mu-session-id)
     (declare (ignore mu-session-id))
-    (list (make-access-token :access access)))
+    (mapcar (lambda (grant) (make-access-token :access grant))
+            (access-grants-for-access-name (name access))))
   (:method ((access access-by-query) &key mu-session-id)
     (when mu-session-id ; ignore when no mu-session-id supplied
       (let ((copied-ast (sparql-parser:make-sparql-ast
@@ -71,11 +72,13 @@
                          (sparql-generator:write-valid)
                          (client:query)
                          (client:bindings))
-                  collect
-                  (make-access-token
-                   :access access
-                   :parameters (mapcar (lambda (var) (jsown:filter binding var "value"))
-                                       (variables access))))))))))
+                  append
+                  (mapcar (lambda (grant)
+                            (make-access-token
+                             :access grant
+                             :parameters (mapcar (lambda (var) (jsown:filter binding var "value"))
+                                                 (variables access))))
+                          (access-grants-for-access-name (name access))))))))))
 
 (defun access-token-jsown (token)
   "Yields a jsown representation of the access token."
@@ -110,6 +113,11 @@
   (usage (list :read))
   (graph-spec (error "Must supply graph spec") :type symbol)
   (access (error "Must supply which grant allows access") :type string))
+
+(defun access-grants-for-access-name (name)
+  "Yields a list of all access grants from *rights* which have NAME as ACCESS-GRANT-ACCESS."
+  (remove-if-not (lambda (grant) (string= (access-grant-access grant) name))
+                 *rights*))
 
 (defparameter *active-access-rights* nil
   ;; TODO: currently not used.  Not sure if this should be globally
