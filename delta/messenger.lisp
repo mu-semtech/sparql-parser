@@ -26,25 +26,33 @@
 (defgeneric handle-delta (handler &key inserts deletes)
   (:documentation "Handles a delta message for the raw insert and delete quads.  This may include sending it out to an external provider.")
   (:method ((handler delta-logging-handler) &key inserts deletes)
-    (format t "~&Notify others on quads having been written:~% Inserted Quads: ~A~% Deleted Quads: ~A~%"
-            inserts deletes))
+    (format t "~&Notify others on quads having been written:~% Inserted Quads: ~{~%  ~A~}~% Deleted Quads: ~{~%  ~A~}~%"
+            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) inserts)
+            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) deletes)))
   (:method ((handler delta-remote-handler) &key inserts deletes)
-    (flet ((quad-to-jsown-binding (quad)
-             (jsown:new-js
-               ("subject" (handle-update-unit::match-as-binding (getf quad :subject)))
-               ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
-               ("object" (handle-update-unit::match-as-binding (getf quad :object))))))
+    (when (or inserts deletes)
       ;; TODO: share following headers for this request with the new request
       ;;   - mu-auth-allowed-groups
+      ;;   - mu-auth-sudo (or make that influence mu-auth-allowed-groups?)
       ;;   - mu-session-id
       ;;   - mu-call-id (does this need to be shadowed here?)
-      (when (or inserts deletes)
-        (with-slots (endpoint method) handler
-         (dex:request endpoint
-                      :method method
-                      :content (format nil "{ \"inserts\": ~A, \"deletes\": ~A }"
-                                       (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) inserts)
-                                       (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) deletes))))))))
+      (with-slots (endpoint method) handler
+        (dex:request endpoint
+                     :method method
+                     :content (jsown:to-json (delta-to-jsown :inserts inserts :deletes deletes)))))))
+
+(defun quad-to-jsown-binding (quad)
+  "Converts QUAD to a jsown binding."
+  (jsown:new-js
+    ("subject" (handle-update-unit::match-as-binding (getf quad :subject)))
+    ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
+    ("object" (handle-update-unit::match-as-binding (getf quad :object)))))
+
+(defun delta-to-jsown (&key inserts deletes)
+  "Convert delta inserts and deletes message to jsown body for inserts and deletes."
+  (jsown:new-js
+    ("inserts" (mapcar #'quad-to-jsown-binding inserts))
+    ("deletes" (mapcar #'quad-to-jsown-binding deletes))))
 
 (defun delta-notify (&key inserts deletes)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
@@ -57,3 +65,4 @@
         *delta-handlers*))
 
 (push (make-instance 'delta-logging-handler) *delta-handlers*)
+;; (add-delta-messenger "http://localhost:8089")

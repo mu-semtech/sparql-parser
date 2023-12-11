@@ -130,7 +130,8 @@ failure."
                (incf position))))
       (scan-numbers) ; optional
       (and (scan-dot)
-           (scan-numbers)))))
+           (scan-numbers)
+           position))))
 
 (defun scan-decimal-positive (string start)
   "Scans for DECIMAL_POSITIVE."
@@ -1010,4 +1011,4 @@ failure."
   ;; (incf (gethash token *token-history* 0))
   (with-internal-runtime-processing (time-spent nil)
       ((incf (the fixnum (gethash token *token-history* 0)) time-spent))
-    (funcall (scanner-for token) string start)))
+    (funcall (scanner-for (if (stringp token) (coerce token 'base-string) token)) string start)))

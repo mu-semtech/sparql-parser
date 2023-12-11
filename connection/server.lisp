@@ -15,13 +15,14 @@
           (if (equal content-type "application/sparql-update")
               (coerce body-string 'base-string)
               (let ((params (quri:url-decode-params body-string)))
-                (coerce (string-trim "\n \t" (cdr (or (assoc "query" params :test #'equal)
-                                                      (assoc "update" params :test #'equal))))
+                (coerce (string-trim (list #\Newline #\Space #\Tab #\Return)
+                                     (cdr (or (assoc "query" params :test #'equal)
+                                              (assoc "update" params :test #'equal))))
                         'base-string)))))
       ;; get should have query in query parameter
       (when-let ((query-assoc (assoc "query" (quri:url-decode-params (getf env :query-string ""))
                                      :test #'string=)))
-        (coerce (cdr query-assoc) 'base-string))))
+        (coerce (string-trim (list #\Newline #\Space #\Tab #\Return) (cdr query-assoc)) 'base-string))))
 
 (defun manipulate-query (ast)
   "Manipulates the requested query for current access rights."
@@ -59,19 +60,31 @@
                         :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
                         :mu-call-scope (gethash "mu-call-scope" headers))
       (with-parser-setup
-        (let* ((query-string (extract-query-string env (gethash "content-type" headers)))
+        (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
+                               ;; (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
+                               ;;         str
+                               ;;         (list :mu-call-id (mu-call-id)
+                               ;;               :mu-session-id (mu-session-id)
+                               ;;               :mu-auth-sudo (mu-auth-sudo)
+                               ;;               :mu-auth-allowed-groups (mu-auth-allowed-groups)
+                               ;;               :mu-call-scope (mu-call-scope)))
+                               str))
                (response (execute-query-for-context query-string)))
           `(200
-            (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
+            (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
             (,response)))))))
 
 (defun boot (&key (port 8890) (worker-count 32))
+  (format t "Booting server on port ~A with ~A workers" port worker-count)
+
   (bordeaux-threads:make-thread
    (lambda ()
      (woo:run (lambda (env) (acceptor env))
               :address "0.0.0.0"
               :port port
               :worker-num worker-count))))
+
+(setf woo.specials:*debug* t)
 
 (when (find :docker *features*)
   (boot))

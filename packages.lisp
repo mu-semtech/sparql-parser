@@ -215,8 +215,7 @@
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
   (:import-from #:alexandria
                 #:when-let)
-  (:export
-   #:execute-query-for-context))
+  (:export #:execute-query-for-context #:boot))
 
 (defpackage #:detect-quads
   (:use :common-lisp)

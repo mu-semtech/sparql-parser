@@ -1,6 +1,10 @@
-FROM madnificent/lisp-webservice:0.5.0
+FROM madnificent/lisp-webservice:0.6.0
+
+RUN apt-get install -y libev-dev gcc;
+
+ENV SYSTEMS="SPARQL-PARSER"
+RUN ["/usr/src/load.sh"]
 
 COPY . /app
 
-ENV SYSTEMS="sparql-parser"
-ENV BOOT="sparql-parser"
+EXPOSE 8890

@@ -70,18 +70,21 @@ same logic to construct the submatches."
             ((and (jsown:val-safe solution "datatype")
                   (string= type "literal"))
              ;; datatype based strings
-             `(ebnf::|RDFLiteral|
-                     ,(make-string-literal)
-                     "^^"
-                     ,(sparql-manipulation:make-iri (jsown:val solution "datatype"))))
+             (make-nested-match
+              `(ebnf::|RDFLiteral|
+                      ,(make-string-literal)
+                      "^^"
+                      ,(sparql-manipulation:make-iri (jsown:val solution "datatype")))))
             ((and (string= type "literal"))
              ;; handle string
-             `(ebnf::|RDFLiteral| ,(make-string-literal)))
+             (make-nested-match
+              `(ebnf::|RDFLiteral| ,(make-string-literal))))
             ((and (string= type "bnode"))
              ;; support blank node
-             `(ebnf::|BlankNode|
-                     ,(make-token-match 'ebnf::|BLANK_NODE_LABEL|
-                                        (concatenate 'string "_:" value))))
+             (make-nested-match
+              `(ebnf::|BlankNode|
+                      ,(make-token-match 'ebnf::|BLANK_NODE_LABEL|
+                                         (concatenate 'string "_:" value)))))
             (t (error "Unknown solution to turn into match statement ~A" solution))))))
 
 (defun match-as-binding (match)
@@ -108,9 +111,9 @@ This is the inverse of binding-as-match and can be used to create delta messages
          (destructuring-bind (ebnf-value-string &optional langtag-or-hathat hathat-iri)
              (sparql-parser:match-submatches match)
            ;; TODO: ensure hathatiri has an expandad iri in its primitive string when expanding if it is a prefixed name
-           (let ((value-string (detect-quads::primitive-match-string ebnf-value-string))
+           (let ((value-string (detect-quads::primitive-match-string (first (sparql-parser:match-submatches ebnf-value-string))))
                  (langtag-or-hathat-string (and langtag-or-hathat
-                                                (detect-quads::primitive-match-string langtag-or-hathat)))
+                                                (detect-quads::primitive-match-string (first (sparql-parser:match-submatches langtag-or-hathat)))))
                  (hathat-iri-string (and hathat-iri
                                          (detect-quads::primitive-match-string hathat-iri))))
              (cond (hathat-iri (jsown:new-js
@@ -153,9 +156,16 @@ This is the inverse of binding-as-match and can be used to create delta messages
                       (quad-object (getf quad :object))
                       (object-match ;; TODO: support other types of resources than IRIs
                         (if (and (sparql-parser:match-p quad-object)
-                                 (sparql-parser:match-term-p quad-object 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral|))
+                                 (sparql-parser:match-term-p quad-object 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|
+                                                             ;; 'ebnf::string_literal1 'ebnf::string_literal2 'ebnf::string_literal_long1 'ebnf::string_literal_long2
+                                                             ))
                             quad-object
-                            (sparql-manipulation:make-iri (quad-term-uri quad-object)))))
+                            (if nil
+                                ;; (and (listp quad-object)
+                                ;;      (find (car quad-object)
+                                ;;            (list 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|)))
+                                quad-object
+                                (sparql-manipulation:make-iri (quad-term-uri quad-object))))))
                  (make-nested-match
                   `(ebnf::|TriplesTemplate|
                           (ebnf::|TriplesSameSubject|
@@ -216,40 +226,40 @@ This is the inverse of binding-as-match and can be used to create delta messages
     (sparql-parser:make-sparql-ast :top-node match :string sparql-parser:*scanning-string*)))
 
 (defun insert-data-query-for-quads (quads)
-  (format t "~&TODO: Make insert data for~% Quads: ~A~%" quads)
+  ;; (format t "~&TODO: Make insert data for~% Quads: ~A~%" quads)
   (let* ((quads-not-triples (make-quads-not-triples quads))
-         (quads-not-triples-strings
-           (mapcar (lambda (x)
-                     (if (sparql-generator::is-valid-match
-                          x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
-                         (sparql-generator::write-valid-match x)
-                         (prog1 "" ;; TODO: provide better error path
-                           ;; (break "~A is not a valid match" x)
-                           )))
-                   quads-not-triples))
+         ;; (quads-not-triples-strings
+         ;;   (mapcar (lambda (x)
+         ;;             (if (sparql-generator::is-valid-match
+         ;;                  x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
+         ;;                 (sparql-generator::write-valid-match x)
+         ;;                 (prog1 "" ;; TODO: provide better error path
+         ;;                   ;; (break "~A is not a valid match" x)
+         ;;                   )))
+         ;;           quads-not-triples))
          (query (insert-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
-    (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
-    (format t "~&Query is:~% ~A~%" query-string)
+    ;; (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
+    ;; (format t "~&Query is:~% ~A~%" query-string)
     ;; (break query-string)
     (coerce query-string 'base-string)))
 
 (defun delete-data-query-for-quads (quads)
-  (format t "~&TODO: Make delete data for~% Quads: ~A~%" quads)
+  ;; (format t "~&TODO: Make delete data for~% Quads: ~A~%" quads)
   (let* ((quads-not-triples (make-quads-not-triples quads))
-         (quads-not-triples-strings
-           (mapcar (lambda (x)
-                     (if (sparql-generator::is-valid-match
-                          x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
-                         (sparql-generator::write-valid-match x)
-                         (prog1 "" ;; TODO: provide better error path
-                           ;; (break "~A is not a valid match" x)
-                           )))
-                   quads-not-triples))
-         (query (insert-data-query-from-quads-not-triples quads-not-triples))
+         ;; (quads-not-triples-strings
+         ;;   (mapcar (lambda (x)
+         ;;             (if (sparql-generator::is-valid-match
+         ;;                  x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
+         ;;                 (sparql-generator::write-valid-match x)
+         ;;                 (prog1 "" ;; TODO: provide better error path
+         ;;                   ;; (break "~A is not a valid match" x)
+         ;;                   )))
+         ;;           quads-not-triples))
+         (query (delete-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
-    (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
-    (format t "~&Query is:~% ~A~%" query-string)
+    ;; (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
+    ;; (format t "~&Query is:~% ~A~%" query-string)
     ;; (break query-string)
     query-string))
 
@@ -320,7 +330,7 @@ variables are missing this will not lead to a pattern."
   ;; TODO: verify insert-triples and delete-triples don't contain any more variables
   ;; TODO: execute where block if it exists
   (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
-    (format t "~&Treating operation ~A~%" operation)
+    ;; (format t "~&Treating operation ~A~%" operation)
     ;; (break "Got operation ~A" operation)
     (case (operation-type operation)
       (:insert-triples
@@ -328,7 +338,7 @@ variables are missing this will not lead to a pattern."
               (quads (acl:dispatch-quads data)))
          (assert-no-variables-in-quads data)
          ;; (break "Received quads ~A" quads)
-         (format t "~&Received quads for insert-triples ~A~%" quads)
+         ;; (format t "~&Received quads for insert-triples ~A~%" quads)
          (let ((query (insert-data-query-for-quads quads)))
            (client:query query)
            ;; (break "Sent query ~A~% " query)
@@ -339,9 +349,9 @@ variables are missing this will not lead to a pattern."
               (quads (acl:dispatch-quads data)))
          (assert-no-variables-in-quads data)
          ;; (break "Received quads ~A" quads)
-         (format t "~&Received quads for delete-triples ~A~%" quads)
-         (client:query (delete-data-query-for-quads (acl:dispatch-quads data)))
-         (delta-notify :deletes quads)))
+         ;; (format t "~&Received quads for delete-triples ~A~%" quads)
+         (client:query (delete-data-query-for-quads quads))
+         (delta-messenger:delta-notify :deletes quads)))
       (:modify
        (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
              (delete-patterns (operation-data-subfield operation :delete-patterns)))
@@ -354,7 +364,7 @@ variables are missing this will not lead to a pattern."
                  (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
              (let ((query (make-combined-delete-insert-data-query deletes inserts)))
                (client:query query))
-             (delta-notify :deletes deletes :inserts inserts))))))))
+             (delta-messenger:delta-notify :deletes deletes :inserts inserts))))))))
 
 (defun unfold-prefixed-quads (quads)
   "Unfolds the prefixed quads (represented by a CONS cell) into a match

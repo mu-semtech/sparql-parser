@@ -23,7 +23,7 @@
         :process (ebnf::|Update|)
         :after ((response match)
                 (declare (ignore response match))
-                (format t "~&PREFIXES are ~A~%" (info-prefixes *info*))
+                ;; (format t "~&PREFIXES are ~A~%" (info-prefixes *info*))
                 (info-operations *info*)))
 (handle ebnf::|Update|
         :note "An update has a (possibly empty) prologue.  This data structure needs to be extended for each update passed down."
@@ -145,7 +145,7 @@
                                               :test #'string=)))
                      (assert found-prefix)
                      (let ((prefix-uri-representation (primitive-match-string (cdr found-prefix))))
-                       (format t "~&Found prefix uri representation ~A with pn-local ~A~%" prefix-uri-representation pn-local)
+                       ;; (format t "~&Found prefix uri representation ~A with pn-local ~A~%" prefix-uri-representation pn-local)
                        (cons pname-ln
                              (concatenate 'string
                                           (subseq prefix-uri-representation 1 (1- (length prefix-uri-representation)))

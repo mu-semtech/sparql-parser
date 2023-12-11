@@ -133,6 +133,8 @@
                  'base-string)))
 
 ;;;; Scenario
+;;;; Boot up a container using:
+;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.0.0
 (defun run-assertion-tests ()
   (clean-up-graphs)
   (store-initial-session-data)
@@ -235,3 +237,4 @@
         } WHERE {
           books:abundance schema:creator/^schema:creator ?book.
         }"))))
+
