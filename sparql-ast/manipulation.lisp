@@ -340,7 +340,38 @@ destructured bindings of LAMBDA-LIST as per DESTRUCTURING-BIND."
                  (sparql-parser:match-submatches match)
                (setf (sparql-parser:match-submatches match)
                      `(,select-clause ,@dataset-clauses ,@other-clauses))
-               match)))))
+               match))
+      (ebnf::|ConstructQuery|
+             ;; ALways starts with "CONSTRUCT" then either:
+             ;; - a ConstructTemplate followed by a DatasetClause*
+             ;; - a DatasetClause* followed by "WHERE"
+             (let* ((submatches (match-submatches match))
+                    (second-submatch (second  submatches)))
+               (if (match-p second-submatch)
+                   (case (match-term second-submatch)
+                     (ebnf::|ConstructTemplate|
+                      ;; insert in the third spot
+                      (setf (sparql-parser:match-submatches match)
+                            `(,(first submatches)
+                              ,(second submatches)
+                              ,@dataset-clauses
+                              ,@(cddr submatches))))
+                     (ebnf::|DatasetClause|
+                      ;; insert in the second spot
+                      (setf (sparql-parser:match-submatches match)
+                            `(,(first submatches)
+                              ,@dataset-clauses
+                              ,@(cdr submatches))))
+                     (t (error "ConstructQuery has is not ConstructTemplate or DatasetClause as second submatch but is a match-p: ~A"
+                               second-submatch)))
+                   ;; must be the word "WHERE", insert in the second spot
+                   (setf (sparql-parser:match-submatches match)
+                         `(,(first submatches)
+                           ,@dataset-clauses
+                           ,@(cdr submatches))))
+               match))))
+  ;; TODO: support ebnf::|AskQuery| and ebnf::|DescribeQuery|
+  )
 
 (defun add-default-base-decl-to-prologue (sparql-ast &optional (base-uri "http://mu.semte.ch/prefix/local/"))
   "Adds a default base decl as the first element of PROLOGUE."
