@@ -1,6 +1,6 @@
-FROM madnificent/lisp-webservice:0.6.0
+FROM madnificent/lisp-webservice:feature-modernize
 
-RUN apt-get install -y libev-dev gcc;
+RUN apt-get update; apt-get -y upgrade; apt-get install -y libev-dev gcc;
 
 ENV SYSTEMS="SPARQL-PARSER"
 RUN ["/usr/src/load.sh"]
