@@ -761,7 +761,7 @@ failure."
     (ebnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6#x00F8-#x02FF#x0370-#x037D#x037F-#x1FFF#x200C-#x200D#x2070-#x218F#x2C00-#x2FEF#x3001-#xD7FF#xF900-#xFDCF#xFDF0-#xFFFD#x10000-#xEFFFF]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
     (ebnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
     (ebnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
-    (ebnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
+    (ebnf::|SPARQLNIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
     (ebnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
     (ebnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
     (ebnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
@@ -800,7 +800,7 @@ failure."
     (ebnf::|PN_CHARS_BASE| . "[A-Za-z#x00C0-#x00D6#x00D8-#x00F6]") ; :PN_CHARS_BASE . [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
     (ebnf::|ANON| . "\\[[#x20#x9#xD#xA]*\\]") ; :ANON . '[' WS* ']'
     (ebnf::|WS| . "[#x20#x9#xD#xA]") ; :WS . #x20 | #x9 | #xD | #xA
-    (ebnf::|NIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
+    (ebnf::|SPARQLNIL| . "\\([#x20#x9#xD#xA]*\\)") ; :NIL . '(' WS* ')'
     (ebnf::|ECHAR| . "\\\\[tbnrf\\\\\"']") ; :ECHAR . '\' [tbnrf\"']
     (ebnf::|STRING_LITERAL_LONG2| . "\"\"\"((\"|\"\")?([^\"\\]|\\\\[tbnrf\\\\\"']))*\"\"\"") ; :STRING_LITERAL_LONG2 . '"""' ( ( '"' | '""' )? ( [^"\] | ECHAR ) )* '"""'
     (ebnf::|STRING_LITERAL_LONG1| . "'''(('|'')?([^'\\\\]|\\\\[tbnrf\\\\\"']))*'''") ; :STRING_LITERAL_LONG1 . "'''" ( ( "'" | "''" )? ( [^'\] | ECHAR ) )* "'''"
@@ -977,7 +977,7 @@ failure."
          #'scan-var2)
         ((eq token 'ebnf::|PNAME_LN|)
          #'tree-scan-pname-ln)
-        ((eq token 'ebnf::|NIL|)
+        ((eq token 'ebnf::|SPARQLNIL|)
          #'scan-nil)
         ((eq token 'ebnf::|ANON|)
          #'scan-anon)

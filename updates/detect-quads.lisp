@@ -128,7 +128,7 @@
         :todo "Document RDFLiteral not being processed further."
         :process (ebnf::|iri|)
         :accept (ebnf::|RDFLiteral| ebnf::|BooleanLiteral| ebnf::|NumericLiteral|)
-        :not-supported (ebnf::|BlankNode| ebnf::|NIL|))
+        :not-supported (ebnf::|BlankNode| ebnf::|SPARQLNIL|))
 (handle ebnf::|iri|
         :process (ebnf::|PrefixedName|)
         :accept (ebnf::|IRIREF|))

@@ -92,8 +92,8 @@
  (rule InlineDataOneVar "63" (seq Var "{" (star DataBlockValue) "}"))
  (rule InlineDataFull "64"
   (seq
-   (alt NIL (seq "(" (star Var) ")")) "{"
-   (star (alt (seq "(" (star DataBlockValue) ")") NIL)) "}" ))
+   (alt SPARQLNIL (seq "(" (star Var) ")")) "{"
+   (star (alt (seq "(" (star DataBlockValue) ")") SPARQLNIL)) "}" ))
  (rule DataBlockValue "65"
   (alt iri RDFLiteral NumericLiteral BooleanLiteral "UNDEF"))
  (rule MinusGraphPattern "66" (seq "MINUS" GroupGraphPattern))
@@ -103,8 +103,8 @@
  (rule Constraint "69" (alt BrackettedExpression BuiltInCall FunctionCall))
  (rule FunctionCall "70" (seq iri ArgList))
  (rule ArgList "71"
-  (alt NIL (seq "(" (opt "DISTINCT") Expression (star (seq "," Expression)) ")")))
- (rule ExpressionList "72" (alt NIL (seq "(" Expression (star (seq "," Expression)) ")")))
+  (alt SPARQLNIL (seq "(" (opt "DISTINCT") Expression (star (seq "," Expression)) ")")))
+ (rule ExpressionList "72" (alt SPARQLNIL (seq "(" Expression (star (seq "," Expression)) ")")))
  (rule ConstructTemplate "73" (seq "{" (opt ConstructTriples) "}"))
  (rule ConstructTriples "74"
   (seq TriplesSameSubject (opt (seq "." (opt ConstructTriples)))))
@@ -152,7 +152,7 @@
  (rule VarOrIri "107" (alt Var iri))
  (rule Var "108" (alt VAR1 VAR2))
  (rule GraphTerm "109"
-  (alt iri RDFLiteral NumericLiteral BooleanLiteral BlankNode NIL))
+  (alt iri RDFLiteral NumericLiteral BooleanLiteral BlankNode SPARQLNIL))
  (rule Expression "110" (seq ConditionalOrExpression))
  (rule ConditionalOrExpression "111"
   (seq ConditionalAndExpression (star (seq "||" ConditionalAndExpression))))
@@ -200,8 +200,8 @@
    (seq "BOUND" "(" Var ")")
    (seq "IRI" "(" Expression ")")
    (seq "URI" "(" Expression ")")
-   (seq "BNODE" (alt (seq "(" Expression ")") NIL))
-   (seq "RAND" NIL)
+   (seq "BNODE" (alt (seq "(" Expression ")") SPARQLNIL))
+   (seq "RAND" SPARQLNIL)
    (seq "ABS" "(" Expression ")")
    (seq "CEIL" "(" Expression ")")
    (seq "FLOOR" "(" Expression ")")
@@ -224,9 +224,9 @@
    (seq "SECONDS" "(" Expression ")")
    (seq "TIMEZONE" "(" Expression ")")
    (seq "TZ" "(" Expression ")")
-   (seq "NOW" NIL)
-   (seq "UUID" NIL)
-   (seq "STRUUID" NIL)
+   (seq "NOW" SPARQLNIL)
+   (seq "UUID" SPARQLNIL)
+   (seq "STRUUID" SPARQLNIL)
    (seq "MD5" "(" Expression ")")
    (seq "SHA1" "(" Expression ")")
    (seq "SHA256" "(" Expression ")")
@@ -311,7 +311,7 @@
  (terminal STRING_LITERAL_LONG2 "159"
   (seq "\"\"\"" (star (seq (opt (alt "\"" "\"\"")) (alt (range "^\"\\") ECHAR))) "\"\"\""))
  (terminal ECHAR "160" (seq "\\" (range "tbnrf\\\"'")))
- (terminal NIL "161" (seq "(" (star WS) ")"))
+ (terminal SPARQLNIL "161" (seq "(" (star WS) ")"))
  (terminal WS "162" (alt (hex "#x20") (hex "#x9") (hex "#xD") (hex "#xA")))
  (terminal ANON "163" (seq "[" (star WS) "]"))
  (terminal PN_CHARS_BASE "164"
