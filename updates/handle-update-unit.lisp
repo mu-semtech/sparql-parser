@@ -35,7 +35,10 @@ same logic to construct the submatches."
 
 (defun sparql-escape-string (string)
   "Generate an escaped SPARQL string."
-  (cl-ppcre:regex-replace-all "([\"\\\\])" string "\\\\\\1"))
+  (concatenate 'string
+               "\""
+               (cl-ppcre:regex-replace-all "([\"\\\\])" string "\\\\\\1")
+               "\""))
 
 (defun make-token-match (term string)
   "Makes a token match for the given string.  This is a MATCH which has a SCANNED-TOKEN as a match."
