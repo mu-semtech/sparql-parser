@@ -69,6 +69,7 @@ We accept strings and uppercase symbols as terminals."
   "Yields the effectively matched string of SCANNED-TOKEN within the current context.
 
 Assumes *scanning-string* is available."
+  (declare (special *scanning-string*))
   (or (scanned-token-string scanned-token)
       (when (and *scanning-string*
                  (<= (scanned-token-end scanned-token) (length *scanning-string*)))
@@ -123,7 +124,7 @@ those.  Allows for manipulation without destroying the original."
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
   (flet ((mk-key (key)
-           (cons key (sparql-terminals:scanner-for key))))
+           (cons key (sparql-terminals:scanner-for (if (stringp key) (coerce key 'base-string) key)))))
     (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
       (loop
         for rule in parsed-bnf
@@ -325,18 +326,48 @@ as the starting point in STRING."
   (setf *match-tree* (make-match :term *start-symbol*))
   (setf *stack* (list *match-tree* (make-match :term +END+))))
 
+(define-condition ebnf-parse-error (simple-error)
+  ((index :initarg :index :initform *next-char-idx*)
+   (stack-top :initarg :stack-top))
+  (:documentation "General error for use in EBNF parsing.  Should be instantiated for extra information."))
+
+(define-condition no-matching-token (ebnf-parse-error)
+  ((possible-tokens :initarg :possible-tokens))
+  (:documentation "Error wthrown when next token could not be found during query parsing."))
+
+(define-condition no-rule-found (ebnf-parse-error)
+  ((next-token :initarg :next-token))
+  (:documentation "Error wthrown when next token could not be found during query parsing."))
+
+(defmethod print-object ((no-matching-token no-matching-token) stream)
+  (with-slots (index possible-tokens stack-top) no-matching-token
+    (format stream "No matching token found at position ~A~&Valid options: ~A~&Stack top: ~A"
+            index
+            (mapcar (lambda (thing) (let ((token (car thing)))
+                                      (typecase token
+                                        (string (format nil "\"~A\"" token))
+                                        (t token))))
+                    possible-tokens)
+            stack-top)))
+
+(defmethod print-object ((no-rule-found no-rule-found) stream)
+  (with-slots (index stack-top next-token) no-rule-found
+    (format stream
+            "No rule found at position ~A~&Stack top: ~A, next token ~A"
+            index stack-top next-token)))
+
 (defun ensure-current-token ()
   "Calculates the current token if it is not known."
   (if *current-token*
       *current-token*
       (let* ((stack-top (match-term (car *stack*)))
              (next-token-list
-              (if (terminalp stack-top)
-                  (list (cons stack-top (sparql-terminals:scanner-for stack-top)))
-                  (let ((transition-descriptions (gethash stack-top *transition-table*)))
-                    (loop for (term . rest) on transition-descriptions
-                            by #'cddr
-                          collect term)))))
+               (if (terminalp stack-top)
+                   (list (cons stack-top (sparql-terminals:scanner-for (if (stringp stack-top) (coerce stack-top 'base-string) stack-top))))
+                   (let ((transition-descriptions (gethash stack-top *transition-table*)))
+                     (loop for (term . rest) on transition-descriptions
+                             by #'cddr
+                           collect term)))))
         (multiple-value-bind (token next-start)
             (calculate-next-token next-token-list *next-char-idx* *scanning-string*)
           (if (and token next-start)
@@ -344,8 +375,13 @@ as the starting point in STRING."
                 (setf *current-token* token)
                 (setf *next-char-idx* next-start)
                 token)
-              (error "Could not calculate token at index ~A for stack-top ~A.~&Searched tokens ~A"
-                     *next-char-idx* stack-top next-token-list))))))
+              (error 'no-matching-token
+                     :possible-tokens next-token-list
+                     :stack-top stack-top
+                     :index *next-char-idx*)
+              ;; (error "Could not calculate token at index ~A for stack-top ~A.~&Searched tokens ~A"
+              ;;        *next-char-idx* stack-top next-token-list)
+              )))))
 
 (defun get-stack-transition (table thing)
   "Like getf, but understands strings too"
@@ -385,7 +421,9 @@ as the starting point in STRING."
              (setf (match-rule stack-top-match) rule)
              (setf *stack* `(,@stack-insertion
                              ,@(rest *stack*))))
-           (error "No rule found for state ~A with token ~A" stack-top next-token))
+           (error 'no-rule-found
+                  :stack-top stack-top
+                  :next-token next-token))
          (error "No transition rules found for state ~A" stack-top))))
     nil ; indicates another step exists
     ))
@@ -427,15 +465,40 @@ as the starting point in STRING."
   (make-sparql-ast :top-node *match-tree*
                    :string *scanning-string*))
 
+(defun get-parser-setup-state ()
+  (list *stack*
+        *scanning-string*
+        *match-tree*
+        *current-token*
+        *next-char-idx*))
+
+(defmacro with-reset-parser-setup-state (state &body body)
+  "Executes within a state as defined by GET-PARSER-SETUP-STATE."
+  `(destructuring-bind (*stack*
+                        *scanning-string*
+                        *match-tree*
+                        *current-token*
+                        *next-char-idx*)
+       ,state
+     ,@body))
+
 (defun parse-sparql-string (string &rest args &key (max-steps 10000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
   "Parses STRING as a SPARQL string either a QueryUnit or an UpdateUnit."
   (declare (ignore max-steps print-intermediate-states print-solution as-ebnf))
-  (handler-case
-      (let ((sparql-parser::*start-symbol* 'ebnf::|QueryUnit|))
-        (apply #'sparql-parser::parse-string string args))
-    (simple-error ()
-      (let ((sparql-parser::*start-symbol* 'ebnf::|UpdateUnit|))
-        (apply #'sparql-parser::parse-string string args)))))
+  (let ((parser-setup-initial-state (get-parser-setup-state)))
+    (handler-case
+        (let ((sparql-parser::*start-symbol* 'ebnf::|QueryUnit|))
+          (apply #'sparql-parser::parse-string string args))
+      (ebnf-parse-error (query-parsing-error)
+        (handler-case
+            (let ((sparql-parser::*start-symbol* 'ebnf::|UpdateUnit|))
+              (with-reset-parser-setup-state parser-setup-initial-state
+                (apply #'sparql-parser::parse-string string args)))
+          (ebnf-parse-error (update-parsing-error)
+            (if (>= (slot-value query-parsing-error 'index)
+                    (slot-value update-parsing-error 'index))
+                (error "~A" query-parsing-error)
+                (error "~A" update-parsing-error))))))))
 
 (defmacro with-parser-setup (&body body)
   "Executes  body within the parser setup scope."
