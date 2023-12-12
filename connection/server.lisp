@@ -53,26 +53,30 @@
   ;; '(200 (:content-type "application/sparql-results+json") ("HELLO HELLO HELLO"))
   (bt:with-lock-held (*request-counter-lock*)
     (incf *request-count*))
-  (let ((headers (getf env :headers)))
-    (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
-                        :mu-session-id (gethash "mu-session-id" headers)
-                        :mu-auth-sudo (and (gethash "mu-auth-sudo" headers nil) t)
-                        :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
-                        :mu-call-scope (gethash "mu-call-scope" headers))
-      (with-parser-setup
-        (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
-                               ;; (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
-                               ;;         str
-                               ;;         (list :mu-call-id (mu-call-id)
-                               ;;               :mu-session-id (mu-session-id)
-                               ;;               :mu-auth-sudo (mu-auth-sudo)
-                               ;;               :mu-auth-allowed-groups (mu-auth-allowed-groups)
-                               ;;               :mu-call-scope (mu-call-scope)))
-                               str))
-               (response (execute-query-for-context query-string)))
-          `(200
-            (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
-            (,response)))))))
+  (handler-case
+      (let ((headers (getf env :headers)))
+        (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
+                            :mu-session-id (gethash "mu-session-id" headers)
+                            :mu-auth-sudo (and (gethash "mu-auth-sudo" headers nil) t)
+                            :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
+                            :mu-call-scope (gethash "mu-call-scope" headers))
+          (with-parser-setup
+            (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
+                                   ;; (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
+                                   ;;         str
+                                   ;;         (list :mu-call-id (mu-call-id)
+                                   ;;               :mu-session-id (mu-session-id)
+                                   ;;               :mu-auth-sudo (mu-auth-sudo)
+                                   ;;               :mu-auth-allowed-groups (mu-auth-allowed-groups)
+                                   ;;               :mu-call-scope (mu-call-scope)))
+                                   str))
+                   (response (execute-query-for-context query-string)))
+              `(200
+                (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
+                (,response))))))
+    (simple-error (e)
+      (format t "Could not process query, yielding 500.  ~%~A~%" e)
+      `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e))))))
 
 (defun boot (&key (port 8890) (worker-count 32))
   (format t "Booting server on port ~A with ~A workers" port worker-count)
