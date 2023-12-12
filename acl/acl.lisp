@@ -135,11 +135,12 @@
   (loop for group in (if (stringp mu-auth-allowed-groups)
                          (jsown:parse mu-auth-allowed-groups)
                          mu-auth-allowed-groups)
-        for access = (find-access-grant-by-name (jsown:val group "name"))
-        when access
-          collect
-          (make-access-token :access access
-                             :parameters (jsown:val group "variables"))))
+        for name = (jsown:val group "name")
+        for parameters = (jsown:val group "variables")
+        append (loop for access-grant in (access-grants-for-access-name name)
+                     collect (make-access-token
+                              :access access-grant
+                              :parameters parameters))))
 
 (defun access-tokens-from-session-id (mu-session-id)
   "Calculates the access rights from the mu-session-id."
@@ -156,7 +157,7 @@
       (access-tokens-from-allowed-groups mu-auth-allowed-groups)
       (let ((tokens (access-tokens-from-session-id mu-session-id)))
         (setf (mu-auth-allowed-groups)
-              (mapcar #'access-token-jsown tokens))
+              (jsown:to-json (mapcar #'access-token-jsown tokens)))
         tokens)))
 
 (defmacro with-access-tokens ((access-tokens-var) &body body)
