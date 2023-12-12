@@ -64,5 +64,5 @@
   (push (make-instance 'delta-remote-handler :endpoint target :method method)
         *delta-handlers*))
 
-(push (make-instance 'delta-logging-handler) *delta-handlers*)
+;; (push (make-instance 'delta-logging-handler) *delta-handlers*)
 ;; (add-delta-messenger "http://localhost:8089")

@@ -5,7 +5,7 @@
       "http://triplestore:8890/sparql"
       "http://localhost:8891/sparql"))
 
-(defparameter *log-sparql-query-roundtrip* t)
+(defparameter *log-sparql-query-roundtrip* nil)
 
 (defun query (string)
   "Sends a query to the backend and responds with the response body."

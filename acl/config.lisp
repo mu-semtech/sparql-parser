@@ -38,16 +38,16 @@
 ;;;; is triggered by the producing microservice.  Said microservice can
 ;;;; determine the scope and find out what is necessary.  
 
-(setf *access-specifications*
-      (list (make-instance 'always-accessible :name "public")
-            (make-instance 'access-by-query
-                           :name 'user ; I think this should be "user" instead to match the access below
-                           :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-                                   PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-                                   SELECT ?id WHERE {
-                                     <SESSION_ID> session:account/mu:uuid ?id.
-                                   }"
-                           :vars (list "id"))))
+;; (setf *access-specifications*
+;;       (list (make-instance 'always-accessible :name "public")
+;;             (make-instance 'access-by-query
+;;                            :name 'user ; I think this should be "user" instead to match the access below
+;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;                                    SELECT ?id WHERE {
+;;                                      <SESSION_ID> session:account/mu:uuid ?id.
+;;                                    }"
+;;                            :vars (list "id"))))
 
 ;; access rights
 ;;
@@ -65,26 +65,26 @@
 ;; graphs in the store
 ;;
 ;; What data resides where?
-(setf *graphs*
-      (list (make-graph-specification
-             :name 'public-data
-             :base-graph "http://mu.semte.ch/graphs/public"
-             :constraints '((:predicate (:value "http://bar"))
-                            (:subject (:type "http://subject-type"))
-                            (:object (:type "http://object-type"))))
-            (make-graph-specification
-             :name 'user-specific
-             :base-graph "http://mu.semte.ch/graphs/user/"
-             :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person")
-                             :predicate (:value "http://xmlns.com/foaf/0.1/mbox"))
-                            (:subject (:type "http://xmlns.com/foaf/0.1/Person")
-                             :predicate (:value "http://xmlns.com/foaf/0.1/firstName"))
-                            (:subject (:type "http://xmlns.com/foaf/0.1/Person")
-                             :predicate (:value "http://xmlns.com/foaf/0.1/lastName"))))
-            (make-graph-specification
-             :name 'clean
-             :base-graph "http://mu.semte.ch/ext/nothing"
-             :constraints nil)))
+;; (setf *graphs*
+;;       (list (make-graph-specification
+;;              :name 'public-data
+;;              :base-graph "http://mu.semte.ch/graphs/public"
+;;              :constraints '((:predicate (:value "http://bar"))
+;;                             (:subject (:type "http://subject-type"))
+;;                             (:object (:type "http://object-type"))))
+;;             (make-graph-specification
+;;              :name 'user-specific
+;;              :base-graph "http://mu.semte.ch/graphs/user/"
+;;              :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person")
+;;                              :predicate (:value "http://xmlns.com/foaf/0.1/mbox"))
+;;                             (:subject (:type "http://xmlns.com/foaf/0.1/Person")
+;;                              :predicate (:value "http://xmlns.com/foaf/0.1/firstName"))
+;;                             (:subject (:type "http://xmlns.com/foaf/0.1/Person")
+;;                              :predicate (:value "http://xmlns.com/foaf/0.1/lastName"))))
+;;             (make-graph-specification
+;;              :name 'clean
+;;              :base-graph "http://mu.semte.ch/ext/nothing"
+;;              :constraints nil)))
 ;; (define-graph application ("http://mu.semte.ch/application")
 ;;   ("nfo:FileDataObject"))
 ;;
@@ -100,15 +100,15 @@
 ;;      (-> "foaf:accountServiceHomepage" "foaf:accountName")
 ;;      (<- "foaf:holdsAccount")))
 
-(setf *rights*
-      (list (make-access-grant
-             :usage '(:read :write)
-             :graph-spec 'public-data
-             :access "public")
-            (make-access-grant
-             :usage '(:read :write)
-             :graph-spec 'user-specific
-             :access "user")))
+;; (setf *rights*
+;;       (list (make-access-grant
+;;              :usage '(:read :write)
+;;              :graph-spec 'public-data
+;;              :access "public")
+;;             (make-access-grant
+;;              :usage '(:read :write)
+;;              :graph-spec 'user-specific
+;;              :access "user")))
 
 ;; granting access to groups within scopes
 
@@ -149,95 +149,95 @@
  
 
 ;;;; An example for veeakker
-(setf *access-specifications*
-      (list (make-instance 'always-accessible
-                           :name "public")
-            (make-instance 'access-by-query
-                           :name "admin"
-                           :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-                                   PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-                                   PREFIX veeakker: <http://veeakker.be/vocabularies/shop/>
+;; (setf *access-specifications*
+;;       (list (make-instance 'always-accessible
+;;                            :name "public")
+;;             (make-instance 'access-by-query
+;;                            :name "admin"
+;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;                                    PREFIX veeakker: <http://veeakker.be/vocabularies/shop/>
 
-                                   SELECT ?id WHERE {
-                                     <SESSION_ID> session:account/mu:hasRole veeakker:administrator.
-                                   }")
-            (make-instance 'access-by-query
-                           :name "user"
-                           :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-                                   PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-                                   SELECT ?id WHERE {
-                                     <SESSION_ID> session:account/mu:uuid ?id.
-                                   }"
-                           :vars (list "id"))))
+;;                                    SELECT ?id WHERE {
+;;                                      <SESSION_ID> session:account/mu:hasRole veeakker:administrator.
+;;                                    }")
+;;             (make-instance 'access-by-query
+;;                            :name "user"
+;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;                                    SELECT ?id WHERE {
+;;                                      <SESSION_ID> session:account/mu:uuid ?id.
+;;                                    }"
+;;                            :vars (list "id"))))
 
-(setf *graphs*
-      (list (make-graph-specification
-             :name 'public-data
-             :base-graph "http://mu.semte.ch/graphs/public"
-             :constraints '((:subject (:type "http://schema.org/Organization"))
-                            (:subject (:type "http://veeakker.be/vocabularies/shop/DeliveryPlace"))
-                            (:subject (:type "http://veeakker.be/vocabularies/shop/DeliveryKind"))
-                            (:subject (:type "http://schema.org/GeoCoordinate"))
-                            (:subject (:type "http://schema.org/PostalAddress"))
-                            (:subject (:type "http://veeakker.be/vocabularies/shop/ProductGroup"))
-                            (:subject (:type "http://schema.org/Product"))
-                            (:subject (:type "http://purl.org/goodrelations/v1#Offering"))
-                            (:subject (:type "http://purl.org/goodrelations/v1#UnitPriceSpecification"))
-                            (:subject (:type "http://purl.org/goodrelations/v1#QuantitativeValue"))
-                            (:subject (:type "http://purl.org/goodrelations/v1#TypeAndQuantityNode"))
-                            (:subject (:type "http://veeakker.be/vocabularies/shop/SpotlightProduct"))
-                            (:subject (:type "http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#FileDataObject"))
-                            (:subject (:type "http://mu.semte.ch/vocabularies/ext/Banner"))))
-            (make-graph-specification
-             :name 'user-specific
-             :base-graph "http://mu.semte.ch/graphs/user/"
-             ;; it seems we don't actually know the constraints
-             :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person")
-                             :predicate (:value "http://xmlns.com/foaf/0.1/mbox"))))
-            (make-graph-specification
-             :name 'clean
-             :base-graph "http://mu.semte.ch/graphs/nothing/"
-             :constraints '())))
+;; (setf *graphs*
+;;       (list (make-graph-specification
+;;              :name 'public-data
+;;              :base-graph "http://mu.semte.ch/graphs/public"
+;;              :constraints '((:subject (:type "http://schema.org/Organization"))
+;;                             (:subject (:type "http://veeakker.be/vocabularies/shop/DeliveryPlace"))
+;;                             (:subject (:type "http://veeakker.be/vocabularies/shop/DeliveryKind"))
+;;                             (:subject (:type "http://schema.org/GeoCoordinate"))
+;;                             (:subject (:type "http://schema.org/PostalAddress"))
+;;                             (:subject (:type "http://veeakker.be/vocabularies/shop/ProductGroup"))
+;;                             (:subject (:type "http://schema.org/Product"))
+;;                             (:subject (:type "http://purl.org/goodrelations/v1#Offering"))
+;;                             (:subject (:type "http://purl.org/goodrelations/v1#UnitPriceSpecification"))
+;;                             (:subject (:type "http://purl.org/goodrelations/v1#QuantitativeValue"))
+;;                             (:subject (:type "http://purl.org/goodrelations/v1#TypeAndQuantityNode"))
+;;                             (:subject (:type "http://veeakker.be/vocabularies/shop/SpotlightProduct"))
+;;                             (:subject (:type "http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#FileDataObject"))
+;;                             (:subject (:type "http://mu.semte.ch/vocabularies/ext/Banner"))))
+;;             (make-graph-specification
+;;              :name 'user-specific
+;;              :base-graph "http://mu.semte.ch/graphs/user/"
+;;              ;; it seems we don't actually know the constraints
+;;              :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person")
+;;                              :predicate (:value "http://xmlns.com/foaf/0.1/mbox"))))
+;;             (make-graph-specification
+;;              :name 'clean
+;;              :base-graph "http://mu.semte.ch/graphs/nothing/"
+;;              :constraints '())))
 
-(setf *rights*
-      (list (make-access-grant
-             :usage '(:read)
-             :graph-spec 'public-data
-             :access "public")
-            (make-access-grant
-             :usage '(:read :write)
-             :graph-spec 'public-data
-             :access "admin")
-            (make-access-grant
-             :usage '(:read :write)
-             :graph-spec 'user-specific
-             :access "user")
-            (make-access-grant
-             :usage '(:read)
-             :graph-spec 'clean
-             :access "clean")))
+;; (setf *rights*
+;;       (list (make-access-grant
+;;              :usage '(:read)
+;;              :graph-spec 'public-data
+;;              :access "public")
+;;             (make-access-grant
+;;              :usage '(:read :write)
+;;              :graph-spec 'public-data
+;;              :access "admin")
+;;             (make-access-grant
+;;              :usage '(:read :write)
+;;              :graph-spec 'user-specific
+;;              :access "user")
+;;             (make-access-grant
+;;              :usage '(:read)
+;;              :graph-spec 'clean
+;;              :access "clean")))
 
 ;; An example for lokaalbeslist.vlaanderen.be
-(setf *access-specifications*
-      (list (make-instance 'always-accessible
-                           :name "public")))
+;; (setf *access-specifications*
+;;       (list (make-instance 'always-accessible
+;;                            :name "public")))
 
-(setf *graphs*
-      (list (make-graph-specification
-             :name 'public-data
-             :base-graph "http://mu.semte.ch/graphs/public"
-             :constraints '())
-            (make-graph-specification
-             :name 'clean
-             :base-graph "http://mu.semte.ch/graphs/nothing/"
-             :constraints '())))
+;; (setf *graphs*
+;;       (list (make-graph-specification
+;;              :name 'public-data
+;;              :base-graph "http://mu.semte.ch/graphs/public"
+;;              :constraints '())
+;;             (make-graph-specification
+;;              :name 'clean
+;;              :base-graph "http://mu.semte.ch/graphs/nothing/"
+;;              :constraints '())))
 
-(setf *rights*
-      (list (make-access-grant
-             :usage '(:read)
-             :graph-spec 'public-data
-             :access "public")
-            (make-access-grant
-             :usage '(:read)
-             :graph-spec 'clean
-             :access "clean")))
+;; (setf *rights*
+;;       (list (make-access-grant
+;;              :usage '(:read)
+;;              :graph-spec 'public-data
+;;              :access "public")
+;;             (make-access-grant
+;;              :usage '(:read)
+;;              :graph-spec 'clean
+;;              :access "clean")))
