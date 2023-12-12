@@ -159,6 +159,7 @@ failure."
          (let ((position start)
                (string-length (length string)))
            (when (and (< (+ 2 position) string-length)
+                      (char= quote-char (elt string position))
                       (char= quote-char (elt string (+ 1 position)))
                       (char= quote-char (elt string (+ 2 position))))
              (incf position 3)
