@@ -203,10 +203,8 @@ MATCH may be updated in place but updated MATCH is returned."
             (remove-dataset-clauses)
             (remove-graph-graph-patterns)
             (add-default-base-decl-to-prologue)
-            ;; TODO: cope with empty usage rights
-            (add-from-graphs (graphs-for-tokens tokens usage))
-            ;; (prog1 (format t "Added FROM graphs as ~A~%" (graphs-for-tokens tokens usage)))
-            )))))
+            (add-from-graphs (or (graphs-for-tokens tokens usage)
+                                 (list "http://mu-authorization.service.semantic.works/empty-graph"))))))))
 
 (defmacro do-graph-constraint ((graph-constraint &optional (collection 'do)) (position kind value) &body body)
   "Executes BODY on each constraint of GRAPH-CONSTRAINT optionally collecting through COLLECTION and filtering on KIND.
