@@ -46,7 +46,8 @@
           ;; query
           (client::query
            (generate-query
-            (manipulate-query ast)))))))
+            (manipulate-query ast))
+           :send-to-single t)))))
 
 (defun acceptor (env)
   ;; (declare (ignore env))

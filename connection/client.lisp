@@ -7,36 +7,48 @@
 
 (defparameter *log-sparql-query-roundtrip* nil)
 
-(defun query (string)
-  "Sends a query to the backend and responds with the response body."
-  (multiple-value-bind (body code headers)
-      (let ((uri (quri:uri *backend*))
-            (headers `(("accept" . "application/sparql-results+json")
-                       ("mu-call-id" . ,(mu-call-id))
-                       ("mu-session-id" . ,(mu-session-id)))))
-        (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
-            (progn
-              (setf (quri:uri-query-params uri)
-                    `(("query" . ,string)))
-              (dex:request uri
-                           :method :get
-                           :use-connection-pool t
-                           :keep-alive t
-                           :force-string t
-                           ;; :verbose t
-                           :headers headers))
-            (dex:request uri
-                         :method :post
-                         :use-connection-pool nil
-                         :keep-alive nil
-                         :force-string t
-                         :headers headers
-                         :content `(("query" . ,string)))))
-    (declare (ignore code headers))
-    (when *log-sparql-query-roundtrip*
-      (format t "~&Requested:~%~A~%and received~%~A~%"
-              string body))
-    body))
+(defun query (string &key (send-to-single nil))
+  "Sends a query to the backend and responds with the response body.
+
+When SEND-TO-SINGLE is truethy and multple endpoints are available, the request is sent to only one of them."
+  (let ((endpoints
+          (if (listp *backend*)
+              (if send-to-single
+                  (list (alexandria:random-elt *backend*))
+                  *backend*)
+              (list *backend*)))
+        result)
+    (loop for endpoint in endpoints
+          do
+             (multiple-value-bind (body code headers)
+                 (let ((uri (quri:uri endpoint))
+                       (headers `(("accept" . "application/sparql-results+json")
+                                  ("mu-call-id" . ,(mu-call-id))
+                                  ("mu-session-id" . ,(mu-session-id)))))
+                   (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
+                       (progn
+                         (setf (quri:uri-query-params uri)
+                               `(("query" . ,string)))
+                         (dex:request uri
+                                      :method :get
+                                      :use-connection-pool t
+                                      :keep-alive t
+                                      :force-string t
+                                      ;; :verbose t
+                                      :headers headers))
+                       (dex:request uri
+                                    :method :post
+                                    :use-connection-pool nil
+                                    :keep-alive nil
+                                    :force-string t
+                                    :headers headers
+                                    :content `(("query" . ,string)))))
+               (declare (ignore code headers))
+               (when *log-sparql-query-roundtrip*
+                 (format t "~&Requested:~%~A~%and received~%~A~%"
+                         string body))
+               (setf result body)))
+    result))
 
 (defun bindings (query-result)
   "Converts the string representation of the SPARQL query result into a set
