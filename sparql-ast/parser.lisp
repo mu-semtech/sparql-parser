@@ -124,7 +124,10 @@ those.  Allows for manipulation without destroying the original."
 (defun construct-transition-table-from-parsed-bnf (parsed-bnf)
   "Import EBNF converted through Ruby's EBNF module to BNF and written as s-expressions."
   (flet ((mk-key (key)
-           (cons key (sparql-terminals:scanner-for (if (stringp key) (coerce key #-be-cautious 'base-string #+be-cautious 'string) key)))))
+           (cons key (sparql-terminals:scanner-for (if (stringp key) (coerce key #-be-cautious 'base-string #+be-cautious 'string) key))))
+         (rule-first-includes-empty-p (rule)
+           (some (lambda (k) (eq k 'ebnf:|_eps|))
+                 (ebnf:rule-first rule))))
     (let ((empty-rule (make-rule :name 'ebnf:|_empty| :expansion nil)))
       (loop
         for rule in parsed-bnf
@@ -133,7 +136,6 @@ those.  Allows for manipulation without destroying the original."
         for rule-expansion-type = (first rule-expansion)
         for rule-expansion-options = (rest rule-expansion)
         for rule-first-all = (ebnf:rule-first rule)
-        for rule-first-includes-empty-p = (some (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
         for rule-first-options = (remove-if (lambda (k) (eq k 'ebnf:|_eps|)) rule-first-all)
         for rule-follow = (ebnf:rule-follow rule)
         unless (ebnf:rule-terminal-p rule)
@@ -141,13 +143,13 @@ those.  Allows for manipulation without destroying the original."
           (list (ebnf:rule-name rule)
                 (cond ((eq rule-expansion-type 'ebnf:seq)
                        ;; sequence
-                       (let* ((rule (make-rule :name rule-name :expansion rule-expansion-options))
+                       (let* ((expansion-rule (make-rule :name rule-name :expansion rule-expansion-options))
                               (predicted (loop for first in rule-first-options
-                                               append (list (mk-key first) rule)))
-                              (empty-follow (when rule-first-includes-empty-p
+                                               append (list (mk-key first) expansion-rule)))
+                              (empty-follow (when (rule-first-includes-empty-p rule)
                                               ;; follow will contain _empty deeper down the stack
                                               (loop for follow in rule-follow
-                                                    append (list (mk-key follow) rule)))))
+                                                    append (list (mk-key follow) expansion-rule)))))
                          (concatenate 'list predicted empty-follow)))
                       ((eq rule-expansion-type 'ebnf:alt)
                        ;; alternatives
@@ -164,11 +166,15 @@ those.  Allows for manipulation without destroying the original."
                                                                      :expansion (list option))))
                                    (t ;; a subselection
                                     (let* ((ebnf-child-rule (ebnf-rule-search parsed-bnf option))
-                                           (child-rule (make-rule :name rule-name
-                                                                  :expansion (list (ebnf:rule-name ebnf-child-rule)))))
+                                           (child-expansion-rule (make-rule :name rule-name
+                                                                            :expansion (list (ebnf:rule-name ebnf-child-rule)))))
                                       (loop for key in (ebnf:rule-first ebnf-child-rule)
-                                            unless (eq key 'ebnf:|_eps|)
-                                              append (list (mk-key key) child-rule)))))))
+                                            append
+                                            (if (eq key 'ebnf:|_eps|)
+                                                ;; find which expansion may be empty (having _eps in its first) and pick that one
+                                                (when (rule-first-includes-empty-p ebnf-child-rule)
+                                                  (list (mk-key (first rule-follow)) child-expansion-rule))
+                                                (list (mk-key key) child-expansion-rule))))))))
                       (t (error "Found rule expansion which is neither sequence nor alternative."))))))))
 
 (defparameter *transition-table*
