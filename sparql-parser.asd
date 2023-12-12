@@ -38,4 +38,6 @@
                ;; visualizing resulting reasonings
                (:file "external/vis-js")
                ;; sparql http - part 2
-               (:file "connection/server")))
+               (:file "connection/server")
+               ;; configuration
+               (:file "config/config")))
