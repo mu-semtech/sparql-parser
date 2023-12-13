@@ -5,6 +5,9 @@
 
 (defparameter *request-count* 0)
 
+(defparameter *log-incoming-requests-p* nil
+  "When set to non-nil, we log incoming requests and access rights for them.")
+
 (defun extract-query-string (env content-type)
   "Extracts query string from the request when content-type is given."
   (if (eq (getf env :request-method) :post)
@@ -63,13 +66,14 @@
                             :mu-call-scope (gethash "mu-call-scope" headers))
           (with-parser-setup
             (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
-                                   ;; (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
-                                   ;;         str
-                                   ;;         (list :mu-call-id (mu-call-id)
-                                   ;;               :mu-session-id (mu-session-id)
-                                   ;;               :mu-auth-sudo (mu-auth-sudo)
-                                   ;;               :mu-auth-allowed-groups (mu-auth-allowed-groups)
-                                   ;;               :mu-call-scope (mu-call-scope)))
+                                   (when *log-incoming-requests-p*
+                                     (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
+                                             str
+                                             (list :mu-call-id (mu-call-id)
+                                                   :mu-session-id (mu-session-id)
+                                                   :mu-auth-sudo (mu-auth-sudo)
+                                                   :mu-auth-allowed-groups (mu-auth-allowed-groups)
+                                                   :mu-call-scope (mu-call-scope))))
                                    str))
                    (response (execute-query-for-context query-string)))
               `(200
