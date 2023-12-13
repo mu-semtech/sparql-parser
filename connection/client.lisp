@@ -20,34 +20,43 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
         result)
     (loop for endpoint in endpoints
           do
-             (multiple-value-bind (body code headers)
-                 (let ((uri (quri:uri endpoint))
-                       (headers `(("accept" . "application/sparql-results+json")
-                                  ("mu-call-id" . ,(mu-call-id))
-                                  ("mu-session-id" . ,(mu-session-id)))))
-                   (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
-                       (progn
-                         (setf (quri:uri-query-params uri)
-                               `(("query" . ,string)))
-                         (dex:request uri
-                                      :method :get
-                                      :use-connection-pool t
-                                      :keep-alive t
-                                      :force-string t
-                                      ;; :verbose t
-                                      :headers headers))
-                       (dex:request uri
-                                    :method :post
-                                    :use-connection-pool nil
-                                    :keep-alive nil
-                                    :force-string t
-                                    :headers headers
-                                    :content `(("query" . ,string)))))
-               (declare (ignore code headers))
-               (when *log-sparql-query-roundtrip*
-                 (format t "~&Requested:~%~A~%and received~%~A~%"
-                         string body))
-               (setf result body)))
+             (support:with-exponential-backoff-retry
+                 (:max-time-spent 60 :max-retries 10 :initial-pause-interval 1 :pause-interval-multiplier 2)
+               (handler-case
+                   (multiple-value-bind (body code headers)
+                       (let ((uri (quri:uri endpoint))
+                             (headers `(("accept" . "application/sparql-results+json")
+                                        ("mu-call-id" . ,(mu-call-id))
+                                        ("mu-session-id" . ,(mu-session-id)))))
+                         (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
+                             (progn
+                               (setf (quri:uri-query-params uri)
+                                     `(("query" . ,string)))
+                               (dex:request uri
+                                            :method :get
+                                            :use-connection-pool t
+                                            :keep-alive t
+                                            :force-string t
+                                            ;; :verbose t
+                                            :headers headers))
+                             (dex:request uri
+                                          :method :post
+                                          :use-connection-pool nil
+                                          :keep-alive nil
+                                          :force-string t
+                                          :headers headers
+                                          :content `(("query" . ,string)))))
+                     (declare (ignore code headers))
+                     (when *log-sparql-query-roundtrip*
+                       (format t "~&Requested:~%~A~%and received~%~A~%"
+                               string body))
+                     (setf result body))
+                 (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
+                   (format t "~&Encountered error from FAST-HTTP: ~A" e)
+                   (support:report-exponential-backoff-failure e))
+                 (error (e)
+                   (format t "~&Encountered general error when executing query: ~A" e)
+                   (support:report-exponential-backoff-failure e)))))
     result))
 
 (defun bindings (query-result)

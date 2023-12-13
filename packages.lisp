@@ -14,7 +14,9 @@
            #:typed-hash-table
            #:typed-list
            #:typed-plist
-           #:pick-lists))
+           #:pick-lists
+           #:report-exponential-backoff-failure
+           #:with-exponential-backoff-retry))
 
 (defpackage :ebnf
   (:use :common-lisp)
