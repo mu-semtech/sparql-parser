@@ -95,10 +95,102 @@
 ;; (define-graph user-specific ("http://mu.semte.ch/graphs/user")
 ;;   (foaf:Person
 ;;      (-> "foaf:firstName" "foaf:lastName" "schema:email" "foaf:mbox")
-;;      (<- "veeakker:hasBAsket"))
+;;      (<- "veeakker:hasBasket"))
 ;;   (foaf:OnlineAccount
 ;;      (-> "foaf:accountServiceHomepage" "foaf:accountName")
 ;;      (<- "foaf:holdsAccount")))
+
+(defun add-or-replace-graph (graph-specification)
+  "Adds a graph specification or replaces an earlier one with the same name."
+  (let ((name (graph-specification-name graph-specification)))
+    (when (find name *graphs* :key #'graph-specification-name)
+      (warn "Replacing earlier graph specification for ~A" name)
+      (setf *graphs* (delete name *graphs* :key #'graph-specification-name)))
+    (push graph-specification *graphs*)))
+
+(defmacro define-graph (name (graph) &body type-specifications)
+  "Compact DSL for specifying common graph constraints."
+  `(add-or-replace-graph
+    (make-graph-specification
+     :name ',name
+     :base-graph ,graph
+     :constraints ',(loop for (name . predicate-specifications) in type-specifications
+                          for type-sub-constraint = (if (eq name '_) nil `(:type ,name))
+                          if predicate-specifications
+                            append (loop for (direction . predicates) in predicate-specifications
+                                         for type-constraint
+                                           = (when type-sub-constraint
+                                               (case direction
+                                                 (-> `(:subject ,type-sub-constraint))
+                                                 (<- `(:object ,type-sub-constraint))
+                                                 (otherwise (error "Direction must be <- or -> but got ~s" direction))))
+                                         append (loop for predicate in predicates
+                                                      for predicate-constraint
+                                                        = (if (eq predicate '_)
+                                                              `()
+                                                              `(:predicate (:value ,predicate)))
+                                                      collect `(,@type-constraint ,@predicate-constraint)))
+                          else
+                            ;; shorthand for all predicates
+                            collect (if name `(:subject ,type-sub-constraint) `())))))
+
+(define-graph user-specific ("http://mu.semte.ch/graphs/user/")
+  ("foaf:Person"
+   (-> "foaf:firstName" "foaf:lastName" "schema:email" "foaf:mbox")
+   (<- "veeakker:hasBasket"))
+  ("foaf:OnlineAccount"
+   (-> "foaf:accountServiceHomepage" "foaf:accountName")
+   (<- "foaf:holdsAccount")))
+
+(define-graph something-specific ("http://mu.semte.ch/graphs/external-audit-trails/")
+  (_ (-> "ext:auditTrail")))
+
+(define-graph everything ("http://mu.semte.ch/application")
+  (_ (-> _)))
+
+(defmacro defgraph (name (graph) &body type-specifications)
+  "Compact DSL for specifying common graph constraints."
+  `(add-or-replace-graph
+    (make-graph-specification
+     :name ',name
+     :base-graph ,graph
+     :constraints ',(loop for (name . predicate-specifications) in type-specifications
+                          for type-sub-constraint = (if (eq name '_) nil `(:type ,name))
+                          if predicate-specifications
+                            append (loop for (direction predicate) on predicate-specifications
+                                           by #'cddr
+                                         for type-constraint
+                                           = (when type-sub-constraint
+                                               (case direction
+                                                 (-> `(:subject ,type-sub-constraint))
+                                                 (<- `(:object ,type-sub-constraint))
+                                                 (otherwise (error "Direction must be <- or -> but got ~s" direction))))
+                                         for predicate-constraint
+                                           = (if (eq predicate '_)
+                                                 `()
+                                                 `(:predicate (:value ,predicate)))
+                                         collect `(,@type-constraint ,@predicate-constraint))
+                          else
+                            ;; shorthand for all predicatse
+                            collect (if name `(:subject ,type-sub-constraint) `())))))
+
+(defgraph user-specific ("http://mu.semte.ch/graphs/user/")
+  ("foaf:Person"
+   -> "foaf:firstName"
+   -> "foaf:lastName"
+   -> "schema:email"
+   -> "foaf:mbox"
+   <- "veeakker:hasBasket")
+  ("foaf:OnlineAccount"
+   -> "foaf:accountServiceHomepage"
+   -> "foaf:accountName"
+   <- "foaf:holdsAccount"))
+
+(defgraph something-specific ("http://mu.semte.ch/graphs/external-audit-trails/")
+  (_ -> "ext:auditTrail"))
+
+(defgraph everything ("http://mu.semte.ch/application")
+  (_ -> _))
 
 ;; (setf *rights*
 ;;       (list (make-access-grant
