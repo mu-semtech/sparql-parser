@@ -9,6 +9,11 @@
 (defparameter *rights* nil
   "All known GRANT instances connecting ACCESS-SPECIFICATION to GRAPH.")
 
+(defparameter *prefixes* nil
+  "plist of prefixes with their expansion.")
+
+(defconstant _ '_ "Empty node symbolizing the default or no value.")
+
 (defclass access ()
   ((name :initform (error "Must supply NAME when defining access.")
          :initarg :name

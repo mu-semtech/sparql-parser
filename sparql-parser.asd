@@ -22,6 +22,7 @@
                (:file "connection/client")
                ;; access control definitions
                (:file "acl/acl")
+               (:file "acl/configuration-interface")
                (:file "acl/config")
                ;; reasoning to determine graphs
                (:file "reasoner/tree-mirror")
