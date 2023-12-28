@@ -35,25 +35,25 @@
     (make-graph-specification
      :name ',name
      :base-graph ,graph
-     :constraints ',(loop for (type-name . predicate-specifications) in type-specifications
-                          for type-sub-constraint = (if (eq type-name '_) nil `(:type ,type-name))
-                          if predicate-specifications
-                            append (loop for (direction predicate) on predicate-specifications
-                                           by #'cddr
-                                         for type-constraint
-                                           = (when type-sub-constraint
-                                               (case direction
-                                                 (-> `(:subject ,type-sub-constraint))
-                                                 (<- `(:object ,type-sub-constraint))
-                                                 (otherwise (error "Direction must be <- or -> but got ~s" direction))))
-                                         for predicate-constraint
-                                           = (if (eq predicate '_)
-                                                 `()
-                                                 `(:predicate (:value ,predicate)))
-                                         collect `(,@type-constraint ,@predicate-constraint))
-                          else
-                            ;; shorthand for all predicatse
-                            collect (if type-name `(:subject ,type-sub-constraint) `())))))
+     :constraints (list ,@(loop for (type-name . predicate-specifications) in type-specifications
+                                for type-sub-constraint = (if (eq type-name '_) nil `(list :type (expand-prefix ,type-name)))
+                                if predicate-specifications
+                                  append (loop for (direction predicate) on predicate-specifications
+                                                 by #'cddr
+                                               for type-constraint
+                                                 = (when type-sub-constraint
+                                                     (case direction
+                                                       (-> `(:subject ,type-sub-constraint))
+                                                       (<- `(:object ,type-sub-constraint))
+                                                       (otherwise (error "Direction must be <- or -> but got ~s" direction))))
+                                               for predicate-constraint
+                                                 = (if (eq predicate '_)
+                                                       `()
+                                                       `(:predicate (list :value (expand-prefix ,predicate))))
+                                               collect `(list ,@type-constraint ,@predicate-constraint))
+                                else
+                                  ;; shorthand for all predicatse
+                                  collect (if type-name `(list :subject ,type-sub-constraint) `()))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

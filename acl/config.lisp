@@ -1,5 +1,8 @@
 (in-package :acl)
 
+(define-prefixes
+  :foaf "http://xmlns.com/foaf/0.1/")
+
 (define-graph user-specific ("http://mu.semte.ch/graphs/user/")
   ("foaf:Person"
    -> "foaf:firstName"
