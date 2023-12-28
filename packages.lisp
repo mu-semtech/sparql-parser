@@ -81,7 +81,15 @@
   (:import-from #:support #:->)
   (:export #:apply-access-rights
            #:with-test-code-json-access-tokens
-           #:dispatch-quads))
+           #:dispatch-quads
+           #:_
+           #:supply-allowed-groups*
+           #:define-prefixes
+           #:define-graph
+           #:with-scope
+           #:grant*
+           #:grant
+           #:supply-allowed-group))
 
 (defpackage #:reasoner-tree-mirror
   (:use :common-lisp)

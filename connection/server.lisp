@@ -52,6 +52,12 @@
             (manipulate-query ast))
            :send-to-single t)))))
 
+(defun parse-mu-call-scope-header (header)
+  "Parses the mu-call-scope header and converts it into the correct instance."
+  (cond ((null header) acl:_)
+        ((string= "" header) acl:_)
+        (t header)))
+
 (defun acceptor (env)
   ;; (declare (ignore env))
   ;; '(200 (:content-type "application/sparql-results+json") ("HELLO HELLO HELLO"))
@@ -63,7 +69,7 @@
                             :mu-session-id (gethash "mu-session-id" headers)
                             :mu-auth-sudo (and (gethash "mu-auth-sudo" headers nil) t)
                             :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
-                            :mu-call-scope (gethash "mu-call-scope" headers))
+                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-call-scope" headers)))
           (with-parser-setup
             (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
                                    (when *log-incoming-requests-p*

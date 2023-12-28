@@ -24,24 +24,24 @@
 
 (grant (read write)
        :to user-specific
-       :for-token "user")
+       :for-allowed-group "user")
 
 (grant read
        :to public
-       :for-token "public")
+       :for-allowed-group "public")
 
 (grant read
        :to delivered-orders
-       :for-token "user")
+       :for-allowed-group "user")
 
 (with-scope "service:image-service"
   (grant (read write)
          :to files
-         :for-token "public"))
+         :for-allowed-group "public"))
 
-(supply-token "public")
+(supply-allowed-group "public")
 
-(supply-token "user"
+(supply-allowed-group "user"
   :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
           PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
           PREFIX musession: <http://mu.semte.ch/vocabularies/session/>

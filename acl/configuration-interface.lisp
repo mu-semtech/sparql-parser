@@ -66,19 +66,19 @@
 
 (defun grant* (&key scopes graph-specs rights allowed-groups)
   "Functional variant to apply a grant."
-  (dolist (scope scopes)
-    (dolist (allowed-group allowed-groups)
-      (dolist (graph-spec graph-specs)
-        (push (make-access-grant
-               :usage rights
-               :graph-spec graph-spec
-               :scope scope
-               :access allowed-group)
-              *grants*)))))
+  (dolist (allowed-group allowed-groups)
+    (dolist (graph-spec graph-specs)
+      (push (make-access-grant
+             :usage rights
+             :graph-spec graph-spec
+             :scopes scopes
+             :access allowed-group)
+            *rights*))))
 
 (declaim (special current-scope))
 
 (defmacro grant (right &key to-graph for-allowed-group to for)
+  ;; TODO: support to and for
   (flet ((ensure-list (thing)
            (if (listp thing)
                `'(,@thing)
@@ -95,7 +95,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; calculating the mu-auth-allowed-groups
 
-(defun supply-allowed-group* (allowed-group constraint &rest args &key query parameters &allow-other-keys)
+(defun supply-allowed-groups* (allowed-group constraint &rest args &key query parameters &allow-other-keys)
   "Indicates when an allowed-group should be supplied.
 
 Understands two constraints natively:
@@ -129,7 +129,7 @@ In case constraint is not understood, make-instance is called with constraint :n
     (when instance
       (push instance *access-specifications*))))
 
-(defmacro supply-token (group &body args &key constraint parameters query &allow-other-keys)
+(defmacro supply-allowed-group (group &body args &key constraint parameters query &allow-other-keys)
   (declare (ignore query))
   (let ((args (copy-list args)))
     ;; quote arguments when they're lists

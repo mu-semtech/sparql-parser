@@ -12,6 +12,19 @@
 (defparameter *prefixes* nil
   "plist of prefixes with their expansion.")
 
+(defun expand-prefix (uri)
+  "Expands the prefix if it could be found."
+  (or (loop for (l-prefix expansion)
+              on *prefixes*
+                by #'cddr
+            for prefix = (concatenate 'string (string-downcase (symbol-name l-prefix)) ":")
+            when (and (>= (length uri) (length prefix))
+                      (string= (subseq uri 0 (length prefix)) prefix))
+              return (concatenate 'string
+                                  expansion
+                                  (subseq uri (length prefix))))
+      uri))
+
 (defconstant _ '_ "Empty node symbolizing the default or no value.")
 
 (defclass access ()
@@ -114,11 +127,25 @@
   ;; in that case.
   (constraints nil))
 
-(defstruct access-grant
-  (scope (list '_))
+(defstruct (access-grant (:constructor make-access-grant*))
+  (scopes (list '_))
   (usage (list :read))
   (graph-spec (error "Must supply graph spec") :type symbol)
   (access (error "Must supply which grant allows access") :type string))
+
+(defun make-access-grant (&rest args &key scopes usage graph-spec access)
+  "Constructs a new access grant."
+  (declare (ignore usage graph-spec access))
+  ;; expand the scope when it's a string
+  (let ((args (copy-list args)))
+    (when scopes
+      (setf (getf args :scopes)
+            (mapcar (lambda (scope)
+                      (etypecase scope
+                        (string (expand-prefix scope))
+                        (symbol scope)))
+                    scopes)))
+    (apply #'make-access-grant* args)))
 
 (defun access-grants-for-access-name (name)
   "Yields a list of all access grants from *rights* which have NAME as ACCESS-GRANT-ACCESS."
@@ -173,22 +200,26 @@ variables."
   `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id))))
      ,@body))
 
-(defun accessible-graphs-with-tokens (tokens usage)
+(defun accessible-graphs (&key tokens usage scope)
   "Yields a list of (CONS TOKEN GRAPH-SPECIFICATION) for the set of supplied tokens."
   (loop for token in tokens
-        for token-name = (access-grant-access (access-token-access token))
+        for access-grant = (access-token-access token)
+        for token-name = (access-grant-access access-grant)
+        for token-scopes = (access-grant-scope access-grant)
         append (loop for right in *rights*
                      when (and (eq (access-grant-access right) token-name)
-                               (find usage (access-grant-usage right) :test #'eq))
+                               (or (not usage)
+                                   (find usage (access-grant-usage right) :test #'eq))
+                               (find scope token-scopes :test #'equal))
                        append (loop for graph-specification in *graphs*
                                     for granted-graph-spec-name = (access-grant-graph-spec right)
                                     when (eq granted-graph-spec-name
                                              (graph-specification-name graph-specification))
                                       collect (cons token graph-specification)))))
 
-(defun graphs-for-tokens (tokens usage)
+(defun graphs-for-tokens (tokens usage scope)
   "Yields the graphs which can be accessed from TOKENS."
-  (loop for (token . graph-specification) in (accessible-graphs-with-tokens tokens usage)
+  (loop for (token . graph-specification) in (accessible-graphs :tokens tokens :usage usage :scope scope)
         collect (token-graph-specification-graph token graph-specification)))
 
 (defun token-graph-specification-graph (token graph-specification)
@@ -209,7 +240,7 @@ MATCH may be updated in place but updated MATCH is returned."
             (remove-dataset-clauses)
             (remove-graph-graph-patterns)
             (add-default-base-decl-to-prologue)
-            (add-from-graphs (or (graphs-for-tokens tokens usage)
+            (add-from-graphs (or (accessible-graphs :tokens tokens :usage usage :scope (mu-call-scope))
                                  (list "http://mu-authorization.service.semantic.works/empty-graph"))))))))
 
 (defmacro do-graph-constraint ((graph-constraint &optional (collection 'do)) (position kind value) &body body)
@@ -341,7 +372,7 @@ desired graphs."
 
             ;; we need the combination of each quad and each graph constraint to
             ;; figure out what information we need
-            (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
+            (dolist (token-with-graph-specification (accessible-graphs :tokens tokens :usage :write :scope (mu-call-scope)))
               (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
                 ;; find all quads for which any value constraints hold, these are hard requirements
                 (loop for quad in quads
@@ -353,7 +384,7 @@ desired graphs."
             (fetch-types-to-fetch)
             ;; now we know we have all relevant types, we can go over the
             ;; computations and determine in which graphs each quad should be stored
-            (dolist (token-with-graph-specification (accessible-graphs-with-tokens tokens :write))
+            (dolist (token-with-graph-specification (accessible-graphs :tokens tokens :usage :write :scope (mu-call-scope)))
               (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification))))
                 ;; TODO: check each quad so we only add it once
                 (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
