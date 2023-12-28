@@ -1,0 +1,619 @@
+#+TITLE: Study: Access Control Lists reasoning for updates
+
+* Abstract
+  Access rights can be pre-processed and treated through bit vectors and
+  matrix multiplications.  We estimate this approach to be faster for
+  the size of updates we currently receive because more processing can
+  happen in parallel.
+
+  This document describes how certain information can be transformed to
+  numbers which can then be used for manipulation.
+
+* State of this document
+  This document is largely complete in terms of functionality but not in
+  terms of optimizations.  In order to implement this approach, the
+  document should first be completed, and then revisited completely to
+  further speed up computations.
+
+  A full example is supplied which provides a plausible reasoning.  The
+  example uses basic matrix operations, namely
+  - dot multiplication,
+  - repeating columns,
+  - transposing matriches,
+  - pair-wise sums,
+  - and element-wise comparison to a value
+
+  We did not search for a library to speed up this process.
+
+  Some concluding remarks on general lessons learned are at the end of
+  this document.
+
+* Approaches for calculating access rights
+  We see twe interesting paths for processing access rights.  Working
+  out the details a bit further should make clear how feasible the
+  matrix approach is.
+
+  The path described in this document aims to execute some operations in
+  parallel by understanding their contents and then calculating the
+  matches through matrix operations.
+
+  Another path tries to be smart in calculating the necessary information.
+  Such a path could first calculate the types of each subject and object
+  to then determine where these subjects and objects could appear in the
+  access rights to then further filter on the predicate.  This approach
+  tries to address each triple a limited amount of times.
+
+* Why is this faster?
+  It is unclear if access rights calculation is the expensive part.
+  Though we new calculation will currently be =O(n*m)= with =n= the
+  amount of rules and =m= the amount of triples
+
+  We foresee a faster calculation by treating each of the facts as a
+  unit so matrix multiplication can be applied and fast caching can be
+  achieved.
+
+  The facts are determined by the =allowed-groups= of the current user.
+  By giving each of the triple constraints a scope we can easily
+  identify the triple itself and specify where it should land.
+
+  To achieve this, all facts must receive an index to order them.  For
+  each request we can calculate the plausible facts by checking the
+  access rights and comparing them
+
+* An example
+  This example runs us through a full case and lets us understand the
+  basic building blocks for the computation.
+
+  Say we have the following relevant access rights:
+
+  #+begin_src lisp
+    (in-package :acl)
+
+    (define-graph user-specific ("http://mu.semte.ch/graphs/user/")
+      ("foaf:Person"
+       -> "foaf:firstName"
+       -> "foaf:lastName"
+       -> "schema:email"
+       -> "foaf:mbox"
+       <- "veeakker:hasBasket")
+      ("foaf:OnlineAccount"
+       -> "foaf:accountServiceHomepage"
+       -> "foaf:accountName"
+       <- "foaf:holdsAccount"))
+
+    (define-graph orders ("http://mu.semte.ch/graphs/orders-for-user/")
+      ("foaf:Person"
+       -> "veeakker:placedOrder")
+      ("veeakker:Order"
+       -> "veeakker:containsOffer"))
+
+    (define-graph public ("http://mu.semte.ch/graphs/public")
+      ("gr:Offering" -> _))
+
+    (define-graph audits ("http://mu.semte.ch/graphs/external-audit-trails/")
+      (_ -> "ext:auditTrail")
+      ("foaf:Person" <- "ext:auditFor"))
+  #+end_src
+
+** Rule vectors
+   Each of these facts can receive a name:
+
+   | GRAPH         | nr | rule                                  |
+   |---------------+----+---------------------------------------|
+   | user-specific |  0 | s:type = foaf:Person                  |
+   | user-specific |  1 | p:value = foaf:firstName              |
+   | user-specific |  2 | p:value = foaf:lastName               |
+   | user-specific |  3 | p:value = schema:email                |
+   | user-specific |  4 | o:type = foaf:Person                  |
+   | user-specific |  5 | p:value = veeakker:hasBasket          |
+   | user-specific |  6 | s:type = foaf:OnlineAccount           |
+   | user-specific |  7 | p:value = foaf:accountServiceHomepage |
+   | user-specific |  8 | p:value = foaf:accountName            |
+   | user-specific |  9 | o:type = foaf:OnlineAccount           |
+   | user-specific | 10 | p:value = foaf:holdsAccount           |
+   | orders        |  4 | s:type = foaf:Person                  |
+   | orders        | 11 | p:value = veeakker:placedOrder        |
+   | orders        | 12 | s:type = veeakker:Order               |
+   | orders        | 13 | p:value = veeakker:containsOffer      |
+   | public        | 14 | s:type = gr:Offering                  |
+   | audits        | 15 | p:value = ext:auditTrail              |
+   | audits        |  4 | o:type = foaf:Person                  |
+   | audits        | 16 | p:value = ext:auditFor                |
+
+** Applicable rules
+   A request to write to =orders,audits= would only need to cope
+   with rules =4,11,12,13,14,15,16= and we can determine them quickly.  The
+   applicable rule calculation can easily be cached.
+
+   Say triples arrive for a user having access to both, we can first
+   construct a vector to indicate which rules are relevant.  We name this vector =R=.
+
+   #+begin_src lisp
+     #*00001000000111111
+   #+end_src
+
+** Vectors to indicate what is acted on
+   - subject :: src_lisp{#*10000010000010100}
+   - predicate :: src_lisp{#*01110101101101011}
+   - object :: src_lisp{#*00001000010000000}
+
+** Vectors ot type
+   This Vector can be used to determine the relevant access rights and
+   for its calculation.
+
+   Each type can have its own vector.  Let us determine these vectors
+   for type and order:
+
+   - type :: src_lisp{#*10001010010010100}
+   - value :: src_lisp{#*01110101101101011}
+
+   As more types of matches receive support, multiple of these vectors
+   will exist but they can always be a bit vector.
+
+** Applicable vectors per type
+   Discovering the type verifications that need to be calculated for
+   each triple is now handled by executing an AND between these two
+   vectors (such as =bit-and=).
+
+   With this in place we would calculate the type vector as:
+
+   #+name: bit-vector
+   #+begin_src lisp :cache yes
+     (bit-and #*00001000000111111 #*10001010010010100)
+   #+end_src
+
+   #+RESULTS[d7794378a470c9c9bb6922400699f932dfaf81ac]: bit-vector
+   : #*00001000000010100
+
+** Applying type vectors
+   In order to apply the type vectors we can receive all vectors that
+   act on a type, and use this to calculate the applicable types using
+   specific code.
+
+   The function will receive the bit array to indicate the indiches of
+   interesting bits to match, then we can OR the lot together based on
+   the discovered types.
+    
+** Indexing known URIs
+   When we define the graphs we know all of the URIs which may appear
+   in the configuration and we can index them as such:
+
+   | Nr | URI                         |
+   |----+-----------------------------|
+   |  0 | UNKNOWN                     |
+   |  1 | rdf:type                    |
+   |  2 | foaf:Person                 |
+   |  3 | foaf:firstName              |
+   |  4 | foaf:lastName               |
+   |  5 | schema:email                |
+   |  6 | veeakker:hasBasket          |
+   |  7 | foaf:OnlineAccount          |
+   |  8 | foaf:accountServiceHomepage |
+   |  9 | foaf:accountName            |
+   |  10 | foaf:holdsAccount           |
+   | 11 | veeakker:placedOrder        |
+   | 12 | veeakker:Order              |
+   | 13 | veeakker:containsOffer      |
+   | 14 | gr:Offering                 |
+   | 15 | ext:auditTrail              |
+   | 16 | ext:auditFor                |
+
+*** Type constraints per rule
+   | rule nr | rule                                  | type vector    |
+   |---------+---------------------------------------+----------------|
+   |       0 | s:type = foaf:Person                  | #(2 nil nil)   |
+   |       1 | p:value = foaf:firstName              | #(nil nil nil) |
+   |       2 | p:value = foaf:lastName               | #(nil nil nil) |
+   |       3 | p:value = schema:email                | #(nil nil nil) |
+   |       4 | o:type = foaf:Person                  | #(nil nil 2)   |
+   |       5 | p:value = veeakker:hasBasket          | #(nil nil nil) |
+   |       6 | s:type = foaf:OnlineAccount           | #(7 nil nil)   |
+   |       7 | p:value = foaf:accountServiceHomepage | #(nil nil nil) |
+   |       8 | p:value = foaf:accountName            | #(nil nil nil) |
+   |       9 | o:type = foaf:OnlineAccount           | #(nil nil 7)   |
+   |      10 | p:value = foaf:holdsAccount           | #(nil nil nil) |
+   |      11 | p:value = veeakker:placedOrder        | #(nil nil nil) |
+   |      12 | s:type = veeakker:Order               | #(12 nil nil)  |
+   |      13 | p:value = veeakker:containsOffer      | #(nil nil nil) |
+   |      14 | s:type = gr:Offering                  | #(14 nil nil)  |
+   |      15 | p:value = ext:auditTrail              | #(nil nil nil) |
+   |      16 | p:value = ext:auditFor                | #(nil nil nil) |
+     
+   We could use the number 0 to indicate "no value" instead of
+   assigning it a type, which would lead to the following matrix:
+
+   #+begin_src lisp
+     #((2 0 0)
+       (0 0 0)
+       (0 0 0)
+       (0 0 0)
+       (0 0 2)  
+       (0 0 0)
+       (7 0 0)  
+       (0 0 0)
+       (0 0 0)
+       (0 0 7)  
+       (0 0 0)
+       (0 0 0)
+       (12 0 0) 
+       (0 0 0)
+       (14 0 0) 
+       (0 0 0)
+       (0 0 0))
+   #+end_src
+
+*** Value constraints per rule
+    The value types can be constructed similarly
+
+   | rule nr | rule                                  | type vector |
+   |---------+---------------------------------------+-------------|
+   |       0 | s:type = foaf:Person                  | #(0 0 0)    |
+   |       1 | p:value = foaf:firstName              | #(0 3 0)    |
+   |       2 | p:value = foaf:lastName               | #(0 4 0)    |
+   |       3 | p:value = schema:email                | #(0 5 0)    |
+   |       4 | o:type = foaf:Person                  | #(0 0 0)    |
+   |       5 | p:value = veeakker:hasBasket          | #(0 6 0)    |
+   |       6 | s:type = foaf:OnlineAccount           | #(0 0 0)    |
+   |       7 | p:value = foaf:accountServiceHomepage | #(0 8 0)    |
+   |       8 | p:value = foaf:accountName            | #(0 9 0)    |
+   |       9 | o:type = foaf:OnlineAccount           | #(0 0 0)    |
+   |      10 | p:value = foaf:holdsAccount           | #(0 10 0)    |
+   |      11 | p:value = veeakker:placedOrder        | #(0 11 0)   |
+   |      12 | s:type = veeakker:Order               | #(0 0 0)    |
+   |      13 | p:value = veeakker:containsOffer      | #(0 13 0)   |
+   |      14 | s:type = gr:Offering                  | #(0 0 0)    |
+   |      15 | p:value = ext:auditTrail              | #(0 15 0)   |
+   |      16 | p:value = ext:auditFor                | #(0 16 0)   |
+
+   #+name: value-constraints-per-rule
+   #+begin_src lisp
+     #((0 0 0)
+       (0 3 0)
+       (0 4 0)
+       (0 5 0)
+       (0 0 0)
+       (0 6 0)
+       (0 0 0)
+       (0 8 0)
+       (0 9 0)
+       (0 0 0)
+       (0 10 0)
+       (0 11 0)
+       (0 0 0)
+       (0 13 0)
+       (0 0 0)
+       (0 15 0)
+       (0 16 0))
+   #+end_src
+
+** Processing triples
+   The triples to be processed are known.  As such a list of triples
+   can be turned into a multi-dimensional array based on its
+   components.  Because scanning currently happens on the level of a
+   URI, we will capture the value of each URI separately so we can scan
+   for it.
+
+   #+begin_src ttl
+     rpio:Aad foaf:firstName "Aad".
+     rpio:Aad foaf:lastName "Versteden".
+     rpio:Aad a foaf:Agent, foaf:Person.
+     rpio:Aad foaf:mbox "aad.versteden@redpencil.io".
+     rpio:Aad veeakker:placedOrder <http://veeakker.be/orders/42>.
+   #+end_src
+
+   #+begin_src lisp
+     #((("http://redpencil.io/people/Aad" "{\"type\": \"uri\", \"value\": \"http://example.com/Aad\"}")
+        ("http://xmlns.com/foaf/0.1/firstName" "{\"type\": \"uri\", \"value\": \"http://xmlns.com/foaf/0.1/firstName\"}")
+        ("Aad" "{\"type\": \"literal\", \"value\": \"Aad\"}"))
+       (("http://redpencil.io/people/Aad" "{\"type\": \"uri\", \"value\": \"http://example.com/Aad\"}")
+        ("http://xmlns.com/foaf/0.1/lastName" "{\"type\": \"uri\", \"value\": \"http://xmlns.com/foaf/0.1/lastName\"}")
+        ("Versteden" "{\"type\": \"literal\", \"value\": \"Versteden\"}"))
+       (("http://redpencil.io/people/Aad" "{\"type\": \"uri\", \"value\": \"http://example.com/Aad\"}")
+        ("http://www.w3.org/1999/02/22-rdf-syntax-ns#type" "{\"type\": \"uri\", \"value\": \"http://www.w3.org/1999/02/22-rdf-syntax-ns#type\"}")
+        ("http://xmlns.com/foaf/0.1/Person" "{\"type\": \"uri\", \"value\": \"http://xmlns.com/foaf/0.1/Person\"}"))
+       (("http://redpencil.io/people/Aad" "{\"type\": \"uri\", \"value\": \"http://example.com/Aad\"}")
+        ("http://xmlns.com/foaf/0.1/mbox" "{\"type\": \"uri\", \"value\": \"http://xmlns.com/foaf/0.1/mbox\"}")
+        ("mailto:aad.versteden@redpencil.io" "{\"type\": \"uri\", \"value\": \"mailto:aad.versteden@redpencil.io\"}"))
+       (("http://redpencil.io/people/Aad" "{\"type\": \"uri\", \"value\": \"http://example.com/Aad\"}")
+        ("http://veeakker.be/vocabularies/shop/placedOrder" "{\"type\": \"uri\", \"value\": \"http://veeakker.be/vocabularies/shop/placedOrder\"}")
+        ("http://veeakker.be/orders/42" "{\"type\": \"uri\", \"value\": \"http://veeakker.be/orders/42"}")))
+   #+end_src
+    
+   This vector allows us to create a derivation with only the URIs, which is what we're interested in:
+
+   #+begin_src lisp
+     #(("http://redpencil.io/people/Aad"
+        "http://xmlns.com/foaf/0.1/firstName"
+        nil)
+       ("http://redpencil.io/people/Aad"
+        "http://xmlns.com/foaf/0.1/lastName"
+        nil)
+       ("http://redpencil.io/people/Aad"
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        "http://xmlns.com/foaf/0.1/Person")
+       ("http://redpencil.io/people/aad"
+        "http://xmlns.com/foaf/0.1/mbox"
+        "mailto:aad.versteden@redpencil.io")
+       ("http://redpencil.io/people/Aad"
+        "http://veeakker.be/vocabularies/shop/placedOrder"
+        "http://veeakker.be/orders/42"))
+   #+end_src
+
+   This vector can then be further minimized into the URIs we _know_.
+   All other URIs can be ignored for the common cases we encounter in
+   current processing.
+
+   #+begin_src lisp
+     #((0 3 0)
+       (0 4 0)
+       (0 1 2)
+       (0 0 0)
+       (0 11 0))
+   #+end_src
+
+** Processing exact values
+   Processing the exact values is then a matrix operation away.
+   We know the specific values and we want each one where both values
+   are the same.
+
+   For this to work, we need to compare each triple with each exact
+   match rule for a triple.  For this to work, we should create a
+   matrix for each triple and subtract the value-constraints-per-rule
+   from it.  The rows which contain three zeroes at this point are the
+   rules which match the value match.
+
+   For one triple src_lisp{#(0 3 0)} the result would be:
+
+   #+begin_src lisp
+     (matrix-minus
+      #((0 3 0)
+        (0 3 0)
+        (0 3 0)
+        ...
+        (0 3 0)
+        (0 3 0))
+      #((0 0 0)
+        (0 3 0)
+        (0 4 0)
+        ...
+        (0 15 0)
+        (0 16 0))
+      =>
+      #((0 -3 0)
+        (0 0 0)
+        (0 1 0)
+        ...
+        (0 12 0)
+        (0 13 0))
+   #+end_src
+
+   This tells us that only rule 1 has yielded a match for this specific
+   triple.  Matching all of these rules we will learn that:
+
+   This same reasoning can be executed in a larger matrix:
+
+   #+begin_src lisp
+     (matrix-minus
+      #((0 3 0)  (0 4 0)  (0 1 2)
+        (0 3 0)  (0 4 0)  (0 1 2)
+        (0 3 0)  (0 4 0)  (0 1 2)
+        ...
+        (0 3 0)  (0 4 0)  (0 1 2)
+        (0 3 0)  (0 4 0)  (0 1 2))
+      #((0 0 0)  (0 0 0)  (0 0 0)
+        (0 3 0)  (0 3 0)  (0 3 0)
+        (0 4 0)  (0 4 0)  (0 4 0)
+        ...
+        (0 15 0) (0 15 0) (0 15 0)
+        (0 16 0) (0 16 0) (0 16 0))
+      =>
+      #((0  3 0)  (0 4 0)   (0  1 2)
+        (0  0 0)  (0 1 0)   (0 -2 2)
+        (0 -1 0)  (0 0 0)   (0 -3 2)
+        ...
+        (0 -12 0) (0 -11 0) (0 -14 2)
+        (0 -13 0) (0 -12 0) (0 -15 2))
+   #+end_src
+
+   Which when reduced to a per-triple basis in which being equal to 0
+   is 1 and any other value is 0.  Note that there are three columns
+   here because we addressed three triples where there are 9 columns in
+   the code sample above.
+
+   #+begin_src lisp
+     #(0 0 0
+       1 0 0
+       0 1 0
+       ...
+       0 0 0
+       0 0 0)
+   #+end_src
+
+   In this matrix, each column is an inserted triple and each row
+   indicates whether the rule matches.  A triple could match multiple
+   rules.
+
+** Processing types
+   NOTE: aside from types derived from the data, we must also calculate
+   types derived from inputs.
+
+*** Extracting types from inserted triples
+    For the type vectors we can further convert this into a typing
+    vector through which we know the specified type of each triple.
+
+    #+begin_src lisp
+      #(0 0 2 0 0)
+    #+end_src
+
+    We need to further this type with the types implied by the specific
+    resources.
+
+*** Extracting types from the triplestore
+    Types should be cached.  They're very often used.  Other rules for
+    which the type is required can be fetched easily allowing us to
+    filter the subjects and objects for those.  Fetching the type will
+    be more expensive so we refrain from continuing on this
+    path for now.
+
+** Combining rules
+   We will end up with a matrix which defines the rules for each triple
+   including typing.  The triples will now match more rules because
+   their types have been verified.
+
+   NOTE: we made a mistake and did not add mbox as a rule ¯\_(ツ)_/¯ so
+   let's play make pretend that foaf:mbox and schema:email was one
+   thing.
+
+   #+begin_src lisp
+     #((1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0)
+       (1 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0))
+   #+end_src
+
+   The rules can also be converted into a matrix in which each rule to
+   determine a graph can be converted into a column matrix.  The column
+   will have a 1 for each rule that must match, and 0 for each rule
+   that is not relevant.
+
+   note: we made a mistake and did not add mbox as a rule ¯\_(ツ)_/¯ so
+   let's play make pretend that foaf:mbox and schema:email was one
+   thing.
+ 
+  #+begin_src lisp
+     #((1 1 1 0 0 0 0 1 0 0 0 0   
+        1 0 0 0 0 0 0 0 0 0 0 0 
+        0 1 0 0 0 0 0 0 0 0 0 0 
+        0 0 1 0 0 0 0 0 0 0 0 0 
+        0 0 0 1 0 0 0 0 0 0 0 1 
+        0 0 0 1 0 0 0 0 0 0 0 0 
+        0 0 0 0 1 1 0 0 0 0 0 0 
+        0 0 0 0 1 0 0 0 0 0 0 0 
+        0 0 0 0 0 1 0 0 0 0 0 0 
+        0 0 0 0 0 0 1 0 0 0 0 0 
+        0 0 0 0 0 0 1 0 0 0 0 0 
+        0 0 0 0 0 0 0 1 0 0 0 0 
+        0 0 0 0 0 0 0 0 1 0 0 0 
+        0 0 0 0 0 0 0 0 1 0 0 0
+        0 0 0 0 0 0 0 0 0 1 0 0
+        0 0 0 0 0 0 0 0 0 0 1 0
+        0 0 0 0 0 0 0 0 0 0 0 1))
+   #+end_src
+
+   These two matriches can be dot multiplied to receive the following Matrix:
+
+   #+begin_src lisp
+     #((2 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 2 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 2 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 0 0 0 0 0 2 0 0 0 0 0 0 0))
+   #+end_src
+
+   Each of the rules can themselves be matched with a number to verify
+   that we have the exact amount of matches for the rule.  With our
+   rules that can be applied here that is always the number 2 yet a
+   rule that only limits predicate would have 1.
+
+   This yields the following reduced matrtix:
+
+   #+name: reduced-graph-matrix
+   #+begin_src lisp
+     #((1 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 1 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 1 0 0 0 0 0 0 0 0 0 0 0 0)
+       (0 0 0 0 0 0 0 1 0 0 0 0 0 0 0))
+   #+end_src
+        
+   This rule can then be applied one by one to indicates the graphs in
+   which each triple may land.
+
+   We can represent the graphs as numbers too:
+
+   | Index | bit number | Graph name    |
+   |-------+------------+---------------|
+   |     0 |          0 | NOTHING       |
+   |     1 |          1 | user-specific |
+   |     2 |          2 | orders        |
+   |     3 |          4 | public        |
+   |     4 |          8 | audits        |
+
+   Each of the triples only lands in one graph but it might land in
+   multiple graphs.  Plus each graph may contain multiple rights too.
+   The rights get translated to:
+
+   #+begin_src lisp
+     #(1 1 1 1 1 1 1 2 2 3 4)
+   #+end_src
+
+   In terms of bit numbers, this becomes:
+
+   #+begin_src lisp
+     #(1 1 1 1 1 1 1 2 2 4 8)
+   #+end_src
+
+   This should be transposed and repeated for each triple such that we
+   can extract a number for each triple:
+
+   #+begin_src lisp
+     #(1 1 1 1 1 1   
+       1 1 1 1 1 1 
+       1 1 1 1 1 1 
+       1 1 1 1 1 1 
+       1 1 1 1 1 1 
+       1 1 1 1 1 1 
+       1 1 1 1 1 1 
+       2 2 2 2 2 2 
+       2 2 2 2 2 2 
+       4 4 4 4 4 4 
+       8 8 8 8 8 8)
+   #+end_src
+
+   Applying a dot multiplication bteween the reduced graph matrix and
+   this matrix will lead to:
+
+   #+begin_src lisp
+     #(1 1 0 0 1 2)
+   #+end_src
+
+   Which translates to the bit vectors:
+
+   #+begin_src lisp
+     #((0 1 0 0 0)
+       (0 1 0 0 0)
+       (0 0 0 0 0)
+       (0 0 0 0 0)
+       (0 1 0 0 0)
+       (0 0 1 0 0))
+   #+end_src
+
+   Thus triples 1 2 4 should arrive in the user-specific graph and
+   triple 6 should arrive in orders.
+
+* Lessons learned
+  Applying access rights through matrix computations is feasible but
+  perhaps not optimal.
+
+  Many operations seem required for processing throug matriches though
+  consing could be limited because operations can happen on larger
+  vectors.
+
+  With the right library, many operations could run in parallel.  Yet
+  probably not all.
+
+  Multiplication (=X= vs =.=) can likely limit some duplication we
+  execute today.
+
+  Using numbers as an index into various structures is very feasible.
+  Pre-processing structures for this purpose may open us up to using
+  various data structures to speed up computation with limited
+  processing.
+
+  It is not obvious this approach will be faster unless a well-suited
+  matrix library can be found that uses information in the CPU.
