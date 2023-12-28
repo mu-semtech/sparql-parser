@@ -100,13 +100,80 @@
 ;;      (-> "foaf:accountServiceHomepage" "foaf:accountName")
 ;;      (<- "foaf:holdsAccount")))
 
+(defun push-or-replace* (object list set-function &key (test #'eq) (key #'identity) on-overwrite)
+  "Non-macro form to add an object to place or replaces an earlier one with the same name."
+  ;; ensure the item is removed
+  (let ((object-key (funcall key object)))
+    (when (find object-key list :key key :test test)
+      (when on-overwrite (funcall on-overwrite))
+      (setf list (delete object list :test test :key key))))
+  ;; with the previous item removed, we can set the function
+  (funcall set-function (cons object list)))
+
+(defmacro push-or-replace (object place &rest args &key test key on-overwrite)
+  "Adds an object to place or replaces an earlier one with the same name."
+  (declare (ignore test key on-overwrite))
+  (let ((updated-args (loop for (key val) on args by #'cddr
+                            if (eq key :on-overwrite)
+                              append `(,key (lambda () ,val))
+                            else
+                              append (list key val))))
+    `(push-or-replace* ,object ,PLACE
+                       (lambda (x) (setf ,place x))
+                       ,@updated-args)))
+
 (defun add-or-replace-graph (graph-specification)
   "Adds a graph specification or replaces an earlier one with the same name."
   (let ((name (graph-specification-name graph-specification)))
     (when (find name *graphs* :key #'graph-specification-name)
       (warn "Replacing earlier graph specification for ~A" name)
       (setf *graphs* (delete name *graphs* :key #'graph-specification-name)))
-    (push graph-specification *graphs*)))
+    (push graph-specification *graphs*))
+  ;; (push-or-replace graph-specification *graphs*
+  ;;                  :key #'graph-specification-name
+  ;;                  :on-overwrite (warn "Replacing earlier key of graph-specification ~A"
+  ;;                                      (graph-specification-name graph-specification)))
+  )
+
+;; (defmacro define-graph (name (graph) &body type-specifications)
+;;   "Compact DSL for specifying common graph constraints."
+;;   `(add-or-replace-graph
+;;     (make-graph-specification
+;;      :name ',name
+;;      :base-graph ,graph
+;;      :constraints ',(loop for (name . predicate-specifications) in type-specifications
+;;                           for type-sub-constraint = (if (eq name '_) nil `(:type ,name))
+;;                           if predicate-specifications
+;;                             append (loop for (direction . predicates) in predicate-specifications
+;;                                          for type-constraint
+;;                                            = (when type-sub-constraint
+;;                                                (case direction
+;;                                                  (-> `(:subject ,type-sub-constraint))
+;;                                                  (<- `(:object ,type-sub-constraint))
+;;                                                  (otherwise (error "Direction must be <- or -> but got ~s" direction))))
+;;                                          append (loop for predicate in predicates
+;;                                                       for predicate-constraint
+;;                                                         = (if (eq predicate '_)
+;;                                                               `()
+;;                                                               `(:predicate (:value ,predicate)))
+;;                                                       collect `(,@type-constraint ,@predicate-constraint)))
+;;                           else
+;;                             ;; shorthand for all predicates
+;;                             collect (if name `(:subject ,type-sub-constraint) `())))))
+
+;; (define-graph user-specific ("http://mu.semte.ch/graphs/user/")
+;;   ("foaf:Person"
+;;    (-> "foaf:firstName" "foaf:lastName" "schema:email" "foaf:mbox")
+;;    (<- "veeakker:hasBasket"))
+;;   ("foaf:OnlineAccount"
+;;    (-> "foaf:accountServiceHomepage" "foaf:accountName")
+;;    (<- "foaf:holdsAccount")))
+
+;; (define-graph something-specific ("http://mu.semte.ch/graphs/external-audit-trails/")
+;;   (_ (-> "ext:auditTrail")))
+
+;; (define-graph everything ("http://mu.semte.ch/application")
+;;   (_ (-> _)))
 
 (defmacro define-graph (name (graph) &body type-specifications)
   "Compact DSL for specifying common graph constraints."
@@ -114,48 +181,8 @@
     (make-graph-specification
      :name ',name
      :base-graph ,graph
-     :constraints ',(loop for (name . predicate-specifications) in type-specifications
-                          for type-sub-constraint = (if (eq name '_) nil `(:type ,name))
-                          if predicate-specifications
-                            append (loop for (direction . predicates) in predicate-specifications
-                                         for type-constraint
-                                           = (when type-sub-constraint
-                                               (case direction
-                                                 (-> `(:subject ,type-sub-constraint))
-                                                 (<- `(:object ,type-sub-constraint))
-                                                 (otherwise (error "Direction must be <- or -> but got ~s" direction))))
-                                         append (loop for predicate in predicates
-                                                      for predicate-constraint
-                                                        = (if (eq predicate '_)
-                                                              `()
-                                                              `(:predicate (:value ,predicate)))
-                                                      collect `(,@type-constraint ,@predicate-constraint)))
-                          else
-                            ;; shorthand for all predicates
-                            collect (if name `(:subject ,type-sub-constraint) `())))))
-
-(define-graph user-specific ("http://mu.semte.ch/graphs/user/")
-  ("foaf:Person"
-   (-> "foaf:firstName" "foaf:lastName" "schema:email" "foaf:mbox")
-   (<- "veeakker:hasBasket"))
-  ("foaf:OnlineAccount"
-   (-> "foaf:accountServiceHomepage" "foaf:accountName")
-   (<- "foaf:holdsAccount")))
-
-(define-graph something-specific ("http://mu.semte.ch/graphs/external-audit-trails/")
-  (_ (-> "ext:auditTrail")))
-
-(define-graph everything ("http://mu.semte.ch/application")
-  (_ (-> _)))
-
-(defmacro defgraph (name (graph) &body type-specifications)
-  "Compact DSL for specifying common graph constraints."
-  `(add-or-replace-graph
-    (make-graph-specification
-     :name ',name
-     :base-graph ,graph
-     :constraints ',(loop for (name . predicate-specifications) in type-specifications
-                          for type-sub-constraint = (if (eq name '_) nil `(:type ,name))
+     :constraints ',(loop for (type-name . predicate-specifications) in type-specifications
+                          for type-sub-constraint = (if (eq type-name '_) nil `(:type ,type-name))
                           if predicate-specifications
                             append (loop for (direction predicate) on predicate-specifications
                                            by #'cddr
@@ -172,9 +199,9 @@
                                          collect `(,@type-constraint ,@predicate-constraint))
                           else
                             ;; shorthand for all predicatse
-                            collect (if name `(:subject ,type-sub-constraint) `())))))
+                            collect (if type-name `(:subject ,type-sub-constraint) `())))))
 
-(defgraph user-specific ("http://mu.semte.ch/graphs/user/")
+(define-graph user-specific ("http://mu.semte.ch/graphs/user/")
   ("foaf:Person"
    -> "foaf:firstName"
    -> "foaf:lastName"
@@ -186,11 +213,126 @@
    -> "foaf:accountName"
    <- "foaf:holdsAccount"))
 
-(defgraph something-specific ("http://mu.semte.ch/graphs/external-audit-trails/")
+(define-graph something-specific ("http://mu.semte.ch/graphs/external-audit-trails/")
   (_ -> "ext:auditTrail"))
 
-(defgraph everything ("http://mu.semte.ch/application")
+(define-graph everything ("http://mu.semte.ch/application")
   (_ -> _))
+
+(defconstant _ '_ "Empty node symbolizing the default or no value.")
+
+(defmacro with-scope (scope &body body)
+  `(let ((current-scope ,scope))
+     (declare (special current-scope))
+     ,@body))
+
+(defun grant* (&key scopes graph-specs rights allowed-groups)
+  "Functional variant to apply a grant."
+  (dolist (scope scopes)
+    (dolist (allowed-group allowed-groups)
+      (dolist (graph-spec graph-specs)
+        (push (make-access-grant
+               :usage rights
+               :graph-spec graph-spec
+               :scope scope
+               :access allowed-group)
+              *grants*)))))
+
+(declaim (special current-scope))
+
+(defmacro grant (right &key to-graph for-allowed-group to for)
+  (flet ((ensure-list (thing)
+           (if (listp thing)
+               `'(,@thing)
+               `'(,thing))))
+    `(grant* :scopes (if (boundp 'current-scope)
+                         (list current-scope)
+                         (list '_))
+             :graph-specs ,(ensure-list to-graph)
+             :rights (list ,@(loop for item in (if (listp right) right (list right))
+                                   collect (intern (symbol-name item) :keyword)))
+             :allowed-groups ,(ensure-list for-allowed-group))))
+
+(grant (read write)
+       :to-graph user-specific
+       :for-allowed-group "user")
+
+(grant (read write)
+       :to user-specific
+       :for-token "user")
+
+(grant read
+       :to public
+       :for-token "public")
+
+(grant read
+       :to delivered-orders
+       :for-token "user")
+
+(with-scope "service:image-service"
+  (grant (read write)
+         :to files
+         :for-token "public"))
+
+(defun supply-allowed-group* (allowed-group constraint &rest args &key query parameters &allow-other-keys)
+  "Indicates when an allowed-group should be supplied.
+
+Understands two constraints natively:
+- NIL :: same as always
+- ALWAYS :: always supply this group, no rules necessary.
+- NEVER :: never supply this group, may not define group.
+- QUERY :: construct access-by-query with supplied query and parameters
+
+In case constraint is not understood, make-instance is called with constraint :name allowed-groups args"
+  (declare (ignore parameters))
+  (unless constraint
+    (if query
+        (setf constraint 'query)
+        (setf constraint 'always)))
+
+  (let ((instance (case constraint
+                    (always
+                     (make-instance 'always-accessible
+                                    :name allowed-group))
+                    (never nil)
+                    (query
+                     (make-instance 'access-by-query
+                                    :name allowed-group
+                                    :query (or (getf args :query)
+                                               (error "Must supply query when constructing allowed group by query for group ~A"
+                                                      allowed-group))
+                                    :vars (getf args :parameters)))
+                    (otherwise (apply #'make-instance
+                                      constraint
+                                      args)))))
+    (when instance
+      (push instance *access-specifications*))))
+
+(defmacro supply-token (group &body args &key constraint parameters query &allow-other-keys)
+  (declare (ignore query))
+  (let ((args (copy-list args)))
+    ;; quote arguments when they're lists
+    (when (and parameters
+               (listp parameters)
+               (every #'stringp parameters))
+      (setf (getf args :parameters)
+            `(list ,@parameters)))
+    (when (and constraint (not (listp constraint)))
+      (setf constraint `',constraint))
+    `(supply-allowed-groups* ,group
+                             ,constraint
+                             ,@args))))
+
+(supply-token "public")
+
+(supply-token "user"
+  :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          PREFIX musession: <http://mu.semte.ch/vocabularies/session/>
+          SELECT ?id WHERE {
+           <SESSION_ID> ext:hasAccount/mu:uuid ?id.
+          }"
+  :parameters ("id"))
 
 ;; (setf *rights*
 ;;       (list (make-access-grant
@@ -213,6 +355,14 @@
 ;; ;; users can read and write their own data
 ;; (grant (:read :write) :to user :for private) 
 
+;; (supply-token "user"
+;;               :when (query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;                             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;                             PREFIX musession: <http://mu.semte.ch/vocabularies/session/>
+;;                             SELECT ?id WHERE {
+;;                              <SESSION_ID> ext:hasAccount/mu:uuid ?id.
+;;                             }")
+;;               :parameters ("id"))
 
 ;; (define-user-group account
 ;;   :access (by-query :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
@@ -333,3 +483,5 @@
 ;;              :usage '(:read)
 ;;              :graph-spec 'clean
 ;;              :access "clean")))
+
+

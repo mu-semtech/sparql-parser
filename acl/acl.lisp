@@ -110,6 +110,7 @@
   (constraints nil))
 
 (defstruct access-grant
+  (scope (list '_))
   (usage (list :read))
   (graph-spec (error "Must supply graph spec") :type symbol)
   (access (error "Must supply which grant allows access") :type string))
