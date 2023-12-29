@@ -152,11 +152,6 @@
   (remove-if-not (lambda (grant) (string= (access-grant-access grant) name))
                  *rights*))
 
-(defparameter *active-access-rights* nil
-  ;; TODO: currently not used.  Not sure if this should be globally
-  ;; available as contextual information.
-  "List of the current call's access rights.")
-
 (defun find-access-grant-by-name (name)
   "Find access right by name."
   (find name *rights*
