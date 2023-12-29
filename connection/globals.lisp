@@ -22,7 +22,7 @@ providing a call scope.")
                                 mu-session-id
                                 mu-auth-sudo
                                 mu-auth-allowed-groups
-                                mu-call-scope)
+                                (mu-call-scope 'acl:_))
                              &body body)
   `(let ((*mu-call-id* ,mu-call-id)
          (*mu-session-id* ,mu-session-id)

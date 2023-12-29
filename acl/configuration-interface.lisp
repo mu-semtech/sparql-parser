@@ -80,15 +80,15 @@
 (defmacro grant (right &key to-graph for-allowed-group to for)
   (flet ((ensure-list (thing)
            (if (listp thing)
-               `'(,@thing)
-               `'(,thing))))
+               `(,@thing)
+               `(,thing))))
     `(grant* :scopes (if (boundp 'current-scope)
                          (list current-scope)
                          (list '_))
-             :graph-specs ,(append (ensure-list to-graph) (ensure-list to))
+             :graph-specs ',(append (ensure-list to-graph) (ensure-list to))
              :rights (list ,@(loop for item in (if (listp right) right (list right))
                                    collect (intern (symbol-name item) :keyword)))
-             :allowed-groups ,(append (ensure-list for-allowed-group) (ensure-list for)))))
+             :allowed-groups ',(append (ensure-list for-allowed-group) (ensure-list for)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

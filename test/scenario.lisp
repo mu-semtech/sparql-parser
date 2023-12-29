@@ -56,52 +56,94 @@
        :schema "http://schema.org/"
        :books "http://example.com/books/"
        :favorites "http://mu.semte.ch/favorites/")
-     (setf acl::*access-specifications*
-           (list (make-instance 'acl::always-accessible
-                                :name "public")
-                 (make-instance 'acl::access-by-query
-                                :name "user"
-                                :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-                                        PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-                                        SELECT ?id WHERE {
-                                          <SESSION_ID> session:account/mu:uuid ?id.
-                                        }"
-                                :vars (list "id"))
-                 (make-instance 'acl::access-by-query
-                                :name "admin"
-                                :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-                                        PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-                                        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-                                        SELECT ?id WHERE {
-                                          <SESSION_ID> session:account/ext:hasRole ext:Administrator.
-                                        }"
-                                :vars nil)))
-     (setf acl::*graphs*
-           (list (acl::make-graph-specification
-                  :name 'acl::public-data
-                  :base-graph "http://mu.semte.ch/graphs/public"
-                  :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person"))
-                                 (:subject (:type "http://schema.org/Book"))))
-                 (acl::make-graph-specification
-                  :name 'acl::user-data
-                  :base-graph "http://mu.semte.ch/graphs/personal/"
-                  :constraints '((:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasBook"))
-                                 (:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasSuperFavorite"))
-                                 (:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasFavoriteAuthor")
-                                  :object (:type "http://xmlns.com/foaf/0.1/Person"))))))
-     (setf acl::*rights*
-           (list (acl::make-access-grant
-                  :usage '(:read :write)
-                  :graph-spec 'acl::public-data
-                  :access "admin")
-                 (acl::make-access-grant
-                  :usage '(:read)
-                  :graph-spec 'acl::public-data
-                  :access "public")
-                 (acl::make-access-grant
-                  :usage '(:read :write)
-                  :graph-spec 'acl::user-data
-                  :access "user")))
+
+     (acl:supply-allowed-group "public")
+
+     (acl:supply-allowed-group "user"
+       :parameters ("id")
+       :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+               PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+               SELECT ?id WHERE {
+                 <SESSION_ID> session:account/mu:uuid ?id.
+               }")
+
+     (acl:supply-allowed-group "admin"
+       :parameters ()
+       :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+               PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+               PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+               SELECT ?account WHERE {
+                 <SESSION_ID> session:account ?account.
+                 ?account ext:hasRole ext:Administrator.
+               }")
+
+     ;; (setf acl::*access-specifications*
+     ;;       (list (make-instance 'acl::always-accessible
+     ;;                            :name "public")
+     ;;             (make-instance 'acl::access-by-query
+     ;;                            :name "user"
+     ;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+     ;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+     ;;                                    SELECT ?id WHERE {
+     ;;                                      <SESSION_ID> session:account/mu:uuid ?id.
+     ;;                                    }"
+     ;;                            :vars (list "id"))
+     ;;             (make-instance 'acl::access-by-query
+     ;;                            :name "admin"
+     ;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+     ;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+     ;;                                    PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+     ;;                                    SELECT ?id WHERE {
+     ;;                                      <SESSION_ID> session:account/ext:hasRole ext:Administrator.
+     ;;                                    }"
+     ;;                            :vars nil)))
+
+     (acl:define-graph acl::public-data ("http://mu.semte.ch/graphs/public")
+       ("foaf:Person" acl::-> acl::_)
+       ("schema:Book" acl::-> acl::_))
+     (acl:define-graph acl::user-data ("http://mu.semte.ch/graphs/personal/")
+       (acl::_
+        acl::-> "ext:hasBook"
+        acl::-> "ext:hasSuperFavorite")
+       ("foaf:Person" acl::<- "ext:hasFavoriteAuthor"))
+
+     ;; (setf acl::*graphs*
+     ;;       (list (acl::make-graph-specification
+     ;;              :name 'acl::public-data
+     ;;              :base-graph "http://mu.semte.ch/graphs/public"
+     ;;              :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person"))
+     ;;                             (:subject (:type "http://schema.org/Book"))))
+     ;;             (acl::make-graph-specification
+     ;;              :name 'acl::user-data
+     ;;              :base-graph "http://mu.semte.ch/graphs/personal/"
+     ;;              :constraints '((:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasBook"))
+     ;;                             (:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasSuperFavorite"))
+     ;;                             (:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasFavoriteAuthor")
+     ;;                              :object (:type "http://xmlns.com/foaf/0.1/Person"))))))
+
+     (acl:grant (acl::read acl::write)
+                :to acl::public-data
+                :for "admin")
+     (acl:grant (acl::read)
+                :to acl::public-data
+                :for "public")
+     (acl:grant (acl::read acl::write)
+                :to acl::user-data
+                :for "user")
+
+     ;; (setf acl::*rights*
+     ;;       (list (acl::make-access-grant
+     ;;              :usage '(:read :write)
+     ;;              :graph-spec 'acl::public-data
+     ;;              :access "admin")
+     ;;             (acl::make-access-grant
+     ;;              :usage '(:read)
+     ;;              :graph-spec 'acl::public-data
+     ;;              :access "public")
+     ;;             (acl::make-access-grant
+     ;;              :usage '(:read :write)
+     ;;              :graph-spec 'acl::user-data
+     ;;              :access "user")))
      ;; execute body
      ,@body))
 
@@ -127,7 +169,8 @@
                       sessions:janeuuid session:account accounts:janeuuid1.
                       accounts:januuid1 mu:uuid \"janeuuid1\".
                       sessions:adminuuid session:account accounts:adminuuid1.
-                      accounts:adminuuid1 ext:hasRole ext:Administrator.
+                      accounts:adminuuid1 ext:hasRole ext:Administrator;
+                        mu:uuid \"adminuuid1\".
                     }
                   }"
                  #-be-cautious 'base-string #+be-cautious 'string)))
@@ -140,7 +183,10 @@
   (store-initial-session-data)
 
   (with-acl-config
+    (format t "~&Joll is an administrator.~%")
     (with-impersonation-for :joll
+      (format t "~&Can add authors.~%")
+
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
@@ -155,6 +201,7 @@
             foaf:name \"Daniel Kahneman\".
         }")
 
+      (format t "~&Can add authors. (2)~%")
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
@@ -173,6 +220,8 @@
             schema:creator authors:daniel.
         }")
 
+      (format t "~&Can add extra book for author.~%")
+
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
@@ -184,6 +233,8 @@
             schema:name \"Ready for Anything\";
             schema:creator authors:david .
         }")
+
+      (format t "~&Can add extra author to book.~%")
 
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
@@ -198,6 +249,9 @@
         }"))
 
     (with-impersonation-for :jack
+      (format t "~&Jack is a user.~%")
+
+      (format t "~&Jack can add a favorite.~%")
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
@@ -209,7 +263,9 @@
         INSERT DATA {
           favorites:me ext:hasBook books:gtd, books:fastAndSlow.
         }")
+
       ;; jack likes all authors of the book Abundance
+      (format t "~&Jack can add conditional favorite authors.~%")
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
@@ -224,6 +280,7 @@
           books:abundance schema:creator ?author.
         }")
       ;; this data has no place to live, the target must be a foaf:Person and it is a book.
+      (format t "~&Jack can't add books as favorite author.~%")
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
@@ -236,5 +293,33 @@
           favorites:me ext:hasFavoriteAuthor ?book.
         } WHERE {
           books:abundance schema:creator/^schema:creator ?book.
-        }"))))
+        }")
+      ;; let's check if jack has favorite authors
+      (format t "~&Jack can ask for favorite authors.~%")
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        ASK {
+          favorites:me ext:hasFavoriteAuthor ?book. 
+        }")      
+      ;; then let's describe the values
+      (format t "~&Jack can describe favorite authors.~%")
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        DESCRIBE ?book {
+          favorites:me ext:hasFavoriteAuthor ?book. 
+        }")
+      
+      )))
 

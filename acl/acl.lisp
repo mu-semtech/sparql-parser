@@ -200,7 +200,7 @@ variables."
   (loop for token in tokens
         for access-grant = (access-token-access token)
         for token-name = (access-grant-access access-grant)
-        for token-scopes = (access-grant-scope access-grant)
+        for token-scopes = (access-grant-scopes access-grant)
         append (loop for right in *rights*
                      when (and (eq (access-grant-access right) token-name)
                                (or (not usage)
@@ -235,7 +235,7 @@ MATCH may be updated in place but updated MATCH is returned."
             (remove-dataset-clauses)
             (remove-graph-graph-patterns)
             (add-default-base-decl-to-prologue)
-            (add-from-graphs (or (accessible-graphs :tokens tokens :usage usage :scope (mu-call-scope))
+            (add-from-graphs (or (graphs-for-tokens tokens usage (mu-call-scope))
                                  (list "http://mu-authorization.service.semantic.works/empty-graph"))))))))
 
 (defmacro do-graph-constraint ((graph-constraint &optional (collection 'do)) (position kind value) &body body)

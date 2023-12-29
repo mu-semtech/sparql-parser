@@ -369,9 +369,38 @@ destructured bindings of LAMBDA-LIST as per DESTRUCTURING-BIND."
                          `(,(first submatches)
                            ,@dataset-clauses
                            ,@(cdr submatches))))
-               match))))
-  ;; TODO: support ebnf::|AskQuery| and ebnf::|DescribeQuery|
-  )
+               match))
+      (ebnf::|DescribeQuery|
+             ;; Always starts with DESCRIBE then either multiple VarOrIri elements or "*".
+             ;; Map over (rest submatches) and collect into the right bin:
+             (let ((describe-word (first (sparql-parser:match-submatches match)))
+                   (vars (list (second (sparql-parser:match-submatches match))))
+                   where-list
+                   solution-modifier)
+               ;; collect submatches by type
+               (dolist (submatch (cddr (sparql-parser:match-submatches match)))
+                 (match-symbol-case submatch
+                   (ebnf::|VarOrIri| (push submatch vars))
+                   (ebnf::|WhereClause| (push submatch where-list))
+                   (ebnf::|SolutionModifier| (setf solution-modifier submatch))
+                   (otherwise (error "Unknown match received in DescribeQuery"))))
+               ;; reconstruct submatches
+               (setf (match-submatches match)
+                     `(,describe-word
+                       ,@(reverse vars)
+                       ,@dataset-clauses
+                       ,@where-list
+                       ,solution-modifier))
+               match))
+      (ebnf::|AskQuery|
+             ;; Only need to replace all dataset-clauses or inject them in the right spot.
+             (let ((ask-word (first (match-submatches match))))
+               (destructuring-bind (solution-modifier where-clause &rest args)
+                   (reverse (match-submatches match))
+                 (declare (ignore args))
+                 (setf (match-submatches match)
+                       `(,ask-word ,@dataset-clauses ,where-clause ,solution-modifier))
+                 match))))))
 
 (defun add-default-base-decl-to-prologue (sparql-ast &optional (base-uri "http://mu.semte.ch/prefix/local/"))
   "Adds a default base decl as the first element of PROLOGUE."

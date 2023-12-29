@@ -90,4 +90,3 @@ of JSOWN compatible BINDINGS."
   ;; TODO: move this file into a module about query execution.
   `(let ((,bindings (batch-map-solutions-for-select-query* ,query :for ,for :batch-size ,batch-size :usage ,usage)))
      (list ,@body)))
-
