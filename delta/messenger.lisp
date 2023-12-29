@@ -39,7 +39,10 @@
       (with-slots (endpoint method) handler
         (dex:request endpoint
                      :method method
-                     :content (jsown:to-json (delta-to-jsown :inserts inserts :deletes deletes)))))))
+                     :content (jsown:to-json
+                               (delta-to-jsown :inserts inserts
+                                               :deletes deletes
+                                               :scope (connection-globals:mu-call-scope))))))))
 
 (defun quad-to-jsown-binding (quad)
   "Converts QUAD to a jsown binding."
@@ -48,11 +51,15 @@
     ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
     ("object" (handle-update-unit::match-as-binding (getf quad :object)))))
 
-(defun delta-to-jsown (&key inserts deletes)
+(defun delta-to-jsown (&key inserts deletes scope)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
-  (jsown:new-js
-    ("inserts" (mapcar #'quad-to-jsown-binding inserts))
-    ("deletes" (mapcar #'quad-to-jsown-binding deletes))))
+  (let ((delta
+          (jsown:new-js
+            ("inserts" (mapcar #'quad-to-jsown-binding inserts))
+            ("deletes" (mapcar #'quad-to-jsown-binding deletes)))))
+    (when (and scope (not (eq scope acl:_)))
+      (setf (jsown:val delta "scope") scope))
+    delta))
 
 (defun delta-notify (&key inserts deletes)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
