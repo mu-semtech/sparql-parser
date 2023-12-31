@@ -214,8 +214,10 @@ variables."
 
 (defun graphs-for-tokens (tokens usage scope)
   "Yields the graphs which can be accessed from TOKENS."
-  (loop for (token . graph-specification) in (accessible-graphs :tokens tokens :usage usage :scope scope)
-        collect (token-graph-specification-graph token graph-specification)))
+  (remove-duplicates
+   (loop for (token . graph-specification) in (accessible-graphs :tokens tokens :usage usage :scope scope)
+         collect (token-graph-specification-graph token graph-specification))
+   :test #'string=))
 
 (defun token-graph-specification-graph (token graph-specification)
   "Assuming token belongs to graph-specification, yields the corresponding graph URL."
