@@ -43,13 +43,13 @@
 
 (defmacro with-acl-config (&body body)
   "Executes body with the access rights specification required for these tests."
-  ;; TODO: specify access rights for our case
+
   `(let ((acl::*prefixes* nil)
          (acl::*access-specifications* nil)
          (acl::*graphs* nil)
          (acl::*rights* nil))
      ;; initialize rights
-     (acl::define-prefixes ;; TODO: use prefixes and remove unnecessary
+     (acl::define-prefixes
        :foaf "http://xmlns.com/foaf/0.1/"
        :authors "http://example.com/authors/"
        :ext "http://mu.semte.ch/vocabularies/ext/"
@@ -77,27 +77,6 @@
                  ?account ext:hasRole ext:Administrator.
                }")
 
-     ;; (setf acl::*access-specifications*
-     ;;       (list (make-instance 'acl::always-accessible
-     ;;                            :name "public")
-     ;;             (make-instance 'acl::access-by-query
-     ;;                            :name "user"
-     ;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-     ;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-     ;;                                    SELECT ?id WHERE {
-     ;;                                      <SESSION_ID> session:account/mu:uuid ?id.
-     ;;                                    }"
-     ;;                            :vars (list "id"))
-     ;;             (make-instance 'acl::access-by-query
-     ;;                            :name "admin"
-     ;;                            :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
-     ;;                                    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-     ;;                                    PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-     ;;                                    SELECT ?id WHERE {
-     ;;                                      <SESSION_ID> session:account/ext:hasRole ext:Administrator.
-     ;;                                    }"
-     ;;                            :vars nil)))
-
      (acl:define-graph acl::public-data ("http://mu.semte.ch/graphs/public")
        ("foaf:Person" acl::-> acl::_)
        ("schema:Book" acl::-> acl::_))
@@ -106,20 +85,6 @@
         acl::-> "ext:hasBook"
         acl::-> "ext:hasSuperFavorite")
        ("foaf:Person" acl::<- "ext:hasFavoriteAuthor"))
-
-     ;; (setf acl::*graphs*
-     ;;       (list (acl::make-graph-specification
-     ;;              :name 'acl::public-data
-     ;;              :base-graph "http://mu.semte.ch/graphs/public"
-     ;;              :constraints '((:subject (:type "http://xmlns.com/foaf/0.1/Person"))
-     ;;                             (:subject (:type "http://schema.org/Book"))))
-     ;;             (acl::make-graph-specification
-     ;;              :name 'acl::user-data
-     ;;              :base-graph "http://mu.semte.ch/graphs/personal/"
-     ;;              :constraints '((:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasBook"))
-     ;;                             (:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasSuperFavorite"))
-     ;;                             (:predicate (:value "http://mu.semte.ch/vocabularies/ext/hasFavoriteAuthor")
-     ;;                              :object (:type "http://xmlns.com/foaf/0.1/Person"))))))
 
      (acl:grant (acl::read acl::write)
                 :to acl::public-data
@@ -131,20 +96,6 @@
                 :to acl::user-data
                 :for "user")
 
-     ;; (setf acl::*rights*
-     ;;       (list (acl::make-access-grant
-     ;;              :usage '(:read :write)
-     ;;              :graph-spec 'acl::public-data
-     ;;              :access "admin")
-     ;;             (acl::make-access-grant
-     ;;              :usage '(:read)
-     ;;              :graph-spec 'acl::public-data
-     ;;              :access "public")
-     ;;             (acl::make-access-grant
-     ;;              :usage '(:read :write)
-     ;;              :graph-spec 'acl::user-data
-     ;;              :access "user")))
-     ;; execute body
      ,@body))
 
 (defmacro with-impersonation-for (user &body body)
