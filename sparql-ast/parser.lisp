@@ -488,23 +488,49 @@ as the starting point in STRING."
        ,state
      ,@body))
 
-(defun parse-sparql-string (string &rest args &key (max-steps 10000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
-  "Parses STRING as a SPARQL string either a QueryUnit or an UpdateUnit."
+(defun parse-sparql-string (string
+                            &rest args
+                            &key
+                              (max-steps 10000)
+                              (print-intermediate-states nil)
+                              (print-solution nil)
+                              (as-ebnf t)
+                              (start-symbols (list 'ebnf::|QueryUnit| 'ebnf::|UpdateUnit|)))
+  "Parses STRING as a SPARQL string either a QueryUnit or an UpdateUnit.
+
+Types of query can be overridden optionally using :START-SYMBOLS keyword.
+
+The first matching start symbol is returned and no further parsing
+occurs.  If no matches could be found, the ebnf-parse-error with the
+longest match is thrown."
   (declare (ignore max-steps print-intermediate-states print-solution as-ebnf))
-  (let ((parser-setup-initial-state (get-parser-setup-state)))
-    (handler-case
-        (let ((sparql-parser::*start-symbol* 'ebnf::|QueryUnit|))
-          (apply #'sparql-parser::parse-string string args))
-      (ebnf-parse-error (query-parsing-error)
-        (handler-case
-            (let ((sparql-parser::*start-symbol* 'ebnf::|UpdateUnit|))
-              (with-reset-parser-setup-state parser-setup-initial-state
-                (apply #'sparql-parser::parse-string string args)))
-          (ebnf-parse-error (update-parsing-error)
-            (if (>= (slot-value query-parsing-error 'index)
-                    (slot-value update-parsing-error 'index))
-                (error "~A" query-parsing-error)
-                (error "~A" update-parsing-error))))))))
+  (setf *scanning-string* string) ; initialize the scanning string early
+                                  ; on because it will be shadowed by
+                                  ; with-reset-parser-setup-state
+  (let ((parser-setup-initial-state (get-parser-setup-state))
+        (keyword-args-to-pass (loop for (key value)
+                                      on args by #'cddr
+                                    unless (eq key :start-symbols)
+                                      append (list key value))))
+    (flet ((execute-query-parsing (start-symbol)
+             (handler-case
+                 (let ((sparql-parser::*start-symbol* start-symbol))
+                   (cons :ok
+                         (with-reset-parser-setup-state parser-setup-initial-state
+                           (apply #'sparql-parser::parse-string string keyword-args-to-pass))))
+               (ebnf-parse-error (parsing-error)
+                 (cons :error parsing-error)))))
+      (let ((errors-as-list
+              (loop for start-symbol in start-symbols
+                    for (kind . result) = (execute-query-parsing start-symbol)
+                    if (eq kind :ok)
+                      ;; NOTE: early return when we found a solution
+                      do (return-from parse-sparql-string result)
+                    else
+                      collect result)))
+        (error (alexandria:extremum errors-as-list
+                                    #'>
+                                    :key (alexandria:rcurry #'slot-value 'index)))))))
 
 (defmacro with-parser-setup (&body body)
   "Executes  body within the parser setup scope."
