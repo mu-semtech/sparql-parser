@@ -147,15 +147,11 @@
                    (let ((submatches (sparql-parser:match-submatches rdf-literal)))
                      (if (= (length submatches) 3)           ; must be with iri definition
                          (let* ((iri (third submatches))
-                                (scanned-token (first-found-scanned-token iri))
                                 (maybe-expanded-iri (detect-quads-processing-handlers::|iri| iri)))
                            (when (consp maybe-expanded-iri)
                              ;; TODO: verify this replacement cannot contain parsed characters that need escaping in a URI.
-                             (setf (sparql-parser:scanned-token-string scanned-token)
-                                   (concatenate 'string
-                                                "<"
-                                                (cdr maybe-expanded-iri)
-                                                ">")))
+                             (setf (sparql-parser:match-submatches iri)
+                                   (list (sparql-manipulation:iriref (cdr maybe-expanded-iri)))))
                            rdf-literal)
                          rdf-literal))))
 
