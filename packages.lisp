@@ -17,7 +17,8 @@
            #:pick-lists
            #:report-exponential-backoff-failure
            #:with-exponential-backoff-retry
-           #:jsown-dedup))
+           #:jsown-dedup
+           #:depth-first-search))
 
 (defpackage :ebnf
   (:use :common-lisp)
@@ -43,6 +44,7 @@
            #:match-term-p
            #:make-match
            #:make-scanned-token
+           #:scanned-token-p
            #:copy-match))
 
 (defpackage #:sparql-generator

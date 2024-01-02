@@ -221,3 +221,12 @@ and the keys are therefore in the same order."
   (remove-duplicates jsown-list
                      :test (alexandria:rcurry #'jsown-equal :same-structure-p same-structure-p)))
 
+;;;; tree search
+(defun depth-first-search (&key start condition descend)
+  (if (funcall condition start)
+      start
+      (loop for item in (funcall descend start)
+            if (depth-first-search :start item
+                                   :condition condition
+                                   :descend descend)
+              return it)))

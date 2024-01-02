@@ -15,7 +15,6 @@
 ;;;; Note the enrichment of PNAME_LN and PNAME_NS in which their string
 ;;;; representation is overwritten by the full URI representation.
 
-
 (handle ebnf::|UpdateUnit|
         :local-context (;; TODO: Prefixes and Base should not stick
                         ;; through Update portions but this is assumed
@@ -134,10 +133,26 @@
         :process (ebnf::|Var| ebnf::|GraphTerm|))
 (handle ebnf::|GraphTerm|
         :todo "Further expand boolean literal."
-        :todo "Document RDFLiteral not being processed further."
-        :process (ebnf::|iri|)
-        :accept (ebnf::|RDFLiteral| ebnf::|BooleanLiteral| ebnf::|NumericLiteral|)
+        :process (ebnf::|iri| ebnf::|RDFLiteral|)
+        :accept (ebnf::|BooleanLiteral| ebnf::|NumericLiteral|)
         :not-supported (ebnf::|BlankNode| ebnf::|SPARQLNIL|))
+(handle ebnf::|RDFLiteral|
+        :function ((rdf-literal)
+                   (let ((submatches (sparql-parser:match-submatches rdf-literal)))
+                     (if (= (length submatches) 3)           ; must be with iri definition
+                         (let* ((iri (third submatches))
+                                (scanned-token (first-found-scanned-token iri))
+                                (maybe-expanded-iri (detect-quads-processing-handlers::|iri| iri)))
+                           (when (consp maybe-expanded-iri)
+                             ;; TODO: verify this replacement cannot contain parsed characters that need escaping in a URI.
+                             (setf (sparql-parser:scanned-token-string scanned-token)
+                                   (concatenate 'string
+                                                "<"
+                                                (cdr maybe-expanded-iri)
+                                                ">")))
+                           rdf-literal)
+                         rdf-literal))))
+
 (handle ebnf::|iri|
         :process (ebnf::|PrefixedName|)
         :accept (ebnf::|IRIREF|))
@@ -298,3 +313,10 @@ This only exists for :modify and it supports :delete-patterns
 :insert-patterns :query.  If one could not be found an empty list is
 returned."
   (getf (car (operation-data operation)) subfield))
+
+(defun first-found-scanned-token (match)
+  "Optimistic search for a scanned token in submatches."
+  (support:depth-first-search
+   :start match
+   :condition #'sparql-parser:scanned-token-p
+   :descend #'sparql-parser:match-submatches))
