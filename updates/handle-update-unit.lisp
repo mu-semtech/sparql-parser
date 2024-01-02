@@ -308,7 +308,8 @@ variables are missing this will not lead to a pattern."
          (fill-in-pattern (pattern bindings)
            (loop for (place match) on pattern by #'cddr
                  if (and (sparql-parser:match-p match)
-                         (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|))
+                         (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
+                         (jsown:keyp bindings (subseq (sparql-parser:terminal-match-string match) 1))) ; binding contains key (OPTIONAL in queries)
                    append (list place
                                 (let ((solution (jsown:val bindings (subseq (sparql-parser:terminal-match-string match) 1))))
                                   (if solution
