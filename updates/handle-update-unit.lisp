@@ -116,9 +116,12 @@ This is the inverse of binding-as-match and can be used to create delta messages
            ;; TODO: ensure hathatiri has an expandad iri in its primitive string when expanding if it is a prefixed name
            (let ((value-string (detect-quads::primitive-match-string (first (sparql-parser:match-submatches ebnf-value-string))))
                  (langtag-or-hathat-string (and langtag-or-hathat
+                                                (not hathat-iri)
                                                 (detect-quads::primitive-match-string (first (sparql-parser:match-submatches langtag-or-hathat)))))
                  (hathat-iri-string (and hathat-iri
-                                         (detect-quads::primitive-match-string hathat-iri))))
+                                         (sparql-parser:scanned-token-effective-string
+                                          (detect-quads:first-found-scanned-token
+                                           hathat-iri)))))
              (cond (hathat-iri (jsown:new-js
                                 ("value" value-string)
                                 ("datatype" hathat-iri-string)

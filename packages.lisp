@@ -241,7 +241,8 @@
    #:operation-data
    #:operation-data-subfield
    #:quad-term-uri=
-   #:quad-term-uri))
+   #:quad-term-uri
+   #:first-found-scanned-token))
 
 (defpackage #:handle-update-unit
   (:use :common-lisp)
