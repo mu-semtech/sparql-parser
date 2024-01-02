@@ -17,8 +17,17 @@
 
 
 (handle ebnf::|UpdateUnit|
-        :local-context (:operations nil
-                        :prefixes nil ;; TODO: verify Prefixes and Base should stick through Update portions separated by ;
+        :local-context (;; TODO: Prefixes and Base should not stick
+                        ;; through Update portions but this is assumed
+                        ;; in our stack.  Based on
+                        ;; [[https://www.w3.org/TR/2013/REC-sparql11-update-20130321/#deleteData]]
+                        ;; Example 4 and seen in
+                        ;; [[https://www.w3.org/TR/2013/REC-sparql11-update-20130321/##mappingRequestsToOperations]]
+                        ;; R_1 ; R2 = Tr(Tr(GS, R_1), Tr(GS, R_2)) in
+                        ;; which a new GS is produced by R_1 on which
+                        ;; R_2 is applied.
+                        :operations nil
+                        :prefixes nil
                         :base nil)
         :process (ebnf::|Update|)
         :after ((response match)
