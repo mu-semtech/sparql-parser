@@ -68,7 +68,10 @@ same logic to construct the submatches."
                       ,(make-token-match 'ebnf::|LANGTAG|
                                          (concatenate 'string "@" (jsown:val solution "xml:lang"))))))
             ((and (jsown:val-safe solution "datatype")
-                  (string= type "literal"))
+                  (or (string= type "literal")
+                      ;; virtuoso seems to emit typed-literal in some (all?) cases,
+                      ;; sparql1.1 indicates to use literal
+                      (string= type "typed-literal")))
              ;; datatype based strings
              (make-nested-match
               `(ebnf::|RDFLiteral|
