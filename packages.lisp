@@ -16,7 +16,8 @@
            #:typed-plist
            #:pick-lists
            #:report-exponential-backoff-failure
-           #:with-exponential-backoff-retry))
+           #:with-exponential-backoff-retry
+           #:jsown-dedup))
 
 (defpackage :ebnf
   (:use :common-lisp)
@@ -78,7 +79,7 @@
 
 (defpackage #:acl
   (:use :common-lisp #:sparql-manipulation #:connection-globals)
-  (:import-from #:support #:->)
+  (:import-from #:support #:-> #:jsown-dedup)
   (:export #:apply-access-rights
            #:with-test-code-json-access-tokens
            #:dispatch-quads

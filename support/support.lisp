@@ -205,3 +205,19 @@ elements.  The value returned is consed."
                                         :initial-pause-interval (* pause-interval-multiplier initial-pause-interval)
                                         :pause-interval-multiplier pause-interval-multiplier)))
         (apply #'values response))))
+
+;;;; jsown supporting functions
+(defun jsown-equal (a b &key same-structure-p)
+  "Compares two jsown structures
+
+SAME-STRUCTURE-P indicates the objects were constructed in the same way
+and the keys are therefore in the same order."
+  (if (null same-structure-p)
+      (error "jsown-equality is only implemented for same structure-p at this point.")
+      (equal a b)))
+
+(defun jsown-dedup (jsown-list &key same-structure-p)
+  "Deduplicates a jsown structure."
+  (remove-duplicates jsown-list
+                     :test (alexandria:rcurry #'jsown-equal :same-structure-p same-structure-p)))
+

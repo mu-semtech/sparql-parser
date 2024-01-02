@@ -68,6 +68,16 @@
   (access (error "Must supply ACCESS when creating ACCESS-TOKEN") :type access-grant)
   (parameters nil :type list))
 
+(defun access-token-equal-p (a b)
+  "Returns truethy iff the two access tokens are the same."
+  (and (= (length (access-token-parameters a))
+          (length (access-token-parameters b)))
+       (every #'string=
+              (access-token-parameters a)
+              (access-token-parameters b))
+       (access-grant-equal-p (access-token-access a)
+                             (access-token-access b))))
+
 (defgeneric calculate-access-tokens (access &key mu-session-id)
   (:documentation "Yields truethy iff the given access is accessible within the current access context.")
   (:method ((access always-accessible) &key mu-session-id)
@@ -77,10 +87,10 @@
   (:method ((access access-by-query) &key mu-session-id)
     (when mu-session-id ; ignore when no mu-session-id supplied
       (let ((copied-ast (sparql-parser:make-sparql-ast
-                      :string (sparql-parser:sparql-ast-string (query access))
-                      :top-node (sparql-parser:copy-match
-                                 (sparql-parser:sparql-ast-top-node (query access))
-                                 t))))
+                         :string (sparql-parser:sparql-ast-string (query access))
+                         :top-node (sparql-parser:copy-match
+                                    (sparql-parser:sparql-ast-top-node (query access))
+                                    t))))
         (sparql-parser:with-sparql-ast copied-ast
           (let ((new-query (replace-iriref copied-ast :from "SESSION_ID" :to mu-session-id)))
             (unless (sparql-generator:is-valid new-query)
@@ -133,6 +143,22 @@
   (graph-spec (error "Must supply graph spec") :type symbol)
   (access (error "Must supply which grant allows access") :type string))
 
+(defun access-grant-equal-p (a b)
+  "Yields truethy iff two access grants are the same."
+  (flet ((equal-by (key test)
+           (funcall test
+                    (funcall key a)
+                    (funcall key b))))
+    (and (equal-by #'access-grant-access
+                   #'string=)
+         (equal-by #'access-grant-graph-spec
+                   #'eq)
+         (equal-by #'access-grant-usage
+                   #'alexandria:set-equal) ; could use eq in set-equal
+         (equal-by #'access-grant-scopes
+                   #'alexandria:set-equal) ; could use eq in set-equal
+         )))
+
 (defun make-access-grant (&rest args &key scopes usage graph-spec access)
   "Constructs a new access grant."
   (declare (ignore usage graph-spec access))
@@ -172,8 +198,10 @@
 
 (defun access-tokens-from-session-id (mu-session-id)
   "Calculates the access rights from the mu-session-id."
-  (loop for access in *access-specifications*
-        append (calculate-access-tokens access :mu-session-id mu-session-id)))
+  (remove-duplicates
+   (loop for access in *access-specifications*
+         append (calculate-access-tokens access :mu-session-id mu-session-id))
+   :test #'access-token-equal-p))
 
 (defmacro with-test-code-json-access-tokens ((json-token-string) &body body)
   `(let ((*test-code-access-tokens* (access-tokens-from-allowed-groups ,json-token-string)))
@@ -185,7 +213,8 @@
       (access-tokens-from-allowed-groups mu-auth-allowed-groups)
       (let ((tokens (access-tokens-from-session-id mu-session-id)))
         (setf (mu-auth-allowed-groups)
-              (jsown:to-json (mapcar #'access-token-jsown tokens)))
+              (jsown:to-json (jsown-dedup (mapcar #'access-token-jsown tokens)
+                                          :same-structure-p t)))
         tokens)))
 
 (defmacro with-access-tokens ((access-tokens-var) &body body)
