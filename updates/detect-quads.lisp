@@ -26,7 +26,13 @@
                         ;; which a new GS is produced by R_1 on which
                         ;; R_2 is applied.
                         :operations nil
-                        :prefixes nil
+                        :prefixes (list
+                                   (cons (sparql-parser:make-match
+                                          :term 'ebnf::|PNAME_NS|
+                                          :submatches (list (sparql-parser:make-scanned-token
+                                                             :start 0 :end 0 :token 'ebnf::|PNAME_NS|
+                                                             :string "xsd:")))
+                                         (sparql-manipulation:iriref "http://www.w3.org/2001/XMLSchema#")))
                         :base nil)
         :process (ebnf::|Update|)
         :after ((response match)
