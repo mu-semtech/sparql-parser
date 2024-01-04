@@ -80,14 +80,16 @@ The car is assumed to be a keyward and the cadr is assumed to be the expanded st
 
 (declaim (special current-scope))
 
-(defmacro grant (right &key to-graph for-allowed-group to for)
+(defmacro grant (right &key to-graph for-allowed-group to for scopes)
   (flet ((ensure-list (thing)
            (if (listp thing)
                `(,@thing)
                `(,thing))))
-    `(grant* :scopes (if (boundp 'current-scope)
-                         (list current-scope)
-                         (list '_))
+    `(grant* :scopes (cond
+                       (,scopes ,scopes)
+                       ((boundp 'current-scope)
+                        (list current-scope))
+                       (t (list '_)))
              :graph-specs ',(append (ensure-list to-graph) (ensure-list to))
              :rights (list ,@(loop for item in (if (listp right) right (list right))
                                    collect (intern (symbol-name item) :keyword)))
