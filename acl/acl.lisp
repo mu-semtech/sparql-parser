@@ -207,21 +207,30 @@
   `(let ((*test-code-access-tokens* (access-tokens-from-allowed-groups ,json-token-string)))
      ,@body))
 
-(defun calculate-and-cache-access-tokens (mu-auth-allowed-groups mu-session-id)
+(defun calculate-and-cache-access-tokens (mu-auth-allowed-groups mu-session-id mu-call-scope)
   "Calculates the access rights based on the mu-auth-allowed-groups string or mu-session-id."
-  (if mu-auth-allowed-groups
-      (access-tokens-from-allowed-groups mu-auth-allowed-groups)
-      (let ((tokens (access-tokens-from-session-id mu-session-id)))
-        (setf (mu-auth-allowed-groups)
-              (jsown:to-json (jsown-dedup (mapcar #'access-token-jsown tokens)
-                                          :same-structure-p t)))
-        tokens)))
+  ;; The code which consumes these access tokens shouldn't _require_
+  ;; only the correct access tokens to be set, they should parse it too,
+  ;; yet the filtering for scope here allows us to skip some
+  ;; computations.
+  (remove-if-not
+   (lambda (access-token)
+     (or t
+      (find mu-call-scope (access-grant-scopes (access-token-access access-token))
+            :test #'equal)))
+   (if mu-auth-allowed-groups
+       (access-tokens-from-allowed-groups mu-auth-allowed-groups)
+       (let ((tokens (access-tokens-from-session-id mu-session-id)))
+         (setf (mu-auth-allowed-groups)
+               (jsown:to-json (jsown-dedup (mapcar #'access-token-jsown tokens)
+                                           :same-structure-p t)))
+         tokens))))
 
 (defmacro with-access-tokens ((access-tokens-var) &body body)
   "Executes BODY with ACCESS-RIGHTS-VAR bound to access rights for current
 context.  Calculates access rights as needed and updates necessary
 variables."
-  `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id))))
+  `(let ((,access-tokens-var (calculate-and-cache-access-tokens (mu-auth-allowed-groups) (mu-session-id) (mu-call-scope))))
      ,@body))
 
 (defun accessible-graphs (&key tokens usage scope)
@@ -338,7 +347,7 @@ desired graphs."
                                           :rule (sparql-parser:match-rule data-block-value)
                                           :submatches (list (make-iri resource))))
                              ,(fourth data-submatches)))
-                     (and (sparql-generator:is-valid ast)
+                     (and (or (sparql-generator:is-valid ast) (error "We have an invalid ast?!"))
                           ast)))))
              (client:batch-map-solutions-for-select-query (query :for :fetch-types-for-insert :usage :read) (bindings)
                                         ; note that :usage :read removes the graph again, we're okay with that for now
