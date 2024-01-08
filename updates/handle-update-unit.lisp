@@ -108,7 +108,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
       (case (sparql-parser:match-term match)
         (ebnf::|IRIREF| (jsown:new-js
                           ("type" "uri")
-                          ("value" (detect-quads::primitive-match-string match))))
+                          ("value" (sparql-manipulation:uri-unwrap-marks (detect-quads::primitive-match-string match)))))
         (ebnf::|RDFLiteral|
          ;; we can extract all cases by destructuring
          (destructuring-bind (ebnf-value-string &optional langtag-or-hathat hathat-iri)

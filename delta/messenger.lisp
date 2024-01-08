@@ -37,12 +37,21 @@
       ;;   - mu-session-id
       ;;   - mu-call-id (does this need to be shadowed here?)
       (with-slots (endpoint method) handler
-        (dex:request endpoint
-                     :method method
-                     :content (jsown:to-json
-                               (delta-to-jsown :inserts inserts
-                                               :deletes deletes
-                                               :scope (connection-globals:mu-call-scope))))))))
+        (let ((delta-message
+                (jsown:to-json
+                 (jsown:new-js
+                   ("changeSets"
+                    (list
+                     (delta-to-jsown :insert inserts
+                                     :delete deletes
+                                     :scope (connection-globals:mu-call-scope))))))))
+          (dex:request endpoint
+                       :method method
+                       :headers `(("content-type" . "application/json")
+                                  ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
+                                  ("mu-call-id" . ,(random 1000000000))
+                                  ("mu-session-id" . ,(connection-globals:mu-session-id)))
+                       :content delta-message))))))
 
 (defun quad-to-jsown-binding (quad)
   "Converts QUAD to a jsown binding."
@@ -51,12 +60,12 @@
     ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
     ("object" (handle-update-unit::match-as-binding (getf quad :object)))))
 
-(defun delta-to-jsown (&key inserts deletes scope)
+(defun delta-to-jsown (&key insert delete scope)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
   (let ((delta
           (jsown:new-js
-            ("inserts" (mapcar #'quad-to-jsown-binding inserts))
-            ("deletes" (mapcar #'quad-to-jsown-binding deletes)))))
+            ("insert" (mapcar #'quad-to-jsown-binding insert))
+            ("delete" (mapcar #'quad-to-jsown-binding delete)))))
     (when (and scope (not (eq scope acl:_)))
       (setf (jsown:val delta "scope") scope))
     delta))
