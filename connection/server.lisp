@@ -43,7 +43,7 @@
     (let ((ast (parse-sparql-string (coerce query #-be-cautious 'base-string #+be-cautious 'string))))
       (if (sparql-parser:match-term-p (sparql-parser:sparql-ast-top-node ast) 'ebnf::|UpdateUnit|)
           ;; update
-          (let ((detect-quads::*info* (detect-quads::make-info)))
+          (let ((detect-quads::*info* (detect-quads::make-info))) ;; TODO: convert this setup into a macro and document it
             (handle-update-unit::handle-sparql-update-unit
              (sparql-parser:sparql-ast-top-node ast)))
           ;; query
