@@ -69,7 +69,7 @@
                             :mu-session-id (gethash "mu-session-id" headers)
                             :mu-auth-sudo (and (gethash "mu-auth-sudo" headers nil) t)
                             :mu-auth-allowed-groups (gethash "mu-auth-allowed-groups" headers)
-                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-call-scope" headers)))
+                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-auth-scope" headers)))
           (with-parser-setup
             (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
                                    (when *log-incoming-requests-p*
