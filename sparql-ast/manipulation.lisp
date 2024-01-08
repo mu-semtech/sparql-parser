@@ -31,8 +31,22 @@
    :submatches
    (list (sparql-parser:make-scanned-token
           :start 0 :end 0
-          :string (concatenate 'string "<" uri ">")
+          :string (uri-wrap-marks uri)
           :token 'ebnf::|IRIREF|))))
+
+(defun uri-wrap-marks (uri-string)
+  "Wraps a URI in < and > marks.
+
+Assumes URI is not wrapped."
+  (coerce (concatenate 'string "<" uri-string ">")
+          #-be-cautious 'base-string
+          #+be-cautious 'string))
+
+(defun uri-unwrap-marks (uri-string)
+  "Unwraps a URI's < and > marks.
+
+Assumes URI-STRING is wrapped."
+  (subseq uri-string 1 (1- (length uri-string))))
 
 (defun make-word-match (string)
   "Constructs a match for fixed content in the EBNF.
@@ -419,7 +433,7 @@ FROM and TO are both expected to be strings.
 Used to replace <SESSION_URI> in access calculation."
   ;; from: source-iriref-string
   ;; to: target-iriref-string
-  (let ((from (coerce (concatenate 'string "<" from ">") #-be-cautious 'base-string #+be-cautious 'string))
+  (let ((from (uri-wrap-marks from))
         (to (iriref (coerce to #-be-cautious 'base-string #+be-cautious 'string))))
     (update-matches-symbol-case (match) sparql-ast
       (ebnf::|IRIREF|

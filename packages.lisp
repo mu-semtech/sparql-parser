@@ -69,7 +69,9 @@
            #:expanded-term-case
            #:iriref
            #:make-iri
-           #:make-word-match))
+           #:make-word-match
+           #:uri-wrap-marks
+           #:uri-unwrap-marks))
 
 ;; Server and client
 (defpackage #:connection-globals

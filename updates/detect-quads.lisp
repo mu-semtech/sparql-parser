@@ -174,7 +174,7 @@
                        ;; (format t "~&Found prefix uri representation ~A with pn-local ~A~%" prefix-uri-representation pn-local)
                        (cons pname-ln
                              (concatenate 'string
-                                          (subseq prefix-uri-representation 1 (1- (length prefix-uri-representation)))
+                                          (sparql-manipulation:uri-unwrap-marks prefix-uri-representation)
                                           pn-local))))))
 (handle ebnf::|PNAME_NS|
         :function ((pname-ns)
@@ -186,7 +186,7 @@
                      (let ((pname-ns-uri-representation (primitive-match-string (cdr found-prefix))))
                        (cons pname-ns
                              (concatenate 'string
-                                          (subseq pname-ns-uri-representation 1 (1- (length pname-ns-uri-representation)))
+                                          (sparql-manipulation:uri-unwrap-marks pname-ns-uri-representation)
                                           string))))))
 (handle ebnf::|NumericLiteral|
         :accept (ebnf::|NumericLiteralUnsigned| ebnf::|NumericLiteralPositive| ebnf::|NumericLiteralNegative|))
