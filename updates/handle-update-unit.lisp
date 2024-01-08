@@ -140,7 +140,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                   ("type" "literal")))
         (ebnf::|NumericLiteral| (jsown:new-js
                                   ("value" (detect-quads::primitive-match-string match))
-                                  ("datatype" "http://www.w3.org/2001/XMLSchema#number"))) ; TODO: convert to current interpretation of boolean, a limited set of submatches are realistic here which helps select the necessary type.
+                                  ("datatype" "http://www.w3.org/2001/XMLSchema#number")))
         (ebnf::|VAR1| (error "Cannot make binding for variable"))
         (ebnf::|VAR2| (error "Cannot make binding for variable"))
         (otherwise (error "Unknown match ~A encountered to convert to binding." match)))))
