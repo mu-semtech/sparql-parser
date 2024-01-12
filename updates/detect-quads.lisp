@@ -95,7 +95,8 @@
         :local-context (:graph nil)
         :process-functions ((ebnf::|VarOrIri| (var-or-iri)
                                    (setf (info-graph *info*)
-                                         (detect-quads-processing-handlers::|VarOrIri| var-or-iri))))
+                                         (expand-var-or-term
+                                          (detect-quads-processing-handlers::|VarOrIri| var-or-iri)))))
         :process (ebnf::|TriplesTemplate|))
 (handle ebnf::|TriplesTemplate|
         :process (ebnf::|TriplesSameSubject| ebnf::|TriplesTemplate|))
@@ -103,7 +104,8 @@
         :local-context (:subject nil)
         :process-functions ((ebnf::|VarOrTerm| (var-or-term)
                                    (setf (info-subject *info*)
-                                         (detect-quads-processing-handlers::|VarOrTerm| var-or-term))))
+                                         (expand-var-or-term
+                                          (detect-quads-processing-handlers::|VarOrTerm| var-or-term)))))
         :process (ebnf::|PropertyListNotEmpty|)
         :not-supported (ebnf::|TriplesNode| ebnf::|PropertyList|))
 (handle ebnf::|PropertyListNotEmpty|
@@ -127,7 +129,8 @@
                    (let ((submatch (first (sparql-parser:match-submatches verb))))
                      (if (stringp (match-term submatch))
                          (sparql-manipulation:iriref "http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-                         (detect-quads-processing-handlers::|VarOrIri| submatch)))))
+                         (expand-var-or-term
+                          (detect-quads-processing-handlers::|VarOrIri| submatch))))))
 (handle ebnf::|VarOrIri|
         :process (ebnf::|Var| ebnf::|iri|))
 (handle ebnf::|Object|
@@ -138,6 +141,15 @@
 
 (handle ebnf::|VarOrTerm|
         :process (ebnf::|Var| ebnf::|GraphTerm|))
+
+(defun expand-var-or-term (thing)
+  "Converts THING into an IRIREF if it is a URL or was parsed as a full URL
+through detect-quads-processing-handlers::|VarOrIri| or
+detect-quads-processing-handlers::|VarOrTerm|."
+  (cond ((consp thing)
+         (sparql-manipulation:iriref (cdr thing)))
+        (t thing)))
+
 (handle ebnf::|GraphTerm|
         :todo "Further expand boolean literal."
         :process (ebnf::|iri| ebnf::|RDFLiteral|)
@@ -148,15 +160,17 @@
                    (let ((submatches (sparql-parser:match-submatches rdf-literal)))
                      (if (= (length submatches) 3)           ; must be with iri definition
                          (let* ((iri (third submatches))
-                                (maybe-expanded-iri (detect-quads-processing-handlers::|iri| iri)))
-                           (when (consp maybe-expanded-iri)
-                             ;; TODO: verify this replacement cannot contain parsed characters that need escaping in a URI.
-                             (setf (sparql-parser:match-submatches iri)
-                                   (list (sparql-manipulation:iriref (cdr maybe-expanded-iri)))))
+                                (expanded-iri
+                                  (sparql-parser:make-match
+                                   :term 'ebnf::|iri|
+                                   :submatches (list (expand-var-or-term (detect-quads-processing-handlers::|iri| iri))))))
+                           (setf (third (sparql-parser:match-submatches rdf-literal))
+                                 expanded-iri)
                            rdf-literal)
                          rdf-literal))))
 
 (handle ebnf::|iri|
+        :todo "This is not consistent.  IRIREF probably emits other content than PrefixedName."
         :process (ebnf::|PrefixedName|)
         :accept (ebnf::|IRIREF|))
 (handle ebnf::|PrefixedName|
@@ -195,11 +209,17 @@
         :accept (ebnf::|VAR1| ebnf::|VAR2|))
 
 (handle ebnf::|Modify|
+        :todo "make WITH iri not leak to next query separated by ;"
         :local-context (:delete-quad-patterns nil
                         :insert-quad-patterns nil
                         :quads nil)
         :process-functions
-        ((ebnf::|DeleteClause| (delete-clause)
+        ((ebnf::|iri| (iri)
+                ;; Must belong to the WITH clause
+                (setf (info-graph *info*)
+                      (expand-var-or-term
+                       (detect-quads-processing-handlers::|iri| iri))))
+         (ebnf::|DeleteClause| (delete-clause)
                 (detect-quads-processing-handlers::|DeleteClause| delete-clause)
                 (setf (info-delete-quad-patterns *info*)
                       (info-quads *info*))
@@ -211,12 +231,31 @@
                 (setf (info-quads *info*) nil))
          (ebnf::|GroupGraphPattern| (group-graph-pattern)
                 (let ((delete-patterns (info-delete-quad-patterns *info*))
-                      (insert-patterns (info-insert-quad-patterns *info*)))
+                      (insert-patterns (info-insert-quad-patterns *info*))
+                      (expanded-group-graph-pattern
+                        (if (info-graph *info*)
+                            (handle-update-unit::make-nested-match
+                             `(ebnf::|GroupGraphPattern|
+                                     "{"
+                                     (ebnf::|GroupGraphPatternSub|
+                                            (ebnf::|GraphPatternNotTriples|
+                                                   (ebnf::|GraphGraphPattern|
+                                                          "GRAPH"
+                                                          (ebnf::|VarOrIri|
+                                                                 (ebnf::|iri|
+                                                                        ,(info-graph *info*)))
+                                                          ,group-graph-pattern)))
+                                     "}"))
+                            group-graph-pattern)))
                   (let ((modify `((:modify (:delete-patterns ,delete-patterns
                                             :insert-patterns ,insert-patterns
-                                            :query ,(make-select-query-for-patterns group-graph-pattern (info-prefixes *info*) (info-base *info*) insert-patterns delete-patterns))))))
+                                            :query ,(make-select-query-for-patterns expanded-group-graph-pattern
+                                                                                    (info-prefixes *info*)
+                                                                                    (info-base *info*)
+                                                                                    insert-patterns
+                                                                                    delete-patterns))))))
                     (alexandria:appendf (info-operations *info*) modify)))))
-        :not-supported (ebnf::|iri| ebnf::|UsingClause|))
+        :not-supported (ebnf::|UsingClause|))
 (handle ebnf::|DeleteClause|
         :process (ebnf::|QuadPattern|))
 (handle ebnf::|InsertClause|
