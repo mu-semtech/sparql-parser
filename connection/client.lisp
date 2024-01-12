@@ -65,7 +65,7 @@ of JSOWN compatible BINDINGS."
   (jsown:filter (jsown:parse query-result)
                 "results" "bindings"))
 
-(defun batch-map-solutions-for-select-query* (query &key for batch-size usage)
+(defun batch-map-solutions-for-select-query* (query &key (for :read) batch-size usage)
   (declare (ignore for batch-size))
   (sparql-parser:with-sparql-ast query
     (let* ((altered-query (if usage
@@ -76,7 +76,7 @@ of JSOWN compatible BINDINGS."
       (format t "~&Batch mapping ~A~%" query-string)
       (client:bindings (client:query query-string)))))
 
-(defmacro batch-map-solutions-for-select-query ((query &key for batch-size usage) (bindings) &body body)
+(defmacro batch-map-solutions-for-select-query ((query &rest args &key for batch-size usage) (bindings) &body body)
   "Executes the given operation in batches.
 
   FOR can be used to identify a default batch size to be used as well as
@@ -87,6 +87,7 @@ of JSOWN compatible BINDINGS."
   batch.
 
   Executes the query and returns a list of the results for each batch."
+  (declare (ignore for batch-size usage))
   ;; TODO: move this file into a module about query execution.
-  `(let ((,bindings (batch-map-solutions-for-select-query* ,query :for ,for :batch-size ,batch-size :usage ,usage)))
+  `(let ((,bindings (batch-map-solutions-for-select-query* ,query ,@args)))
      (list ,@body)))
