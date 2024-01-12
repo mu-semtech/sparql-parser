@@ -88,6 +88,11 @@ struct with similarly named accessor functions."
 (defmacro handle (term &key function note todo process accept local-context process-functions not-supported after &allow-other-keys)
   "We assume symbols are coming from a single other package.  This is correct in our setting but would otherwise be a strange way of using these symbols.
 
+The most common goal for these handlers is to update the *info* object
+to pass the necessary contextual information, yet the return value of
+the function is shared back upward (this is used to get information
+about the URI of something URI-like).
+
  - local-context :: properties to set/reset on *info* struct
  - function :: function to process the match, everything below is ignored in this case
  - process :: list of submatch terms that should be handled through this system

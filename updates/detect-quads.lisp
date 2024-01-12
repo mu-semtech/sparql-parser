@@ -25,6 +25,7 @@
                         ;; R_1 ; R2 = Tr(Tr(GS, R_1), Tr(GS, R_2)) in
                         ;; which a new GS is produced by R_1 on which
                         ;; R_2 is applied.
+                        ;; TODO: Process WITH GRAPH for IRIREF which should alter query and default graph
                         :operations nil
                         :prefixes (list
                                    (cons (sparql-parser:make-match

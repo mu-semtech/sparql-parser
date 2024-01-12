@@ -336,6 +336,8 @@ variables are missing this will not lead to a pattern."
   "Handles the processing of an update-unit EBNF."
   ;; TODO: verify insert-triples and delete-triples don't contain any more variables
   ;; TODO: execute where block if it exists
+  ;; TODO: add conditional validation ensuring all triples were written somewhere
+  ;; TODO: add validation ensuring all triples were written to a readable location
   (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
     ;; (format t "~&Treating operation ~A~%" operation)
     ;; (break "Got operation ~A" operation)
@@ -360,6 +362,7 @@ variables are missing this will not lead to a pattern."
          (client:query (delete-data-query-for-quads quads))
          (delta-messenger:delta-notify :deletes quads)))
       (:modify
+       ;; TODO: handle WITH iriref which should be removed for non sudo queries
        (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
              (delete-patterns (operation-data-subfield operation :delete-patterns)))
          ;; TODO: verify the logic that we can execute insert-patterns

@@ -19,6 +19,8 @@
   (:documentation "Logs deltaa messages to standard output."))
 
 (defclass delta-remote-handler (delta-handler)
+  ;; TODO: ensure delta message sending is non-blocking and failure in
+  ;; this system doesn't make the response fail.
   ((endpoint :initarg :endpoint :initform (error "Must supply target for delta post handler."))
    (method :initarg :method :initform :post))
   (:documentation "Sends a  delta post to the given endpoint."))
