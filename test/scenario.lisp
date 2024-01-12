@@ -43,11 +43,11 @@
 
 (defmacro with-acl-config (&body body)
   "Executes body with the access rights specification required for these tests."
-
   `(let ((acl::*prefixes* nil)
          (acl::*access-specifications* nil)
          (acl::*graphs* nil)
-         (acl::*rights* nil))
+         (acl::*rights* nil)
+         (client::*log-sparql-query-roundtrip* t))
      ;; initialize rights
      (acl::define-prefixes
        :foaf "http://xmlns.com/foaf/0.1/"
@@ -128,7 +128,7 @@
 
 ;;;; Scenario
 ;;;; Boot up a container using:
-;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.0.0
+;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.2.0-rc.1; dr rm virtuoso
 (defun run-assertion-tests ()
   (clean-up-graphs)
   (store-initial-session-data)
@@ -256,7 +256,7 @@
         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
         ASK {
-          favorites:me ext:hasFavoriteAuthor ?book. 
+          favorites:me ext:hasFavoriteAuthor ?author.
         }")      
       ;; then let's describe the values
       (format t "~&Jack can describe favorite authors.~%")
@@ -268,9 +268,30 @@
         PREFIX favorites: <http://mu.semte.ch/favorites/>
         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-        DESCRIBE ?book {
-          favorites:me ext:hasFavoriteAuthor ?book. 
+        DESCRIBE ?author {
+          favorites:me ext:hasFavoriteAuthor ?author.
         }")
-      
+
+      ;; now let's replace the favorite author in two queries rather
+      ;; than in one
+      (format t "~&Jack can execute delete where and insert data in one query.~%")
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        DELETE {
+          favorites:me ext:hasFavoriteAuthor ?book.
+        } WHERE {
+          favorites:me ext:hasFavoriteAuthor ?book.
+        };
+        INSERT DATA {
+          GRAPH <http://mu.semte.ch/application> {
+            favorites:me ext:hasFavoriteAuthor authors:david.
+          }
+        }")
       )))
 
