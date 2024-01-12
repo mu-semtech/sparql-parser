@@ -6,7 +6,7 @@
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."
   :serial t
-  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown)
+  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless)
   :components ((:file "packages")
                ;; supporting code
                (:file "support/support")

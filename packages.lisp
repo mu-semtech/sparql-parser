@@ -73,6 +73,13 @@
            #:uri-wrap-marks
            #:uri-unwrap-marks))
 
+(defpackage #:type-cache
+  (:use :common-lisp)
+  (:import-from #:alexandria #:when-let)
+  (:local-nicknames (#:lhash #:org.shirakumo.luckless.hashtable))
+  (:export
+   #:types-for))
+
 ;; Server and client
 (defpackage #:connection-globals
   (:use :common-lisp)

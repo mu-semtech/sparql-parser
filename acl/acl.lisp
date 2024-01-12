@@ -289,6 +289,12 @@ MATCH may be updated in place but updated MATCH is returned."
            ,@(if (keywordp kind) `(when (eq ,kind ,kind-sym)))
            ,collection ,@body)))
 
+(defun accessible-graphs-for-current-user-and-query (usage)
+  "Yields all the accessible graphs for the current user and usage."
+  (with-access-tokens (tokens)
+    (or (graphs-for-tokens tokens usage (mu-call-scope))
+        (list "http://mu-authorization.service.semantic.works/empty-graph"))))
+
 (defun dispatch-quads (quads)
   "Applies current access rights to quads and updates them to contain the
 desired graphs."
@@ -314,48 +320,11 @@ desired graphs."
                (setf (gethash uri types-to-fetch) t))))
          (fetch-types-to-fetch ()
            "Fetches the types to fetch and populates the known-type-uri-index."
-           (alexandria:when-let*
-               ((types-to-fetch (alexandria:hash-table-keys types-to-fetch))
-                (query
-                 (sparql-parser:with-parser-setup
-                   (let* ((ast
-                            (sparql-parser:parse-sparql-string
-                             (coerce "SELECT ?graph ?resource ?type WHERE { VALUES ?resource { <http://a> } GRAPH ?graph { ?resource a ?type. } }"
-                                     #-be-cautious 'base-string #+be-cautious 'string)))
-                          (inline-data-one-var
-                            (first
-                             (sparql-manipulation::follow-path
-                              (sparql-parser:sparql-ast-top-node ast)
-                              '(ebnf::|QueryUnit|
-                                (ebnf::|Query|
-                                 (ebnf::|SelectQuery|
-                                  (ebnf::|WhereClause|
-                                   (ebnf::|GroupGraphPattern|
-                                    (ebnf::|GroupGraphPatternSub|
-                                     (ebnf::|GraphPatternNotTriples|
-                                            (ebnf::|InlineData|
-                                                   (ebnf::|DataBlock|))))))))))))
-                          (data-submatches (sparql-parser:match-submatches inline-data-one-var))
-                          (data-block-value (third data-submatches)))
-                     (setf (sparql-parser:match-submatches inline-data-one-var)
-                           `(,(first data-submatches)
-                             ,(second data-submatches)
-                             ,@(loop
-                                 for resource in types-to-fetch
-                                 collect (sparql-parser::make-match
-                                          :term 'ebnf::|DataBlockValue|
-                                          :rule (sparql-parser:match-rule data-block-value)
-                                          :submatches (list (make-iri resource))))
-                             ,(fourth data-submatches)))
-                     (and (or (sparql-generator:is-valid ast) (error "We have an invalid ast?!"))
-                          ast)))))
-             (client:batch-map-solutions-for-select-query (query :for :fetch-types-for-insert :usage :read) (bindings)
-                                        ; note that :usage :read removes the graph again, we're okay with that for now
-               (loop for binding in bindings
-                     for uri = (jsown:filter binding "resource" "value")
-                     for typeObj = (jsown:val binding "type")
-                     when (string= (jsown:val typeObj "type") "uri")
-                       do (set-known-type uri (jsown:val typeObj "value") t)))))
+           (let ((graphs (accessible-graphs-for-current-user-and-query :read))
+                 (uris (alexandria:hash-table-keys types-to-fetch)))
+             (loop for (uri . types) in (type-cache::types-for uris graphs)
+                   do (loop for type in types
+                            do (set-known-type uri type t)))))
          (uri-has-type (uri type)
            ;; only usable after fetching types
            (multiple-value-bind (table-for-type table-for-type-p)
