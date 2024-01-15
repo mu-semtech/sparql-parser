@@ -352,6 +352,7 @@ variables are missing this will not lead to a pattern."
            (client:query query)
            ;; (break "Sent query ~A~% " query)
            )
+         (type-cache:update-known-types :inserts quads)
          (delta-messenger:delta-notify :inserts quads)))
       (:delete-triples
        (let* ((data (operation-data operation))
@@ -360,6 +361,7 @@ variables are missing this will not lead to a pattern."
          ;; (break "Received quads ~A" quads)
          ;; (format t "~&Received quads for delete-triples ~A~%" quads)
          (client:query (delete-data-query-for-quads quads))
+         (type-cache:update-known-types :deletes quads)
          (delta-messenger:delta-notify :deletes quads)))
       (:modify
        ;; TODO: handle WITH iriref which should be removed for non sudo queries
@@ -374,6 +376,7 @@ variables are missing this will not lead to a pattern."
                  (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
              (let ((query (make-combined-delete-insert-data-query deletes inserts)))
                (client:query query))
+             (type-cache:update-known-types :deletes deletes :inserts inserts)
              (delta-messenger:delta-notify :deletes deletes :inserts inserts))))))))
 
 (defun unfold-prefixed-quads (quads)

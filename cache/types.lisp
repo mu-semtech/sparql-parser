@@ -55,6 +55,53 @@ Hence graph -> uri -> types in which every URI is expressed as a string and the 
   (when-let ((uri-to-types-hash (get-cache-hash graph *known-types-by-graphs*)))
     (rem-cache-hash uri uri-to-types-hash)))
 
+(defparameter *allow-live-type-cache-update* t
+  "Allow the cache to update changes live.  This is executed without
+   locking on the specific type but with checks, meaning there is a tiny
+   time-window in which a concurrent update could dirty the cache.")
+
+(defun push-types-to-existing-cache (uri graph types)
+  "Pushes TYPES to teh known types for URI and GRAPH if and only if the types for URI are already known."
+  (when-let* ((table (table-for-graph graph)))
+    (multiple-value-bind (current-values values-p)
+        (get-cache-hash uri table)
+      (when values-p
+        (setf (get-cache-hash uri table)
+              (delete-duplicates (concatenate 'list current-values types) :test #'string=))))))
+
+(defun update-known-types (&key deletes inserts)
+  "Loops over deletes and inserts and updates the known cache based on the received values."
+  (flet ((extract-uri-type-graph-combinations (quads)
+           (loop for quad in quads
+                 for predicate = (jsown:val (handle-update-unit::match-as-binding (getf quad :predicate)) "value")
+                 when (string= predicate "http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+                   collect (list (jsown:val (handle-update-unit::match-as-binding (getf quad :subject)) "value")
+                                 (jsown:val (handle-update-unit::match-as-binding (getf quad :object)) "value")
+                                 (jsown:val (handle-update-unit::match-as-binding (getf quad :graph)) "value"))))
+         (remove-overlap (left right)
+           (values (set-difference left right :test #'equal)
+                   (set-difference right left :test #'equal))))
+    ;; 1. filter out what has to do with setting values
+    (let ((delete-types (extract-uri-type-graph-combinations deletes))
+          (insert-types (extract-uri-type-graph-combinations inserts)))
+      ;; 2. convert to effective inserts and effective deletes
+      (multiple-value-bind (effective-delete-types effective-insert-types)
+          (remove-overlap delete-types insert-types)
+        ;; 3. clear what needs to be cleared
+        (loop for (uri type graph) in effective-delete-types
+              do (remove-cached-type uri graph))
+        ;; 4. add to those values which are suspected to be known; or
+        ;; clear the changed ones
+        (if *allow-live-type-cache-update*
+            (loop for ((uri type graph) . rest)
+                    in (support:group-by effective-insert-types
+                                         #'equal
+                                         :key (lambda (uri-type-graph)
+                                                (cons (first uri-type-graph) (third uri-type-graph))))
+                  do (push-types-to-existing-cache uri graph (cons type (mapcar #'second rest))))
+            (loop for (uri type graph) in effective-delete-types
+                  do (remove-cached-type uri graph)))))))
+
 (defun cache-types-for-uri-and-graph (uri graph types)
   "Stores the supplied types as the known types for the given URI and GRAPH."
   (setf (get-cache-hash uri (table-for-graph graph))

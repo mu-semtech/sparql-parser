@@ -20,6 +20,8 @@
                ;; sparql http - part 1
                (:file "connection/globals")
                (:file "connection/client")
+               ;; caching
+               (:file "cache/types")
                ;; access control definitions
                (:file "acl/acl")
                (:file "acl/configuration-interface")

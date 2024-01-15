@@ -75,10 +75,13 @@
 
 (defpackage #:type-cache
   (:use :common-lisp)
-  (:import-from #:alexandria #:when-let)
+  (:import-from #:alexandria
+                #:when-let*
+                #:when-let)
   (:local-nicknames (#:lhash #:org.shirakumo.luckless.hashtable))
   (:export
-   #:types-for))
+   #:types-for
+   #:update-known-types))
 
 ;; Server and client
 (defpackage #:connection-globals
