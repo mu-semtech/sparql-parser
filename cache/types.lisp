@@ -145,6 +145,48 @@ Hence graph -> uri -> types in which every URI is expressed as a string and the 
              ast)
         ast))))
 
+(defparameter *uri-graph-user-type-providers* nil
+  "A list of functions that can calculate the types for a list of combined graph and uri.")
+
+(defun derive-type-from-prefix-function (prefix types &optional complete-p)
+  "Constructs a function that derives the types of uris starting with PREFIX.
+
+If COMPLETE-P is non-nil processing may be short-circuited but no
+guarantees are given for this to be used."
+  (let ((prefix-length (length prefix)))
+    (format t "~&Types is now: ~A~%" types)
+    (lambda (uri graph)
+      (declare (ignore graph))
+      (format t "~&Types is now: ~A~%" types)
+      (let ((uri-length (length uri)))
+        (if (and (>= uri-length prefix-length)
+                 (string= prefix (subseq uri 0 prefix-length)))
+            (progn (format t "~&Returning types ~A for uri ~A~%"
+                           types uri)
+                   (values types complete-p))
+            (values nil nil))))))
+
+(defun derive-user-types (uri graph)
+  "Derives the set of user specified types for URI and GRAPH."
+  (let (derived-types)
+    (loop for user-type-deriver in *uri-graph-user-type-providers*
+          for (found-types complete-p) = (multiple-value-list (funcall user-type-deriver uri graph))
+          do
+             (let ((new-types (concatenate 'list derived-types found-types)))
+               (format t "~&Setting new derived types from ~A to ~A because of newly found types ~A~%"
+                       derived-types new-types found-types)
+               (setf derived-types (concatenate 'list derived-types found-types)))
+          when complete-p
+            return (values derived-types t))
+    (values derived-types nil)))
+
+(defun add-type-for-prefix (prefix type &optional complete-p)
+  "Ensures the type system derives that a URI starting with PREFIX should have type TYPE.
+
+COMPLETE-P is to be understood as by DERIVE-TYPE-FROM-PREFIX-FUNCTION."
+  (push (derive-type-from-prefix-function prefix (list type) complete-p)
+        *uri-graph-user-type-providers*))
+
 (defun fetch-types-for (uris graphs)
   "Fetches the types for the given URIs and GRAPHs."
   (let ((solutions-hash (make-hash-table :test 'equal))) ; regular non-concurrent hash table
@@ -154,10 +196,15 @@ Hence graph -> uri -> types in which every URI is expressed as a string and the 
          :for :fetch-types-for-insert
          :usage nil) ; setting usage to nil ensures access rights are not applied
         (bindings) 
-      ;; initialize the solutions hash to be empty so we can emit empty results too
+      ;; initialize the solutions hash with the user-derived types so we
+      ;; can emit empty results too
       (loop for uri in uris
             do (loop for graph in graphs
-                     do (setf (gethash (cons graph uri) solutions-hash) nil)))
+                     for user-types = (derive-user-types uri graph)
+                     do
+                        (setf (gethash (cons graph uri) solutions-hash)
+                              user-types)))
+      ;; augment the results with results from the triplestore
       (loop for binding in bindings
             for uri = (jsown:filter binding "resource" "value")
             for typeObj = (jsown:val binding "type")

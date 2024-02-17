@@ -47,7 +47,11 @@
          (acl::*access-specifications* nil)
          (acl::*graphs* nil)
          (acl::*rights* nil)
-         (client::*log-sparql-query-roundtrip* t))
+         (client::*log-sparql-query-roundtrip* t)
+         (type-cache::*uri-graph-user-type-providers* nil))
+
+     (type-cache::add-type-for-prefix "http://book-store.example.com/books/" "http://schema.org/Book")
+
      ;; initialize rights
      (acl::define-prefixes
        :foaf "http://xmlns.com/foaf/0.1/"
@@ -292,6 +296,19 @@
           GRAPH <http://mu.semte.ch/application> {
             favorites:me ext:hasFavoriteAuthor authors:david.
           }
-        }")
-      )))
+        }"))
 
+    (with-impersonation-for :joll
+      (format t "~&Joll can write a book title with the right URI and no type.~%")
+
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        INSERT DATA {
+         <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+       }"))))
