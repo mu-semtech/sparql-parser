@@ -97,7 +97,12 @@
      (woo:run (lambda (env) (acceptor env))
               :address "0.0.0.0"
               :port port
-              :worker-num worker-count))))
+              :worker-num worker-count)
+     (let ((sb-ext:*exit-timeout* 2))
+       ;; TODO: ensure all open update queries are handled before exiting
+       (format t "~&Giving two seconds notice to quit.~%")
+       (force-output)
+       (sb-ext:quit)))))
 
 (setf woo.specials:*debug* t)
 
