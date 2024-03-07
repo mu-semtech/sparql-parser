@@ -232,53 +232,17 @@ This is the inverse of binding-as-match and can be used to create delta messages
     (sparql-parser:make-sparql-ast :top-node match :string sparql-parser:*scanning-string*)))
 
 (defun insert-data-query-for-quads (quads)
-  ;; (format t "~&TODO: Make insert data for~% Quads: ~A~%" quads)
   (let* ((quads-not-triples (make-quads-not-triples quads))
-         ;; (quads-not-triples-strings
-         ;;   (mapcar (lambda (x)
-         ;;             (if (sparql-generator::is-valid-match
-         ;;                  x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
-         ;;                 (sparql-generator::write-valid-match x)
-         ;;                 (prog1 "" ;; TODO: provide better error path
-         ;;                   ;; (break "~A is not a valid match" x)
-         ;;                   )))
-         ;;           quads-not-triples))
          (query (insert-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
-    ;; (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
-    ;; (format t "~&Query is:~% ~A~%" query-string)
-    ;; (break query-string)
     (coerce query-string #-be-cautious 'base-string #+be-cautious 'string)))
 
 (defun delete-data-query-for-quads (quads)
-  ;; (format t "~&TODO: Make delete data for~% Quads: ~A~%" quads)
   (let* ((quads-not-triples (make-quads-not-triples quads))
-         ;; (quads-not-triples-strings
-         ;;   (mapcar (lambda (x)
-         ;;             (if (sparql-generator::is-valid-match
-         ;;                  x :rule (sparql-generator::find-rule 'ebnf::|QuadsNotTriples|))
-         ;;                 (sparql-generator::write-valid-match x)
-         ;;                 (prog1 "" ;; TODO: provide better error path
-         ;;                   ;; (break "~A is not a valid match" x)
-         ;;                   )))
-         ;;           quads-not-triples))
          (query (delete-data-query-from-quads-not-triples quads-not-triples))
          (query-string (sparql-generator:write-when-valid query)))
-    ;; (format t "~&Made quads not triples: ~%~A~%" quads-not-triples-strings)
-    ;; (format t "~&Query is:~% ~A~%" query-string)
-    ;; (break query-string)
     query-string))
 
-(defun query-for-quad-changes (&key delete-quads insert-quads)
-  "Constructs a query for quad changes based on available delete quads and insert quads."
-  (cond
-    ((null delete-quads)
-     (insert-data-query-for-quads insert-quads))
-    ((null insert-quads)
-     (delete-data-query-for-quads delete-quads))
-    (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
-
-(defun split-existing-quads (delete-quads insert-quads)
 (defun make-combined-delete-insert-data-query (quads-to-delete quads-to-insert)
   "Constructs a SPARQL query for the combination of QUADS-TO-DELETE and QUADS-TO-INSERT."
   (let ((delete-quads-not-triples (make-quads-not-triples quads-to-delete))
@@ -306,6 +270,15 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                                              "}")))))))))
       (sparql-generator:write-when-valid
        (sparql-parser:make-sparql-ast :top-node match :string sparql-parser:*scanning-string*)))))
+
+(defun query-for-quad-changes (&key delete-quads insert-quads)
+  "Constructs a query for quad changes based on available delete quads and insert quads."
+  (cond
+    ((null delete-quads)
+     (insert-data-query-for-quads insert-quads))
+    ((null insert-quads)
+     (delete-data-query-for-quads delete-quads))
+    (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
 
 (defun filled-in-patterns (patterns bindings)
   "Creates a set of QUADS for the given patterns and bindings.
