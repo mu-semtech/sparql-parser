@@ -269,6 +269,16 @@ This is the inverse of binding-as-match and can be used to create delta messages
     ;; (break query-string)
     query-string))
 
+(defun query-for-quad-changes (&key delete-quads insert-quads)
+  "Constructs a query for quad changes based on available delete quads and insert quads."
+  (cond
+    ((null delete-quads)
+     (insert-data-query-for-quads insert-quads))
+    ((null insert-quads)
+     (delete-data-query-for-quads delete-quads))
+    (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
+
+(defun split-existing-quads (delete-quads insert-quads)
 (defun make-combined-delete-insert-data-query (quads-to-delete quads-to-insert)
   "Constructs a SPARQL query for the combination of QUADS-TO-DELETE and QUADS-TO-INSERT."
   (let ((delete-quads-not-triples (make-quads-not-triples quads-to-delete))
@@ -346,21 +356,14 @@ variables are missing this will not lead to a pattern."
        (let* ((data (operation-data operation))
               (quads (acl:dispatch-quads data)))
          (assert-no-variables-in-quads data)
-         ;; (break "Received quads ~A" quads)
-         ;; (format t "~&Received quads for insert-triples ~A~%" quads)
-         (let ((query (insert-data-query-for-quads quads)))
-           (client:query query)
-           ;; (break "Sent query ~A~% " query)
-           )
+         (client:query (query-for-quad-changes :insert-quads quads))
          (type-cache:update-known-types :inserts quads)
          (delta-messenger:delta-notify :inserts quads)))
       (:delete-triples
        (let* ((data (operation-data operation))
               (quads (acl:dispatch-quads data)))
          (assert-no-variables-in-quads data)
-         ;; (break "Received quads ~A" quads)
-         ;; (format t "~&Received quads for delete-triples ~A~%" quads)
-         (client:query (delete-data-query-for-quads quads))
+         (client:query (query-for-quad-changes :delete-quads quads))
          (type-cache:update-known-types :deletes quads)
          (delta-messenger:delta-notify :deletes quads)))
       (:modify
@@ -374,8 +377,7 @@ variables are missing this will not lead to a pattern."
          (client:batch-map-solutions-for-select-query ((operation-data-subfield operation :query) :for :modify :usage :read) (bindings)
            (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
                  (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
-             (let ((query (make-combined-delete-insert-data-query deletes inserts)))
-               (client:query query))
+             (client:query (query-for-quad-changes :delete-quads deletes :insert-quads inserts))
              (type-cache:update-known-types :deletes deletes :inserts inserts)
              (delta-messenger:delta-notify :deletes deletes :inserts inserts))))))))
 
