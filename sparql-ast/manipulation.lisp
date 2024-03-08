@@ -18,6 +18,20 @@
       (sparql-parser::make-match :term term
                                  :submatches (mapcar #'transform-submatch submatches)))))
 
+(defun make-match-up-to-scanned-token (&key string match-list)
+  (if (rest match-list)
+      (sparql-parser:make-match
+       :term (first match-list)
+       :submatches (list (make-match-up-to-scanned-token
+                          :string string
+                          :match-list (rest match-list))))
+      (sparql-parser:make-match
+       :term (first match-list)
+       :submatches (list (sparql-parser:make-scanned-token
+                          :start 0 :end 0
+                          :string string
+                          :token (first match-list))))))
+
 (defun make-iri (uri)
   "Constructs an IRI with IRIREF in it."
   (sparql-parser:make-match
@@ -33,6 +47,19 @@
           :start 0 :end 0
           :string (uri-wrap-marks uri)
           :token 'ebnf::|IRIREF|))))
+
+(defun make-var (name)
+  "Constructs a variable, supply varname including ? or $."
+  (sparql-parser:make-match
+   :term 'ebnf::|Var|
+   :submatches
+   (list (sparql-parser:make-match
+          :term 'ebnf::|VAR1|
+          :submatches
+          (list (sparql-parser:make-scanned-token
+                 :start 0 :end 0
+                 :string name
+                 :token 'ebnf::|VAR1|))))))
 
 (defun uri-wrap-marks (uri-string)
   "Wraps a URI in < and > marks.

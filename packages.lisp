@@ -45,7 +45,8 @@
            #:make-match
            #:make-scanned-token
            #:scanned-token-p
-           #:copy-match))
+           #:copy-match
+           #:match-equal-p))
 
 (defpackage #:sparql-generator
   (:use :common-lisp)
@@ -71,7 +72,9 @@
            #:make-iri
            #:make-word-match
            #:uri-wrap-marks
-           #:uri-unwrap-marks))
+           #:uri-unwrap-marks
+           #:make-var
+           #:make-match-up-to-scanned-token))
 
 (defpackage #:type-cache
   (:use :common-lisp)
@@ -236,7 +239,8 @@
 (defpackage #:client
   (:use :common-lisp #:connection-globals)
   (:export #:query #:bindings
-           #:batch-map-solutions-for-select-query))
+           #:batch-map-solutions-for-select-query
+           #:batch-create-full-solution-for-select-query))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)

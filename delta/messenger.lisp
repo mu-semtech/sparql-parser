@@ -25,13 +25,15 @@
    (method :initarg :method :initform :post))
   (:documentation "Sends a  delta post to the given endpoint."))
 
-(defgeneric handle-delta (handler &key inserts deletes)
+(defgeneric handle-delta (handler &key inserts deletes effective-inserts effective-deletes)
   (:documentation "Handles a delta message for the raw insert and delete quads.  This may include sending it out to an external provider.")
-  (:method ((handler delta-logging-handler) &key inserts deletes)
-    (format t "~&Notify others on quads having been written:~% Inserted Quads: ~{~%  ~A~}~% Deleted Quads: ~{~%  ~A~}~%"
+  (:method ((handler delta-logging-handler) &key inserts deletes effective-inserts effective-deletes)
+    (format t "~&Notify others on quads having been written:~% Deleted Quads: ~{~%  ~A~}~% Inserted Quads: ~{~%  ~A~}~% Effectively Deleted Quads: ~{~%  ~A~}~% Effectively Inserted Quads: ~{~%  ~A~}"
+            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) deletes)
             (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) inserts)
-            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) deletes)))
-  (:method ((handler delta-remote-handler) &key inserts deletes)
+            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-deletes)
+            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-inserts)))
+  (:method ((handler delta-remote-handler) &key inserts deletes effective-inserts effective-deletes)
     (when (or inserts deletes)
       ;; TODO: share following headers for this request with the new request
       ;;   - mu-auth-allowed-groups
@@ -44,8 +46,10 @@
                  (jsown:new-js
                    ("changeSets"
                     (list
-                     (delta-to-jsown :insert inserts
-                                     :delete deletes
+                     (delta-to-jsown :deletes deletes
+                                     :inserts inserts
+                                     :effective-deletes effective-deletes
+                                     :effective-inserts effective-inserts
                                      :scope (connection-globals:mu-call-scope))))))))
           (dex:request endpoint
                        :method method
@@ -62,19 +66,23 @@
     ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
     ("object" (handle-update-unit::match-as-binding (getf quad :object)))))
 
-(defun delta-to-jsown (&key insert delete scope)
+(defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
   (let ((delta
           (jsown:new-js
-            ("insert" (mapcar #'quad-to-jsown-binding insert))
-            ("delete" (mapcar #'quad-to-jsown-binding delete)))))
+            ("inserts" (mapcar #'quad-to-jsown-binding inserts))
+            ("deletes" (mapcar #'quad-to-jsown-binding deletes))
+            ("effectiveInserts" (mapcar #'quad-to-jsown-binding effective-inserts))
+            ("effectiveDeletes" (mapcar #'quad-to-jsown-binding effective-deletes)))))
     (when (and scope (not (eq scope acl:_)))
       (setf (jsown:val delta "scope") scope))
     delta))
 
-(defun delta-notify (&key inserts deletes)
+(defun delta-notify (&key inserts deletes effective-inserts effective-deletes)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
-  (mapcar (alexandria:rcurry #'handle-delta :inserts inserts :deletes deletes)
+  (mapcar (alexandria:rcurry #'handle-delta :deletes deletes :inserts inserts
+                                            :effective-deletes effective-deletes
+                                            :effective-inserts effective-inserts)
           *delta-handlers*))
 
 (defun add-delta-messenger (target &key (method :post))

@@ -42,6 +42,19 @@ submatches provided they are of type MATCH."
   (string nil :type (or symbol string))  ; optional known string representation
   (token (error "Must supply matched token") :type (or symbol string)))
 
+(defun match-equal-p (a b)
+  "Yields truthy iff match a and match b are equal."
+  ;; TODO: understand semantically equivalent nodes such as """hello"""
+  ;; and "hello".
+  (and (eq (type-of a) (type-of b))
+       (typecase a
+         (match (and (equal (match-term a) (match-term b))
+                     (= (length (match-submatches a)) (length (match-submatches b)))
+                     (every #'match-term-equal-p (match-submatches a) (match-submatches b))))
+         (scanned-token (and (equal (scanned-token-token a) (scanned-token-token b))
+                             (string= (scanned-token-effective-string a)
+                                      (scanned-token-effective-string b)))))))
+
 (defun terminal-p-scanner (thing)
   (loop for pos from 0 below (length thing)
         for char = (elt thing pos)

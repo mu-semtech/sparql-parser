@@ -152,6 +152,30 @@ This is the inverse of binding-as-match and can be used to create delta messages
 ;;;; as well as informing other units that an update has occurred
 ;;;; (namely the delta notifier and anything to clear caches).
 
+(defun quad-object-as-match-term (quad-object)
+  ;; NOTE: this was the original implementation TODO: Verify a
+  ;; quad-object will always yield a iri or one of the following terms
+  ;; and remove this old commented code or support other forms.
+  ;; 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|
+  ;; 'ebnf::|iri|
+
+  ;; (if (and (sparql-parser:match-p quad-object)
+  ;;          (sparql-parser:match-term-p quad-object 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|
+  ;;                                      ;; 'ebnf::string_literal1 'ebnf::string_literal2 'ebnf::string_literal_long1 'ebnf::string_literal_long2
+  ;;                                      ))
+  ;;     quad-object
+  ;;     (if nil
+  ;;         ;; (and (listp quad-object)
+  ;;         ;;      (find (car quad-object)
+  ;;         ;;            (list 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|)))
+  ;;         quad-object
+  ;;         (sparql-manipulation:make-iri (quad-term-uri quad-object))))
+  (if (consp quad-object)
+      (sparql-manipulation:make-iri (quad-term-uri quad-object)) ; in case of a prefixed uri
+      (case (sparql-parser:match-term quad-object)
+        (ebnf::|IRIREF| (make-nested-match `(ebnf::|iri| ,quad-object)))
+        (otherwise quad-object))))
+
 (defun make-quads-not-triples (quads)
   "Constructs a list of ebnf:|QuadsNotTriples| statements for the given set of quads."
   (labels ((make-triples-template-match (graphed-group)
@@ -159,19 +183,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
                (let* ((quad (first graphed-group))
                       (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
                       (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
-                      (quad-object (getf quad :object))
-                      (object-match ;; TODO: support other types of resources than IRIs
-                        (if (and (sparql-parser:match-p quad-object)
-                                 (sparql-parser:match-term-p quad-object 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|
-                                                             ;; 'ebnf::string_literal1 'ebnf::string_literal2 'ebnf::string_literal_long1 'ebnf::string_literal_long2
-                                                             ))
-                            quad-object
-                            (if nil
-                                ;; (and (listp quad-object)
-                                ;;      (find (car quad-object)
-                                ;;            (list 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|)))
-                                quad-object
-                                (sparql-manipulation:make-iri (quad-term-uri quad-object))))))
+                      (object-match (quad-object-as-match-term (getf quad :object))))
                  (make-nested-match
                   `(ebnf::|TriplesTemplate|
                           (ebnf::|TriplesSameSubject|
@@ -280,6 +292,131 @@ This is the inverse of binding-as-match and can be used to create delta messages
      (delete-data-query-for-quads delete-quads))
     (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
 
+(defun quad-equal-p (a b)
+  "Yields truthy iff two quads are equal"
+  ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
+  (and
+   (every (lambda (key)
+            (string= (quad-term-uri (getf a key))
+                     (quad-term-uri (getf b key))))
+          '(:graph :predicate :subject))
+   (sparql-parser:match-equal-p (quad-object-as-match-term (getf a :object))
+                                (quad-object-as-match-term (getf b :object)))))
+
+(defun detect-effective-changes (&key delete-quads insert-quads)
+  "Calculates the quads that will effectively be written to the triplestore
+based on the supplied arguments and the state in the triplestore.
+
+  Yields (values effective-deletes effective-inserts) which are to be
+  executed elsewhere."
+  (let ((existing-quads-to-delete (find-existing-quads delete-quads))
+        (quads-to-insert-not-in-triplestore (second (multiple-value-list (find-existing-quads insert-quads)))))
+    (let ((quads-to-delete (set-difference existing-quads-to-delete insert-quads
+                                           :test #'quad-equal-p))
+          (quads-to-insert quads-to-insert-not-in-triplestore))
+      (values quads-to-delete quads-to-insert))))
+
+(defun query-to-detect-existing-quad-indexes (quads)
+  "Constructs a query which detects quads exist in the triplestore of quads.  Yields the indexes of those quads."
+  ;; Emits a query such as:
+  ;;
+  ;; SELECT ?index WHERE {
+  ;;   VALUES (?index ?graph ?s ?p ?o) {
+  ;;     (0 <graph> <sub1> <pred1> "obj1")
+  ;;     (1 <graph> <sub2> <pred2> "obj2")
+  ;;   }
+  ;;   GRAPH ?graph {
+  ;;     ?s ?p ?o.
+  ;;   }
+  ;; }
+
+  (flet ((make-inline-data-blocks (quads)
+           (loop for quad in quads
+                 for index from 0
+                 append
+                 `("("
+                   ,(sparql-manipulation:make-match-up-to-scanned-token
+                     :string (format nil "~A" index)
+                     :match-list '(ebnf::|DataBlockValue| ebnf::|NumericLiteral| ebnf::|NumericLiteralUnsigned| ebnf::|INTEGER|))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :graph))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
+                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term (getf quad :object)))
+                   ")"))))
+    (make-nested-match
+     `(ebnf::|QueryUnit|
+             (ebnf::|Query|
+                    ebnf::|Prologue|
+                    (ebnf::|SelectQuery|
+                           (ebnf::|SelectClause|
+                                  "SELECT"
+                                  ,(sparql-manipulation:make-var "?index"))
+                           (ebnf::|WhereClause|
+                                  "WHERE"
+                                  (ebnf::|GroupGraphPattern|
+                                         "{"
+                                         (ebnf::|GroupGraphPatternSub|
+                                                (ebnf::|GraphPatternNotTriples|
+                                                       (ebnf::|InlineData|
+                                                              "VALUES"
+                                                              (ebnf::|DataBlock|
+                                                                     (ebnf::|InlineDataFull|
+                                                                            "("
+                                                                            ,(sparql-manipulation:make-var "?index")
+                                                                            ,(sparql-manipulation:make-var "?graph")
+                                                                            ,(sparql-manipulation:make-var "?s")
+                                                                            ,(sparql-manipulation:make-var "?p")
+                                                                            ,(sparql-manipulation:make-var "?o")
+                                                                            ")"
+                                                                            "{"
+                                                                            ,@(make-inline-data-blocks quads)
+                                                                            "}"))))
+                                                (ebnf::|GraphPatternNotTriples|
+                                                       (ebnf::|GraphGraphPattern|
+                                                              "GRAPH"
+                                                              (ebnf::|VarOrIri| ,(sparql-manipulation:make-var "?graph"))
+                                                              (ebnf::|GroupGraphPattern|
+                                                                     "{"
+                                                                     (ebnf::|GroupGraphPatternSub|
+                                                                            (ebnf::|TriplesBlock|
+                                                                                   (ebnf::|TriplesSameSubjectPath|
+                                                                                          (ebnf::|VarOrTerm|
+                                                                                                 ,(sparql-manipulation:make-var "?s"))
+                                                                                          (ebnf::|PropertyListPathNotEmpty|
+                                                                                                 (ebnf::|VerbSimple|
+                                                                                                        ,(sparql-manipulation:make-var "?p"))
+                                                                                                 (ebnf::|ObjectListPath|
+                                                                                                        (ebnf::|ObjectPath|
+                                                                                                               (ebnf::|GraphNodePath|
+                                                                                                                      (ebnf::|VarOrTerm|
+                                                                                                                             ,(sparql-manipulation:make-var "?o")))))))
+                                                                                   "."))
+                                                                     "}"))))
+                                         "}"))
+                           ebnf::|SolutionModifier|)
+                    ebnf::|ValuesClause|)))))
+
+(defun find-existing-quads (quads)
+  "Searches the triplestore and yields the quads which exist.
+
+  Return (VALUES existing-quads non-existing-quads)"
+  (if quads
+      (let* ((ast (sparql-parser:make-sparql-ast :top-node (query-to-detect-existing-quad-indexes quads)
+                                                 :string sparql-parser:*scanning-string*))
+             (query-result (client:bindings (client:query (sparql-generator:write-when-valid ast)
+                                                          :send-to-single t)))
+             (existing-quad-indexes (loop for binding in query-result
+                                          collect (parse-integer (jsown:filter binding "index" "value")))))
+        (values (loop for quad in quads
+                      for index from 0
+                      when (find index existing-quad-indexes)
+                        collect quad)
+                (loop for quad in quads
+                      for index from 0
+                      unless (find index existing-quad-indexes)
+                        collect quad)))
+      (values nil nil)))
+
 (defun filled-in-patterns (patterns bindings)
   "Creates a set of QUADS for the given patterns and bindings.
 
@@ -321,38 +458,41 @@ variables are missing this will not lead to a pattern."
   ;; TODO: execute where block if it exists
   ;; TODO: add conditional validation ensuring all triples were written somewhere
   ;; TODO: add validation ensuring all triples were written to a readable location
-  (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
-    ;; (format t "~&Treating operation ~A~%" operation)
-    ;; (break "Got operation ~A" operation)
-    (case (operation-type operation)
-      (:insert-triples
-       (let* ((data (operation-data operation))
-              (quads (acl:dispatch-quads data)))
-         (assert-no-variables-in-quads data)
-         (client:query (query-for-quad-changes :insert-quads quads))
-         (type-cache:update-known-types :inserts quads)
-         (delta-messenger:delta-notify :inserts quads)))
-      (:delete-triples
-       (let* ((data (operation-data operation))
-              (quads (acl:dispatch-quads data)))
-         (assert-no-variables-in-quads data)
-         (client:query (query-for-quad-changes :delete-quads quads))
-         (type-cache:update-known-types :deletes quads)
-         (delta-messenger:delta-notify :deletes quads)))
-      (:modify
-       ;; TODO: handle WITH iriref which should be removed for non sudo queries
-       (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
-             (delete-patterns (operation-data-subfield operation :delete-patterns)))
-         ;; TODO: verify the logic that we can execute insert-patterns
-         ;; and delete-patterns in batches because anything static will
-         ;; be inserted and deleted in the batch too.
-         ;; (break "Going to treat the select query")
-         (client:batch-map-solutions-for-select-query ((operation-data-subfield operation :query) :for :modify :usage :read) (bindings)
-           (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
-                 (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
-             (client:query (query-for-quad-changes :delete-quads deletes :insert-quads inserts))
-             (type-cache:update-known-types :deletes deletes :inserts inserts)
-             (delta-messenger:delta-notify :deletes deletes :inserts inserts))))))))
+  (flet ((execute-and-dispatch-changes (&key insert-quads delete-quads)
+           (multiple-value-bind
+                 (effective-deletes effective-inserts)
+               (detect-effective-changes :insert-quads insert-quads :delete-quads delete-quads)
+             (client:query (query-for-quad-changes :delete-quads effective-deletes :insert-quads effective-inserts)
+                           :send-to-single nil)
+             (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
+             (delta-messenger:delta-notify
+              :deletes delete-quads :inserts insert-quads
+              :effective-deletes effective-deletes
+              :effective-inserts effective-inserts))))
+   (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
+     ;; (format t "~&Treating operation ~A~%" operation)
+     ;; (break "Got operation ~A" operation)
+     (case (operation-type operation)
+       (:insert-triples
+        (let* ((data (operation-data operation))
+               (quads (acl:dispatch-quads data)))
+          (assert-no-variables-in-quads data)
+          (execute-and-dispatch-changes :insert-quads quads)))
+       (:delete-triples
+        (let* ((data (operation-data operation))
+               (quads (acl:dispatch-quads data)))
+          (assert-no-variables-in-quads data)
+          (execute-and-dispatch-changes :delete-quads quads)))
+       (:modify
+        ;; TODO: handle WITH iriref which should be removed for non sudo queries
+        (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
+              (delete-patterns (operation-data-subfield operation :delete-patterns))
+              (bindings (client:batch-create-full-solution-for-select-query
+                         (operation-data-subfield operation :query)
+                         :for :modify :usage :read)))
+          (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
+                (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
+            (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))))))))
 
 (defun unfold-prefixed-quads (quads)
   "Unfolds the prefixed quads (represented by a CONS cell) into a match

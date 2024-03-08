@@ -76,6 +76,22 @@ of JSOWN compatible BINDINGS."
       (format t "~&Batch mapping ~A~%" query-string)
       (client:bindings (client:query query-string)))))
 
+(defun batch-create-full-solution-for-select-query (query &key (for :read) batch-size usage)
+  "Executes a sparql query, possibly batching the solutions and combining
+them into a set of JSOWN compatible BINDINGS."
+  (declare (ignore for batch-size))
+  (sparql-parser:with-sparql-ast query
+    (let* ((altered-query (if usage
+                              (acl:apply-access-rights query :usage usage)
+                              query))
+           ;; TODO: We don't use write-when-valid here because in
+           ;; practice the WHERE block comes from the MODIFY query which
+           ;; has less expressivity and uses different terms.  Validate
+           ;; this case higher up and provide an option here not to
+           ;; verify further.
+           (query-string (sparql-generator:write-valid altered-query)))
+      (client:bindings (client:query query-string)))))
+
 (defmacro batch-map-solutions-for-select-query ((query &rest args &key for batch-size usage) (bindings) &body body)
   "Executes the given operation in batches.
 
