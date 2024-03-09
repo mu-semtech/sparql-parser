@@ -50,7 +50,7 @@ submatches provided they are of type MATCH."
        (typecase a
          (match (and (equal (match-term a) (match-term b))
                      (= (length (match-submatches a)) (length (match-submatches b)))
-                     (every #'match-term-equal-p (match-submatches a) (match-submatches b))))
+                     (every #'match-equal-p (match-submatches a) (match-submatches b))))
          (scanned-token (and (equal (scanned-token-token a) (scanned-token-token b))
                              (string= (scanned-token-effective-string a)
                                       (scanned-token-effective-string b)))))))
