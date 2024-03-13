@@ -34,11 +34,11 @@ same logic to construct the submatches."
        (make-match specification))))
 
 (defun sparql-escape-string (string)
-  "Generate an escaped SPARQL string."
+  "Generate an escaped SPARQL string for triple double quotes."
   (concatenate 'string
-               "\""
+               "\"\"\""
                (cl-ppcre:regex-replace-all "([\"\\\\])" string "\\\\\\1")
-               "\""))
+               "\"\"\""))
 
 (defun make-token-match (term string)
   "Makes a token match for the given string.  This is a MATCH which has a SCANNED-TOKEN as a match."
@@ -114,7 +114,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
          (destructuring-bind (ebnf-value-string &optional langtag-or-hathat hathat-iri)
              (sparql-parser:match-submatches match)
            ;; TODO: ensure hathatiri has an expandad iri in its primitive string when expanding if it is a prefixed name
-           (let ((value-string (detect-quads::primitive-match-string (first (sparql-parser:match-submatches ebnf-value-string))))
+           (let ((value-string (sparql-inspection:ebnf-string-real-string ebnf-value-string))
                  (langtag-or-hathat-string (and langtag-or-hathat
                                                 (not hathat-iri)
                                                 (detect-quads::primitive-match-string (first (sparql-parser:match-submatches langtag-or-hathat)))))

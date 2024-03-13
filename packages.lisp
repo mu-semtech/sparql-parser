@@ -62,7 +62,8 @@
                 #:match-term
                 #:scanned-token-token
                 #:scanned-token-effective-string)
-  (:export #:match-equal-p))
+  (:export #:match-equal-p
+           #:ebnf-string-real-string))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
