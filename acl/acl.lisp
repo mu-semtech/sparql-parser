@@ -237,18 +237,14 @@ variables."
   "Yields a list of (CONS TOKEN GRAPH-SPECIFICATION) for the set of supplied tokens."
   (loop for token in tokens
         for access-grant = (access-token-access token)
-        for token-name = (access-grant-access access-grant)
         for token-scopes = (access-grant-scopes access-grant)
-        append (loop for right in *rights*
-                     when (and (eq (access-grant-access right) token-name)
-                               (or (not usage)
-                                   (find usage (access-grant-usage right) :test #'eq))
-                               (find scope token-scopes :test #'equal))
-                       append (loop for graph-specification in *graphs*
-                                    for granted-graph-spec-name = (access-grant-graph-spec right)
-                                    when (eq granted-graph-spec-name
-                                             (graph-specification-name graph-specification))
-                                      collect (cons token graph-specification)))))
+        for graph-spec = (access-grant-graph-spec access-grant)
+        when (and (or (not usage)
+                      (find usage (access-grant-usage access-grant) :test #'eq))
+                  (find scope token-scopes :test #'equal))
+          append (loop for graph in *graphs*
+                       when (eq graph-spec (graph-specification-name graph))
+                         collect (cons token graph))))
 
 (defun graphs-for-tokens (tokens usage scope)
   "Yields the graphs which can be accessed from TOKENS."
