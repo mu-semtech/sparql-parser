@@ -50,13 +50,15 @@
                                      :inserts inserts
                                      :effective-deletes effective-deletes
                                      :effective-inserts effective-inserts
-                                     :scope (connection-globals:mu-call-scope))))))))
+                                     :scope (connection-globals:mu-call-scope)
+                                     :allowed-groups (connection-globals:mu-auth-allowed-groups))))))))
           (dex:request endpoint
                        :method method
                        :headers `(("content-type" . "application/json")
                                   ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
                                   ("mu-call-id" . ,(random 1000000000))
-                                  ("mu-session-id" . ,(connection-globals:mu-session-id)))
+                                  ("mu-session-id" . ,(connection-globals:mu-session-id))
+                                  ("mu-auth-allowed-gloups" . ,(connection-globals:mu-auth-allowed-groups)))
                        :content delta-message))))))
 
 (defun quad-to-jsown-binding (quad)
@@ -66,14 +68,15 @@
     ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
     ("object" (handle-update-unit::match-as-binding (getf quad :object)))))
 
-(defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope)
+(defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope allowed-groups)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
   (let ((delta
           (jsown:new-js
-            ("inserts" (mapcar #'quad-to-jsown-binding inserts))
-            ("deletes" (mapcar #'quad-to-jsown-binding deletes))
-            ("effectiveInserts" (mapcar #'quad-to-jsown-binding effective-inserts))
-            ("effectiveDeletes" (mapcar #'quad-to-jsown-binding effective-deletes)))))
+            ("insert" (mapcar #'quad-to-jsown-binding inserts))
+            ("delete" (mapcar #'quad-to-jsown-binding deletes))
+            ("effectiveInsert" (mapcar #'quad-to-jsown-binding effective-inserts))
+            ("effectiveDelete" (mapcar #'quad-to-jsown-binding effective-deletes))
+            ("allowedGroups" allowed-groups))))
     (when (and scope (not (eq scope acl:_)))
       (setf (jsown:val delta "scope") scope))
     delta))
