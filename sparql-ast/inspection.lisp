@@ -8,29 +8,34 @@
   ;; ignore this for now.
   (flet ((first-submatch (match)
            (first (match-submatches match))))
-    (let ((base-string
-            (scanned-token-effective-string
-             (first-submatch
-              (first-submatch
-               ebnf-string)))))
-      (coerce
-       (loop for idx = 0 then (1+ idx)
-             while (< idx (length base-string))
-             for char = (elt base-string idx)
-             collect (case char
-                       (#\\
-                        (incf idx)
-                        (case (elt base-string idx)
-                          (#\\ #\\)
-                          ((#\t #\T) #\Tab)
-                          ((#\n #\N) #\Linefeed)
-                          ((#\r #\R) #\Return)
-                          ((#\b #\B) #\Backspace)
-                          ((#\f #\F) #\Formfeed)
-                          (#\" #\")
-                          (#\' #\')))
-                       (otherwise char)))
-       'string))))
+    (let* ((child-match (first-submatch ebnf-string)) ;; must be a specific string
+           (base-string
+             (scanned-token-effective-string
+              (first-submatch child-match)))
+           (string-representation
+             (coerce
+              (loop for idx = 0 then (1+ idx)
+                    while (< idx (length base-string))
+                    for char = (elt base-string idx)
+                    collect (case char
+                              (#\\
+                               (incf idx)
+                               (case (elt base-string idx)
+                                 (#\\ #\\)
+                                 ((#\t #\T) #\Tab)
+                                 ((#\n #\N) #\Linefeed)
+                                 ((#\r #\R) #\Return)
+                                 ((#\b #\B) #\Backspace)
+                                 ((#\f #\F) #\Formfeed)
+                                 (#\" #\")
+                                 (#\' #\')))
+                              (otherwise char)))
+              'string)))
+      (cond ((sparql-parser:match-term-p child-match 'ebnf::|STRING_LITERAL1| 'ebnf::|STRING_LITERAL2|)
+             (subseq string-representation 1 (- (length string-representation) 1)))
+            ((sparql-parser:match-term-p child-match 'ebnf::|STRING_LITERAL_LONG1| 'ebnf::|STRING_LITERAL_LONG2|)
+             (subseq string-representation 3 (- (length string-representation) 3)))
+            (t (error "Received a string which is not one of 'ebnf::|STRING_LITERAL1| 'ebnf::|STRING_LITERAL2| 'ebnf::|STRING_LITERAL_LONG1| 'ebnf::|STRING_LITERAL_LONG2|"))))))
 
 (defun match-equal-p (a b)
   "Yields truthy iff match a and match b are equal."
