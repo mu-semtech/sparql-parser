@@ -311,4 +311,34 @@
 
         INSERT DATA {
          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
-       }"))))
+       }")
+
+      (format t "~&Effective changes contain only the data that was actually changed, which is:~%- insert \"On types too.\"~%- delete \"On types too.\"~%")
+
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        INSERT DATA {
+         <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
+       }")
+
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        DELETE {
+         <http://book-store.example.com/books/my-book> schema:name ?title.
+        } INSERT {
+         <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+        } WHERE {
+         <http://book-store.example.com/books/my-book> schema:name ?title.
+        }"))))

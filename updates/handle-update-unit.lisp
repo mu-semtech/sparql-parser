@@ -300,8 +300,8 @@ This is the inverse of binding-as-match and can be used to create delta messages
             (string= (quad-term-uri (getf a key))
                      (quad-term-uri (getf b key))))
           '(:graph :predicate :subject))
-   (sparql-parser:match-equal-p (quad-object-as-match-term (getf a :object))
-                                (quad-object-as-match-term (getf b :object)))))
+   (sparql-inspection:match-equal-p (quad-object-as-match-term (getf a :object))
+                                    (quad-object-as-match-term (getf b :object)))))
 
 (defun detect-effective-changes (&key delete-quads insert-quads)
   "Calculates the quads that will effectively be written to the triplestore

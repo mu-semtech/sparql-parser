@@ -45,14 +45,24 @@
            #:make-match
            #:make-scanned-token
            #:scanned-token-p
-           #:copy-match
-           #:match-equal-p))
+           #:copy-match))
 
 (defpackage #:sparql-generator
   (:use :common-lisp)
   (:export #:is-valid #:write-valid
            #:write-when-valid
            #:write-valid-match))
+
+(defpackage #:sparql-inspection
+  (:use :common-lisp)
+  (:import-from #:sparql-parser
+                #:match
+                #:scanned-token
+                #:match-submatches
+                #:match-term
+                #:scanned-token-token
+                #:scanned-token-effective-string)
+  (:export #:match-equal-p))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
