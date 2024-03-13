@@ -172,10 +172,10 @@ guarantees are given for this to be used."
     (loop for user-type-deriver in *uri-graph-user-type-providers*
           for (found-types complete-p) = (multiple-value-list (funcall user-type-deriver uri graph))
           do
-             (let ((new-types (concatenate 'list derived-types found-types)))
+             (alexandria:when-let ((new-types (concatenate 'list derived-types found-types)))
                (format t "~&Setting new derived types from ~A to ~A because of newly found types ~A~%"
                        derived-types new-types found-types)
-               (setf derived-types (concatenate 'list derived-types found-types)))
+               (setf derived-types new-types))
           when complete-p
             return (values derived-types t))
     (values derived-types nil)))
@@ -221,7 +221,7 @@ COMPLETE-P is to be understood as by DERIVE-TYPE-FROM-PREFIX-FUNCTION."
   ;; This code may run concurrently hence we need to ensure to fetch all
   ;; relevant information and fill caches as best as we can.
   (let ((tables (mapcar #'table-for-graph graphs))
-        (uri-graph-solutions (make-hash-table :test 'equal)) ; non-concurrent hash-table (graph . uri) => types
+        (uri-graph-solutions (make-hash-table :test 'equal)) ; non-concurrent hash-table (uri . graph) => types
         missing-uri-graph-combinations)
     ;; discover which URIs are missing
     (loop for uri in uris
