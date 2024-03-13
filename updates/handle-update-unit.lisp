@@ -119,9 +119,10 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                                 (not hathat-iri)
                                                 (detect-quads::primitive-match-string (first (sparql-parser:match-submatches langtag-or-hathat)))))
                  (hathat-iri-string (and hathat-iri
-                                         (sparql-parser:scanned-token-effective-string
-                                          (detect-quads:first-found-scanned-token
-                                           hathat-iri)))))
+                                         (sparql-manipulation:uri-unwrap-marks
+                                          (sparql-parser:scanned-token-effective-string
+                                           (detect-quads:first-found-scanned-token
+                                            hathat-iri))))))
              (cond (hathat-iri (jsown:new-js
                                 ("value" value-string)
                                 ("datatype" hathat-iri-string)
