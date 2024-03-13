@@ -287,4 +287,5 @@
   (:use :common-lisp)
   (:export :send-quads
            :delta-notify
-           :add-delta-messenger))
+           :add-delta-messenger
+           :add-delta-logger))
