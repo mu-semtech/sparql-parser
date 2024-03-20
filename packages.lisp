@@ -63,7 +63,9 @@
                 #:scanned-token-token
                 #:scanned-token-effective-string)
   (:export #:match-equal-p
-           #:ebnf-string-real-string))
+           #:ebnf-string-real-string
+           #:first-found-scanned-token
+           #:rdf-literal-datatype))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
@@ -268,8 +270,7 @@
    #:operation-data
    #:operation-data-subfield
    #:quad-term-uri=
-   #:quad-term-uri
-   #:first-found-scanned-token))
+   #:quad-term-uri))
 
 (defpackage #:handle-update-unit
   (:use :common-lisp)

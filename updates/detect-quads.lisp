@@ -356,9 +356,3 @@ This only exists for :modify and it supports :delete-patterns
 returned."
   (getf (car (operation-data operation)) subfield))
 
-(defun first-found-scanned-token (match)
-  "Optimistic search for a scanned token in submatches."
-  (support:depth-first-search
-   :start match
-   :condition #'sparql-parser:scanned-token-p
-   :descend #'sparql-parser:match-submatches))

@@ -75,7 +75,7 @@ same logic to construct the submatches."
              ;; datatype based strings
              (make-nested-match
               `(ebnf::|RDFLiteral|
-                      ,(make-string-literal)
+                      ,(make-string-literal) ;; TODO: if Virtuoso yields booleans as numbers, this would be one of the places to convert it
                       "^^"
                       ,(sparql-manipulation:make-iri (jsown:val solution "datatype")))))
             ((and (string= type "literal"))
@@ -119,10 +119,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                                 (not hathat-iri)
                                                 (detect-quads::primitive-match-string (first (sparql-parser:match-submatches langtag-or-hathat)))))
                  (hathat-iri-string (and hathat-iri
-                                         (sparql-manipulation:uri-unwrap-marks
-                                          (sparql-parser:scanned-token-effective-string
-                                           (detect-quads:first-found-scanned-token
-                                            hathat-iri))))))
+                                         (sparql-inspection:rdf-literal-datatype match))))
              (cond (hathat-iri (jsown:new-js
                                 ("value" value-string)
                                 ("datatype" hathat-iri-string)
@@ -136,7 +133,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
                         ("value" value-string)
                         ("type" "literal")))))))
         (ebnf::|BooleanLiteral| (jsown:new-js
-                                  ("value" (detect-quads::primitive-match-string match)) ; TODO: convert to current interpretation of boolean, a limited set of values are realstic here and this is a good place to convert.
+                                  ("value" (sparql-parser:scanned-token-effective-string (sparql-inspection:first-found-scanned-token match))) ; TODO: convert to current interpretation of boolean, a limited set of values are realstic here and this is a good place to convert.
                                   ("datatype" "http://www.w3.org/2001/XMLSchema#boolean")
                                   ("type" "literal")))
         (ebnf::|NumericLiteral| (jsown:new-js
@@ -310,12 +307,29 @@ based on the supplied arguments and the state in the triplestore.
 
   Yields (values effective-deletes effective-inserts) which are to be
   executed elsewhere."
-  (let ((existing-quads-to-delete (find-existing-quads delete-quads))
-        (quads-to-insert-not-in-triplestore (second (multiple-value-list (find-existing-quads insert-quads)))))
-    (let ((quads-to-delete (set-difference existing-quads-to-delete insert-quads
-                                           :test #'quad-equal-p))
-          (quads-to-insert quads-to-insert-not-in-triplestore))
-      (values quads-to-delete quads-to-insert))))
+  ;; possible cases
+  ;;
+  ;; |------------------------+---+---+---+---+---+---+---+---|
+  ;; | Start state            | x | x | x | x |   |   |   |   |
+  ;; | To delete              | x | x |   |   | x | x |   |   |
+  ;; | To insert              | x |   | x |   | x |   | x |   |
+  ;; |------------------------+---+---+---+---+---+---+---+---|
+  ;; | Existing to delete     | x | x |   |   |   |   |   |   |
+  ;; | Non-existing to delete |   |   |   |   | x | x |   |   |
+  ;; | Existing to insert     | x |   | x |   |   |   |   |   |
+  ;; | Non-existing to insert |   |   |   |   | x |   | x |   |
+  ;; |------------------------+---+---+---+---+---+---+---+---|
+  ;; | Effective delete       |   | x |   |   |   |   |   |   |
+  ;; | Effective insert       |   |   |   |   | x |   | x |   |
+  (multiple-value-bind (existing-quads-to-delete non-existing-quads-to-delete)
+      (find-existing-quads delete-quads)
+    (declare (ignore non-existing-quads-to-delete))
+    (multiple-value-bind (existing-quads-to-insert non-existing-quads-to-insert)
+        (find-existing-quads insert-quads)
+      (let ((quads-to-delete (set-difference existing-quads-to-delete existing-quads-to-insert
+                                             :test #'quad-equal-p))
+            (quads-to-insert non-existing-quads-to-insert))
+        (values quads-to-delete quads-to-insert)))))
 
 (defun query-to-detect-existing-quad-indexes (quads)
   "Constructs a query which detects quads exist in the triplestore of quads.  Yields the indexes of those quads."
