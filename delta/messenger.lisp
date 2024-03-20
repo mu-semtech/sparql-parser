@@ -66,7 +66,8 @@
   (jsown:new-js
     ("subject" (handle-update-unit::match-as-binding (getf quad :subject)))
     ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
-    ("object" (handle-update-unit::match-as-binding (getf quad :object)))))
+    ("object" (handle-update-unit::match-as-binding (getf quad :object)))
+    ("graph" (handle-update-unit::match-as-binding (getf quad :graph)))))
 
 (defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope allowed-groups)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
