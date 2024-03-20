@@ -230,3 +230,18 @@ and the keys are therefore in the same order."
                                    :condition condition
                                    :descend descend)
               return it)))
+
+;;;; smarter case
+(defmacro case+ ((value &key (test #'eql)) &body clauses)
+  "Like CL:CASE but allows specifying the test to use."
+  (let ((test-sym (gensym "CURRIED-TEST")))
+    `(let ((,test-sym (alexandria:curry ,test ,value)))
+       (cond ,@(loop for (spec . body) in clauses
+                     collect
+                     (cond ((listp spec)
+                            `((some ,test-sym (list ,@spec))
+                              ,@body))
+                           ((find spec '(t otherwise))
+                            `(t ,@body))
+                           (t `((funcall ,test-sym ,spec)
+                                ,@body))))))))

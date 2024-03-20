@@ -35,7 +35,8 @@ submatch is searched for."
     (otherwise nil)))
 
 (defun ebnf-string-real-string (ebnf-string)
-  "Yields the real string for the match term matching ebnf-simple-string-p."
+  "Yields the real string for the match term matching ebnf-simple-string-p
+or the string part of any ebnf::|RDFLiteral|."
   ;; When strings have been parsed, we should execute their escape
   ;; sequences and then yield the resulting string.  As of <2024-03-11
   ;; Mon> there currently isn't any parsing of \u and \U but we will
@@ -72,10 +73,6 @@ submatch is searched for."
            (subseq string-representation 3 (- (length string-representation) 3)))
           (t (error "Received a string which is not one of 'ebnf::|STRING_LITERAL1| 'ebnf::|STRING_LITERAL2| 'ebnf::|STRING_LITERAL_LONG1| 'ebnf::|STRING_LITERAL_LONG2|")))))
 
-(defun ebnf-real-number (match)
-  ;; yields the number 
-  )
-
 (defun ebnf-boolean-p (ebnf-match)
   "Yields truethy iff the ebnf-match represents a boolean."
   (or (eq (match-term ebnf-match) 'ebnf::|BooleanLiteral|)
@@ -98,10 +95,59 @@ submatch is searched for."
           ((string= "1" string) (values t t))
           (t (values nil nil)))))
 
+(defun ebnf-numeric-literal-p (ebnf-match)
+  "Yields truethy iff the ebnf-match represents an integer."
+  (or (eq (match-term ebnf-match) 'ebnf::|NumericLiteral|)
+      (and (eq (match-term ebnf-match) 'ebnf::|RDFLiteral|)
+           (find (rdf-literal-datatype ebnf-match)
+                 (list "http://www.w3.org/2001/XMLSchema#integer"
+                       "http://www.w3.org/2001/XMLSchema#decimal"
+                       "http://www.w3.org/2001/XMLSchema#double")
+                 :test #'string=))))
+
+(defun ebnf-numeric-literal-extract-info (ebnf-match)
+  "Extracts numeric info from a numeric literal.  Yields (cons TYPE STRING-VALUE).
+
+The TYPE is one of :integer, :decimal and :double corresponding with the
+xsd type.  The STRING-VALUE is the literal value string in the EBNF-MATCH."
+  (flet ((extract-number-type (match)
+           (ecase (match-term match)
+             (ebnf::|RDFLiteral|
+              (support:case+ ((rdf-literal-datatype match) :test #'string=)
+                ("http://www.w3.org/2001/XMLSchema#integer" :integer)
+                ("http://www.w3.org/2001/XMLSchema#decimal" :decimal)
+                ("http://www.w3.org/2001/XMLSchema#double" :double)
+                (otherwise (error "Received incorrect datatype for number ~A" (rdf-literal-datatype match)))))
+             (ebnf::|NumericLiteral|
+              (ecase (scanned-token-token (first-found-scanned-token match))
+                ((ebnf::|INTEGER| ebnf::|INTEGER_POSITIVE| ebnf::|INTEGER_NEGATIVE|) :integer)
+                ((ebnf::|DECIMAL| ebnf::|DECIMAL_POSITIVE| ebnf::|DECIMAL_NEGATIVE|) :decimal)
+                ((ebnf::|DOUBLE| ebnf::|DOUBLE_POSITIVE| ebnf::|DOUBLE_NEGATIVE|) :double)))))
+         (extract-number-string (match)
+           (ecase (match-term match)
+             (ebnf::|RDFLiteral| (ebnf-string-real-string match))
+             (ebnf::|NumericLiteral| (sparql-parser:scanned-token-effective-string
+                                      (sparql-inspection:first-found-scanned-token
+                                       match))))))
+    (cons (extract-number-type ebnf-match)
+          (extract-number-string ebnf-match))))
+
+(defun ebnf-numeric-literal-equal (left-ebnf-match right-ebnf-match)
+  "Yields truethy iff both matches represent the same number by some
+sensible equality, assuming both represent a numeric literal."
+  (destructuring-bind (left-number-type . left-number-string)
+      (ebnf-numeric-literal-extract-info left-ebnf-match)
+    (destructuring-bind (right-number-type . right-number-string)
+        (ebnf-numeric-literal-extract-info right-ebnf-match)
+      ;; TODO: this is a more stringent version of equality than what can
+      ;; be expected from current triplestores we use.  Add an
+      ;; implementation which is friendlier towards what the triplestore
+      ;; expects.
+      (and (eq left-number-type right-number-type)
+           (equalp left-number-string right-number-string)))))
+
 (defun match-equal-p (a b)
   "Yields truthy iff match a and match b are equal."
-  ;; TODO: understand semantically equivalent nodes such as """hello"""
-  ;; and "hello".
   (and (eq (type-of a) (type-of b))
        (typecase a
          (match
@@ -112,7 +158,9 @@ submatch is searched for."
                          (ebnf-boolean-p b))
                     (eq (ebnf-boolean-as-real-boolean a)
                         (ebnf-boolean-as-real-boolean b)))
-                   ;; TODO: support (ebnf::|NumericLiteral|)
+                   ((and (ebnf-numeric-literal-p a)
+                         (ebnf-numeric-literal-p b))
+                    (ebnf-numeric-literal-equal a b))
                    (t
                     (and (equal (match-term a) (match-term b))
                          (= (length (match-submatches a)) (length (match-submatches b)))

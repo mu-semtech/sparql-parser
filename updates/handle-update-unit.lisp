@@ -136,9 +136,15 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                   ("value" (sparql-parser:scanned-token-effective-string (sparql-inspection:first-found-scanned-token match))) ; TODO: convert to current interpretation of boolean, a limited set of values are realstic here and this is a good place to convert.
                                   ("datatype" "http://www.w3.org/2001/XMLSchema#boolean")
                                   ("type" "literal")))
-        (ebnf::|NumericLiteral| (jsown:new-js
-                                  ("value" (detect-quads::primitive-match-string match))
-                                  ("datatype" "http://www.w3.org/2001/XMLSchema#number")))
+        (ebnf::|NumericLiteral| (destructuring-bind (number-type . number-string)
+                                    (sparql-inspection:ebnf-numeric-literal-extract-info match)
+                                  (jsown:new-js
+                                    ("value" number-string)
+                                    ("datatype"
+                                     (ecase number-type
+                                       (:integer "http://www.w3.org/2001/XMLSchema#integer")
+                                       (:decimal "http://www.w3.org/2001/XMLSchema#decimal")
+                                       (:double "http://www.w3.org/2001/XMLSchema#double"))))))
         (ebnf::|VAR1| (error "Cannot make binding for variable"))
         (ebnf::|VAR2| (error "Cannot make binding for variable"))
         (otherwise (error "Unknown match ~A encountered to convert to binding." match)))))

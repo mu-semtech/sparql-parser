@@ -18,7 +18,8 @@
            #:report-exponential-backoff-failure
            #:with-exponential-backoff-retry
            #:jsown-dedup
-           #:depth-first-search))
+           #:depth-first-search
+           #:case+))
 
 (defpackage :ebnf
   (:use :common-lisp)
@@ -65,7 +66,8 @@
   (:export #:match-equal-p
            #:ebnf-string-real-string
            #:first-found-scanned-token
-           #:rdf-literal-datatype))
+           #:rdf-literal-datatype
+           #:ebnf-numeric-literal-extract-info))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
