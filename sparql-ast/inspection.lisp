@@ -17,10 +17,11 @@ submatch is searched for."
 
 (defun rdf-literal-datatype (ebnf-rdfliteral-match)
   "Yields the URI type of an ebnf::|RDFLiteral|"
-  (sparql-manipulation:uri-unwrap-marks
-   (sparql-parser:scanned-token-effective-string
-    (sparql-inspection:first-found-scanned-token
-     (third (match-submatches ebnf-rdfliteral-match))))))
+  (when (= 3 (length (match-submatches ebnf-rdfliteral-match)))
+    (sparql-manipulation:uri-unwrap-marks
+     (sparql-parser:scanned-token-effective-string
+      (sparql-inspection:first-found-scanned-token
+       (third (match-submatches ebnf-rdfliteral-match)))))))
 
 (defun ebnf-simple-string-p (ebnf-match)
   "Yields truthy iff ebnf-match represents a string, thus being ebnf::|String| or ebnf::|RDFLiteral| with type xsd:string or no LANGTAG and no iri."
