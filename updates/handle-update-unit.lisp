@@ -599,16 +599,21 @@ variables are missing this will not lead to a pattern."
   "Handles the processing of an update-unit EBNF."
   ;; TODO: add conditional validation ensuring all triples were written somewhere
   ;; TODO: add validation ensuring all triples were written to a readable location
-  (flet ((execute-and-dispatch-changes (&key insert-quads delete-quads)
-           (multiple-value-bind (effective-deletes effective-inserts)
-               (detect-effective-changes :insert-quads insert-quads :delete-quads delete-quads)
-             (client:query (query-for-quad-changes :delete-quads effective-deletes :insert-quads effective-inserts)
-                           :send-to-single nil)
-             (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
-             (delta-messenger:delta-notify
-              :deletes delete-quads :inserts insert-quads
-              :effective-deletes effective-deletes
-              :effective-inserts effective-inserts))))
+  (flet ((execute-and-dispatch-changes (&key delete-quads insert-quads)
+           (let ((dedup-delete-quads (remove-duplicates delete-quads :test #'quad-equal-p))
+                 (dedup-insert-quads (remove-duplicates insert-quads :test #'quad-equal-p)))
+            (multiple-value-bind (effective-deletes effective-inserts)
+                (detect-effective-changes :delete-quads
+                                          dedup-delete-quads
+                                          :insert-quads
+                                          dedup-insert-quads)
+              (client:query (query-for-quad-changes :delete-quads effective-deletes :insert-quads effective-inserts)
+                            :send-to-single nil)
+              (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
+              (delta-messenger:delta-notify
+               :deletes dedup-delete-quads :inserts dedup-insert-quads
+               :effective-deletes effective-deletes
+               :effective-inserts effective-inserts)))))
    (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
      ;; (format t "~&Treating operation ~A~%" operation)
      ;; (break "Got operation ~A" operation)
