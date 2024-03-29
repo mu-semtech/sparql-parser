@@ -301,6 +301,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                (ebnf::|SelectQuery|
                                       (ebnf::|SelectClause|
                                              "SELECT"
+                                             "DISTINCT"
                                              ,@(loop for var in variables collect `(ebnf::|Var| ,var)))
                                       (ebnf::|WhereClause|
                                              "WHERE"

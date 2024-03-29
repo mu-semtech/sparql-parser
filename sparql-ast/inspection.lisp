@@ -147,7 +147,8 @@ sensible equality, assuming both represent a numeric literal."
            (equalp left-number-string right-number-string)))))
 
 (defun match-equal-p (a b)
-  "Yields truthy iff match a and match b are equal."
+  "Yields truthy if match a and match b are equal.  May provide false
+negatives but not false positives."
   (and (eq (type-of a) (type-of b))
        (typecase a
          (match

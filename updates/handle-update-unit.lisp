@@ -297,7 +297,8 @@ This is the inverse of binding-as-match and can be used to create delta messages
     (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
 
 (defun quad-equal-p (a b)
-  "Yields truthy iff two quads are equal"
+  "Yields truthy iff two quads are equal.  May provide false negatives but
+should never provide false positives."
   ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
   (and
    (every (lambda (key)
@@ -306,6 +307,122 @@ This is the inverse of binding-as-match and can be used to create delta messages
           '(:graph :predicate :subject))
    (sparql-inspection:match-equal-p (quad-object-as-match-term (getf a :object))
                                     (quad-object-as-match-term (getf b :object)))))
+
+(defun remove-database-value-overlaps (quads-to-delete existing-quads-to-insert)
+  "Goes to the database to verify that quads-to-delete does not contain
+values which will also be inserted through existing-quads-to-insert.
+This allows us to remove cases where we did not detect two values as
+being the same as per triplestore."
+  (if (and quads-to-delete existing-quads-to-insert)
+      (let ((possibly-overlapping-values-with-index
+              (loop for delete-quad in quads-to-delete
+                    for index from 0
+                    append (loop for insert-quad in existing-quads-to-insert
+                                 ;; we can detect uri's perfectly, only compare with those
+                                 when (every (lambda (key) (string= (quad-term-uri (getf delete-quad key))
+                                                                      (quad-term-uri (getf insert-quad key))))
+                                               '(:predicate :subject :graph))
+                                   collect (list index
+                                                 (getf delete-quad :object)
+                                                 (getf insert-quad :object))))))
+        (if possibly-overlapping-values-with-index
+            (let* ((ast (sparql-parser:make-sparql-ast :top-node
+                                                       (query-to-detect-overlapping-values possibly-overlapping-values-with-index)
+                                                       :string
+                                                       sparql-parser:*scanning-string*))
+                   (query-result (client:bindings (client:query (sparql-generator:write-when-valid ast)
+                                                                :send-to-single t)))
+                   (quad-indexes-to-delete
+                     (delete-duplicates
+                      (loop for binding in query-result
+                            collect (parse-integer (jsown:filter binding "index" "value"))))))
+              (loop for quad in quads-to-delete
+                    for index from 0
+                    unless (find index quad-indexes-to-delete :test #'=)
+                      collect quad))
+            quads-to-delete))
+      quads-to-delete)))
+
+(defun query-to-detect-overlapping-values (possibly-overlapping-values-with-index)
+  "Constructs a query which detects values which the triplestore deems to be the same and yields the corresponding index.
+
+POSSIBLY-OVERLAPPING-INDEXES is a list containing lists of IDX A B in
+which the index will be returned IFF the database thinks A and B are the
+same value."
+  ;; Emits a query such as:
+  ;;
+  ;; SELECT ?index WHERE {
+  ;;   VALUES (?index ?a ?b) {
+  ;;     (0 "obj2" "obj1")
+  ;;     (1 "obj2" "obj2")
+  ;;   }
+  ;    FILTER (?a = ?b)
+  ;; }
+
+  (flet ((make-inline-value-blocks ()
+           (loop for (index a b) in possibly-overlapping-values-with-index
+                 append
+                 `("("
+                   ,(sparql-manipulation:make-match-up-to-scanned-token
+                     :string (format nil "~A" index)
+                     :match-list '(ebnf::|DataBlockValue| ebnf::|NumericLiteral| ebnf::|NumericLiteralUnsigned| ebnf::|INTEGER|))
+                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term a))
+                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term b))
+                   ")"))))
+    (make-nested-match
+     `(ebnf::|QueryUnit|
+             (ebnf::|Query|
+                    ebnf::|Prologue|
+                    (ebnf::|SelectQuery|
+                           (ebnf::|SelectClause|
+                                  "SELECT"
+                                  ,(sparql-manipulation:make-var "?index"))
+                           (ebnf::|WhereClause|
+                                  "WHERE"
+                                  (ebnf::|GroupGraphPattern|
+                                         "{"
+                                         (ebnf::|GroupGraphPatternSub|
+                                                (ebnf::|GraphPatternNotTriples|
+                                                       (ebnf::|InlineData|
+                                                              "VALUES"
+                                                              (ebnf::|DataBlock|
+                                                                     (ebnf::|InlineDataFull|
+                                                                            "("
+                                                                            ,(sparql-manipulation:make-var "?index")
+                                                                            ,(sparql-manipulation:make-var "?a")
+                                                                            ,(sparql-manipulation:make-var "?b")
+                                                                            ")"
+                                                                            "{"
+                                                                            ,@(make-inline-value-blocks)
+                                                                            "}"))))
+                                                (ebnf::|GraphPatternNotTriples|
+                                                       (ebnf::|Filter|
+                                                              "FILTER"
+                                                              (ebnf::|Constraint|
+                                                                     (ebnf::|BrackettedExpression|
+                                                                           "("
+                                                                           (ebnf::|Expression|
+                                                                                  (ebnf::|ConditionalOrExpression|
+                                                                                         (ebnf::|ConditionalAndExpression|
+                                                                                                (ebnf::|ValueLogical|
+                                                                                                       (ebnf::|RelationalExpression|
+                                                                                                              (ebnf::|NumericExpression|
+                                                                                                                     (ebnf::|AdditiveExpression|
+                                                                                                                            (ebnf::|MultiplicativeExpression|
+                                                                                                                                   (ebnf::|UnaryExpression|
+                                                                                                                                          (ebnf::|PrimaryExpression|
+                                                                                                                                                 ,(sparql-manipulation:make-var "?a"))))))
+                                                                                                              "="
+                                                                                                              (ebnf::|NumericExpression|
+                                                                                                                     (ebnf::|AdditiveExpression|
+                                                                                                                            (ebnf::|MultiplicativeExpression|
+                                                                                                                                   (ebnf::|UnaryExpression|
+                                                                                                                                          (ebnf::|PrimaryExpression|
+                                                                                                                                                 ,(sparql-manipulation:make-var "?b")))))))))))
+                                                                           ")")))))
+                                         "}"))
+                           ebnf::|SolutionModifier|)
+                    ebnf::|ValuesClause|)))))
 
 (defun detect-effective-changes (&key delete-quads insert-quads)
   "Calculates the quads that will effectively be written to the triplestore
@@ -335,7 +452,13 @@ based on the supplied arguments and the state in the triplestore.
       (let ((quads-to-delete (set-difference existing-quads-to-delete existing-quads-to-insert
                                              :test #'quad-equal-p))
             (quads-to-insert non-existing-quads-to-insert))
-        (values quads-to-delete quads-to-insert)))))
+        (let ((quads-to-delete-with-database-value-check
+                ;; the database may find some values the same even
+                ;; though the RDF spec considers them different which
+                ;; may create false deletes. eg: 12e5 vs 1.2e6
+                (remove-database-value-overlaps quads-to-delete existing-quads-to-insert)))
+          (values quads-to-delete-with-database-value-check
+                  quads-to-insert))))))
 
 (defun query-to-detect-existing-quad-indexes (quads)
   "Constructs a query which detects quads exist in the triplestore of quads.  Yields the indexes of those quads."
@@ -350,7 +473,6 @@ based on the supplied arguments and the state in the triplestore.
   ;;     ?s ?p ?o.
   ;;   }
   ;; }
-
   (flet ((make-inline-data-blocks (quads)
            (loop for quad in quads
                  for index from 0
@@ -475,13 +597,10 @@ variables are missing this will not lead to a pattern."
 
 (defun handle-sparql-update-unit (update-unit)
   "Handles the processing of an update-unit EBNF."
-  ;; TODO: verify insert-triples and delete-triples don't contain any more variables
-  ;; TODO: execute where block if it exists
   ;; TODO: add conditional validation ensuring all triples were written somewhere
   ;; TODO: add validation ensuring all triples were written to a readable location
   (flet ((execute-and-dispatch-changes (&key insert-quads delete-quads)
-           (multiple-value-bind
-                 (effective-deletes effective-inserts)
+           (multiple-value-bind (effective-deletes effective-inserts)
                (detect-effective-changes :insert-quads insert-quads :delete-quads delete-quads)
              (client:query (query-for-quad-changes :delete-quads effective-deletes :insert-quads effective-inserts)
                            :send-to-single nil)
