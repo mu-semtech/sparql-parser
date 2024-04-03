@@ -341,7 +341,7 @@ being the same as per triplestore."
                     unless (find index quad-indexes-to-delete :test #'=)
                       collect quad))
             quads-to-delete))
-      quads-to-delete)))
+      quads-to-delete))
 
 (defun query-to-detect-overlapping-values (possibly-overlapping-values-with-index)
   "Constructs a query which detects values which the triplestore deems to be the same and yields the corresponding index.
