@@ -215,6 +215,7 @@
   ;; computations.
   (remove-if-not
    (lambda (access-token)
+     ;; TODO: verify systems are working with this deduplication enabled (remove t and test)
      (or t
       (find mu-call-scope (access-grant-scopes (access-token-access access-token))
             :test #'equal)))
