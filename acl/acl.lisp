@@ -218,7 +218,8 @@
      (or t
       (find mu-call-scope (access-grant-scopes (access-token-access access-token))
             :test #'equal)))
-   (if mu-auth-allowed-groups
+   (if (and mu-auth-allowed-groups
+            (not (equal mu-auth-allowed-groups "")))
        (access-tokens-from-allowed-groups mu-auth-allowed-groups)
        (let ((tokens (access-tokens-from-session-id mu-session-id)))
          (setf (mu-auth-allowed-groups)
