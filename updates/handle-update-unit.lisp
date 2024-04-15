@@ -207,7 +207,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
             in (support:group-by quads #'string=
                                  :key (lambda (quad)
                                         (quad-term-uri (getf quad :graph))))
-          for graph = (quad-term-uri (getf (first quads) :graph))
+          for graph = (quad-term-uri (getf (first graphed-group) :graph))
           collect
           (make-nested-match
            `(ebnf::|QuadsNotTriples|
