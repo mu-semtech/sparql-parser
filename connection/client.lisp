@@ -52,14 +52,14 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
                                string body))
                      (setf result body))
                  (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
-                   (format t "~&Encountered error from FAST-HTTP: ~A" e)
-                   (when *log-sparql-query-roundtrip*
-                     (format t "~&Logging query that led to failure:~%~A" string))
+                   (format t
+                           "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
+                           e (when *log-sparql-query-roundtrip* string))
                    (support:report-exponential-backoff-failure e))
                  (error (e)
-                   (format t "~&Encountered general error when executing query: ~A" e)
-                   (when *log-sparql-query-roundtrip*
-                     (format t "~&Logging query that led to failure:~%~A" string))
+                   (format t
+                           "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
+                           e (when *log-sparql-query-roundtrip* string))
                    (support:report-exponential-backoff-failure e)))))
     result))
 
