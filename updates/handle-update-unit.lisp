@@ -117,7 +117,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
            (let ((value-string (sparql-inspection:ebnf-string-real-string ebnf-value-string))
                  (langtag-or-hathat-string (and langtag-or-hathat
                                                 (not hathat-iri)
-                                                (detect-quads::primitive-match-string (first (sparql-parser:match-submatches langtag-or-hathat)))))
+                                                (detect-quads::primitive-match-string langtag-or-hathat)))
                  (hathat-iri-string (and hathat-iri
                                          (sparql-inspection:rdf-literal-datatype match))))
              (cond (hathat-iri (jsown:new-js
