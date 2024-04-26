@@ -635,9 +635,14 @@ variables are missing this will not lead to a pattern."
               (bindings (client:batch-create-full-solution-for-select-query
                          (operation-data-subfield operation :query)
                          :for :modify :usage :read)))
-          (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
-                (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
-            (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))))))))
+          (if bindings
+              (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
+                    (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
+                (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))
+              ;; Following is subject to change.  Nothing should depend
+              ;; on the resulting output, sending out a json body could
+              ;; be assumed, might as well send something sensible.
+              "{ \"head\": { \"link\": [], \"vars\": [\"callret-0\"] }, \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [ { \"callret-0\": { \"type\": \"literal\", \"value\": \"Insert into <http://www.openlinksw.com/schemas/virtrdf#DefaultSparul11Target>, 0 triples -- nothing to do\" }} ] } }")))))))
 
 (defun unfold-prefixed-quads (quads)
   "Unfolds the prefixed quads (represented by a CONS cell) into a match
