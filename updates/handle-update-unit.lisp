@@ -320,26 +320,48 @@ being the same as per triplestore."
                     append (loop for insert-quad in existing-quads-to-insert
                                  ;; we can detect uri's perfectly, only compare with those
                                  when (every (lambda (key) (string= (quad-term-uri (getf delete-quad key))
-                                                                      (quad-term-uri (getf insert-quad key))))
+                                                                    (quad-term-uri (getf insert-quad key))))
                                                '(:predicate :subject :graph))
                                    collect (list index
-                                                 (getf delete-quad :object)
-                                                 (getf insert-quad :object))))))
+                                                 delete-quad
+                                                 insert-quad)))))
         (if possibly-overlapping-values-with-index
-            (let* ((ast (sparql-parser:make-sparql-ast :top-node
-                                                       (query-to-detect-overlapping-values possibly-overlapping-values-with-index)
-                                                       :string
-                                                       sparql-parser:*scanning-string*))
-                   (query-result (client:bindings (client:query (sparql-generator:write-when-valid ast)
-                                                                :send-to-single t)))
-                   (quad-indexes-to-delete
-                     (delete-duplicates
-                      (loop for binding in query-result
-                            collect (parse-integer (jsown:filter binding "index" "value"))))))
-              (loop for quad in quads-to-delete
-                    for index from 0
-                    unless (find index quad-indexes-to-delete :test #'=)
-                      collect quad))
+            (let ((possibly-overlapping-values-with-index-groups ; batch quads
+                    ;; TODO: use length of only object part of match
+                    (support:group-by-size-and-count
+                     possibly-overlapping-values-with-index
+                     :max-size *max-query-size-heuristic*
+                     :max-count *max-quads-per-query-heuristic*
+                     :item-size (lambda (list)
+                                  (destructuring-bind (index delete-quad insert-quad)
+                                      list
+                                    (declare (ignore index))
+                                    (+ 5
+                                       (quad-as-string-size delete-quad)
+                                       (quad-as-string-size insert-quad)))))))
+              ;; collect results for each quad group
+              (loop for possibly-overlapping-values-with-index-group in possibly-overlapping-values-with-index-groups
+                    for object-values-with-index
+                      = (mapcar (lambda (lst)
+                                  (destructuring-bind (index delete-quad insert-quad) lst
+                                    (list index
+                                          (getf delete-quad :object)
+                                          (getf insert-quad :object))))
+                                possibly-overlapping-values-with-index-group)
+                    for ast = (sparql-parser:make-sparql-ast :top-node
+                                                             (query-to-detect-overlapping-values object-values-with-index)
+                                                             :string
+                                                             sparql-parser:*scanning-string*)
+                    for query-result = (client:bindings (client:query (sparql-generator:write-when-valid ast)
+                                                                      :send-to-single t))
+                    for quad-indexes-to-delete
+                      = (delete-duplicates
+                         (loop for binding in query-result
+                               collect (parse-integer (jsown:filter binding "index" "value"))))
+                    append (loop for quad in quads-to-delete
+                                 for index from 0 ; because looping over full quads-to-delete list
+                                 unless (find index quad-indexes-to-delete :test #'=)
+                                   collect quad)))
             quads-to-delete))
       quads-to-delete))
 
