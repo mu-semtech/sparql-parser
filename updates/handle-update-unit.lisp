@@ -539,26 +539,49 @@ based on the supplied arguments and the state in the triplestore.
                            ebnf::|SolutionModifier|)
                     ebnf::|ValuesClause|)))))
 
+(defun quad-as-string-size (quad)
+  "Converts QUAD into an estimate for the size of its representation as a string in a sparql query."
+  (+
+   (loop for part in '(:subject :predicate :object :graph)
+         for value = (getf quad part)
+         if (consp value)
+           sum (length (cdr value))
+         else
+           sum (length (sparql-generator:write-valid-match value)))
+   4))
+
+(defparameter *max-query-size-heuristic* 8000
+  "Heuristing indicating roughly how many characters the body of quads may be in a single query.
+Current implementation will try to query even if over this size.")
+
+(defparameter *max-quads-per-query-heuristic* 100
+  "Heuristing indicating roughly how many quads could be in a single query for insert or query.")
+
 (defun find-existing-quads (quads)
   "Searches the triplestore and yields the quads which exist.
 
   Return (VALUES existing-quads non-existing-quads)"
-  (if quads
-      (let* ((ast (sparql-parser:make-sparql-ast :top-node (query-to-detect-existing-quad-indexes quads)
+  (let (existing-quads
+        non-existing-quads
+        (quad-groups (support:group-by-size-and-count
+                      quads
+                      :max-size *max-query-size-heuristic*
+                      :max-count *max-quads-per-query-heuristic*
+                      :item-size #'quad-as-string-size)))
+    (dolist (quad-group quad-groups)
+      (let* ((ast (sparql-parser:make-sparql-ast :top-node (query-to-detect-existing-quad-indexes quad-group)
                                                  :string sparql-parser:*scanning-string*))
              (query-result (client:bindings (client:query (sparql-generator:write-when-valid ast)
                                                           :send-to-single t)))
              (existing-quad-indexes (loop for binding in query-result
                                           collect (parse-integer (jsown:filter binding "index" "value")))))
-        (values (loop for quad in quads
-                      for index from 0
-                      when (find index existing-quad-indexes)
-                        collect quad)
-                (loop for quad in quads
-                      for index from 0
-                      unless (find index existing-quad-indexes)
-                        collect quad)))
-      (values nil nil)))
+        (loop for quad in quad-group
+              for index from 0
+              if (find index existing-quad-indexes)
+                do (push quad existing-quads)
+              else
+                do (push quad non-existing-quads))))
+    (values existing-quads non-existing-quads)))
 
 (defun filled-in-patterns (patterns bindings)
   "Creates a set of QUADS for the given patterns and bindings.
