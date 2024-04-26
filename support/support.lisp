@@ -80,6 +80,28 @@
           do (push (list item) discovered-groups)
         finally (return discovered-groups)))
 
+(defun group-by-size-and-count (items &key (max-size 100) (max-count 20) (item-size #'length))
+  "Groups items such that MAX-SIZE and MAX-COUNT is not exceeded."
+  (let ((current-list nil)
+        (current-size 0)
+        (current-count 0)
+        (previous-lists nil))
+    (dolist (item items)
+      (let ((current-item-size (funcall item-size item)))
+        (incf current-count)
+        (incf current-size current-item-size)
+        (cond ((null current-list)
+               (push item current-list))
+              ((and
+                (<= current-count max-count)
+                (<= current-size max-size))
+               (push item current-list))
+              (t
+               (push (reverse current-list) previous-lists)
+               (setf current-size current-item-size
+                     current-count 1
+                     current-list (list item))))))
+    (reverse (cons current-list previous-lists))))
 
 (defun pick-lists (left right &key pick single double)
   "Picks elements from the list, executing selector.

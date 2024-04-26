@@ -19,7 +19,8 @@
            #:with-exponential-backoff-retry
            #:jsown-dedup
            #:depth-first-search
-           #:case+))
+           #:case+
+           #:group-by-size-and-count))
 
 (defpackage :ebnf
   (:use :common-lisp)
