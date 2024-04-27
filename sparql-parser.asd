@@ -6,11 +6,12 @@
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."
   :serial t
-  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless)
+  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1)
   :components ((:file "packages")
                ;; supporting code
                (:file "support/support")
                (:file "support/tree-db")
+               (:file "support/string-file")
                ;; parsing an EBNF tree
                (:file "sparql-ast/ebnf")
                (:file "sparql-ast/terminals")

@@ -42,6 +42,8 @@ or the string part of any ebnf::|RDFLiteral|."
   ;; sequences and then yield the resulting string.  As of <2024-03-11
   ;; Mon> there currently isn't any parsing of \u and \U but we will
   ;; ignore this for now.
+  ;;
+  ;; TODO: verify whether support for \u or \U is necessary.
   (let* ((child-match
            (ecase (match-term ebnf-string)
              (ebnf::|RDFLiteral| (first-submatch ebnf-string 2))

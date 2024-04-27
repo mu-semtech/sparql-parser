@@ -20,7 +20,11 @@
            #:jsown-dedup
            #:depth-first-search
            #:case+
-           #:group-by-size-and-count))
+           #:group-by-size-and-count
+           #:*string-max-size*
+           #:*file-abbreviation-uri-prefix*
+           #:maybe-uri-to-string
+           #:maybe-string-to-uri))
 
 (defpackage :ebnf
   (:use :common-lisp)
@@ -68,7 +72,8 @@
            #:ebnf-string-real-string
            #:first-found-scanned-token
            #:rdf-literal-datatype
-           #:ebnf-numeric-literal-extract-info))
+           #:ebnf-numeric-literal-extract-info
+           #:ebnf-simple-string-p))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
@@ -90,7 +95,10 @@
            #:uri-wrap-marks
            #:uri-unwrap-marks
            #:make-var
-           #:make-match-up-to-scanned-token))
+           #:make-match-up-to-scanned-token
+           #:make-token-match
+           #:make-string-literal
+           #:make-rdfliteral))
 
 (defpackage #:type-cache
   (:use :common-lisp)
@@ -256,7 +264,8 @@
   (:use :common-lisp #:connection-globals)
   (:export #:query #:bindings
            #:batch-map-solutions-for-select-query
-           #:batch-create-full-solution-for-select-query))
+           #:batch-create-full-solution-for-select-query
+           #:expand-bindings))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)

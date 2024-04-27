@@ -87,7 +87,8 @@
      (acl:define-graph acl::user-data ("http://mu.semte.ch/graphs/personal/")
        (acl::_
         acl::-> "ext:hasBook"
-        acl::-> "ext:hasSuperFavorite")
+        acl::-> "ext:hasSuperFavorite"
+        acl::-> "ext:longContent")
        ("foaf:Person" acl::<- "ext:hasFavoriteAuthor"))
 
      (acl:grant (acl::read acl::write)
@@ -326,6 +327,36 @@
         INSERT DATA {
          <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
        }")
+
+      (let ((support:*string-max-size* 50))
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+          PREFIX schema: <http://schema.org/>
+          PREFIX authors: <http://example.com/authors/>
+          PREFIX books: <http://example.com/books/>
+          PREFIX favorites: <http://mu.semte.ch/favorites/>
+          PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+          INSERT DATA {
+           <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
+         }")
+
+        (format t "~&Matches yield following content for long content: ~%~A"
+                (server:execute-query-for-context
+                 "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+                  SELECT ?content WHERE { <http://book-store.example.com/books/my-book> ext:longContent ?content }"))
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+          PREFIX schema: <http://schema.org/>
+          PREFIX authors: <http://example.com/authors/>
+          PREFIX books: <http://example.com/books/>
+          PREFIX favorites: <http://mu.semte.ch/favorites/>
+          PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+          INSERT DATA {
+           <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
+         }"))
 
       (server:execute-query-for-context
        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>

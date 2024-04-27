@@ -75,6 +75,35 @@ Assumes URI is not wrapped."
 Assumes URI-STRING is wrapped."
   (subseq uri-string 1 (1- (length uri-string))))
 
+(defun sparql-escape-string (string)
+  "Generate an escaped SPARQL string for triple double quotes."
+  (concatenate 'string
+               "\"\"\""
+               (cl-ppcre:regex-replace-all "([\"\\\\])" string "\\\\\\1")
+               "\"\"\""))
+
+(defun make-token-match (term string)
+  "Makes a token match for the given string.  This is a MATCH which has a SCANNED-TOKEN as a match."
+  `(,term
+    ,(sparql-parser:make-scanned-token
+      :start 0 :end 0
+      :string string
+      :token term)))
+
+(defun make-rdfliteral (string)
+  "This constructs an ebnf::|RDFLiteral| from STRING.
+
+Currently supports only string, but could be extended with datatype and lang keywords when necessary."
+  (handle-update-unit::make-nested-match
+   `(ebnf::|RDFLiteral| ,(make-string-literal string))))
+
+(defun make-string-literal (string)
+  "Constructs a string literal for string, escaping as necessary."
+  (handle-update-unit::make-nested-match
+   `(ebnf::|String|
+           ,(make-token-match 'ebnf::|STRING_LITERAL_LONG2|
+                              (sparql-escape-string string)))))
+
 (defun make-word-match (string)
   "Constructs a match for fixed content in the EBNF.
 

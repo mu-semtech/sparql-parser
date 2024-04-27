@@ -33,29 +33,12 @@ same logic to construct the submatches."
            match))
        (make-match specification))))
 
-(defun sparql-escape-string (string)
-  "Generate an escaped SPARQL string for triple double quotes."
-  (concatenate 'string
-               "\"\"\""
-               (cl-ppcre:regex-replace-all "([\"\\\\])" string "\\\\\\1")
-               "\"\"\""))
-
-(defun make-token-match (term string)
-  "Makes a token match for the given string.  This is a MATCH which has a SCANNED-TOKEN as a match."
-  `(,term
-    ,(sparql-parser:make-scanned-token
-      :start 0 :end 0
-      :string string
-      :token term)))
-
 (defun binding-as-match (solution)
   "Constructs a match statement which corresponds to SOLUTION binding."
   (let ((type (jsown:val solution "type"))
         (value (jsown:val solution "value")))
     (flet ((make-string-literal ()
-             `(ebnf::|String|
-                     ,(make-token-match 'ebnf::|STRING_LITERAL_LONG2|
-                                        (sparql-escape-string value)))))
+             (sparql-manipulation:make-string-literal value)))
       (cond ((string= type "uri")
              ;; uri
              (sparql-manipulation:iriref value))
@@ -640,36 +623,67 @@ variables are missing this will not lead to a pattern."
                   unless (pattern-has-variables filled-in-pattern)
                     collect filled-in-pattern))))))
 
+(defun alter-quad-to-string-file-uris (quad)
+  "Converts the object portion of a quad into a file uri if necessary."
+  (let ((object (getf quad :object)))
+    (when (and (not (consp object)) ; it's certainly a uri
+               (sparql-inspection:ebnf-simple-string-p object)) ; it's a string
+      (multiple-value-bind (uri-replacement uri-replacement-p)
+          (support:maybe-string-to-uri (sparql-inspection:ebnf-string-real-string object))
+        (when uri-replacement-p ; the string has been replaced by a URI
+          (setf (getf quad :object) (sparql-manipulation:iriref uri-replacement))))))
+  quad)
+
+(defun alter-quad-string-file-uri-to-string (quad)
+  (let ((object (getf quad :object)))
+    (when (and (not (consp object))
+               (eq (sparql-parser:match-term object) 'ebnf::|IRIREF|))
+      (let ((uri-string (support:-> object
+                          (sparql-inspection:first-found-scanned-token)
+                          (sparql-parser:scanned-token-effective-string)
+                          (sparql-manipulation:uri-unwrap-marks))))
+        (multiple-value-bind (string-replacement string-replacement-p)
+            (support:maybe-uri-to-string uri-string)
+          (when string-replacement-p
+            (setf (getf quad :object)
+                  (sparql-manipulation:make-rdfliteral string-replacement)))))))
+  quad)
+
 (defun handle-sparql-update-unit (update-unit)
   "Handles the processing of an update-unit EBNF."
   ;; TODO: add conditional validation ensuring all triples were written somewhere
   ;; TODO: add validation ensuring all triples were written to a readable location
   (flet ((execute-and-dispatch-changes (&key delete-quads insert-quads)
-           (let ((dedup-delete-quads (remove-duplicates delete-quads :test #'quad-equal-p))
-                 (dedup-insert-quads (remove-duplicates insert-quads :test #'quad-equal-p)))
-            (multiple-value-bind (effective-deletes effective-inserts)
-                (detect-effective-changes :delete-quads
-                                          dedup-delete-quads
-                                          :insert-quads
-                                          dedup-insert-quads)
-              (dolist (group (support:group-by-size-and-count
-                              (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
-                                     (mapcar (lambda (a) (cons :insert a)) effective-inserts))
-                              :max-size *max-query-size-heuristic*
-                              :max-count *max-quads-per-query-heuristic*
-                              :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
-                (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
-                                                                          when (eq key :delete)
-                                                                            collect quad)
-                                                      :insert-quads (loop for (key . quad) in group
-                                                                          when (eq key :insert)
-                                                                            collect quad))
-                              :send-to-single nil))
-              (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
-              (delta-messenger:delta-notify
-               :deletes dedup-delete-quads :inserts dedup-insert-quads
-               :effective-deletes effective-deletes
-               :effective-inserts effective-inserts)))))
+           (let* (;; once we have the effective content to alter, we can safely create files from long strings
+                  (delete-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris delete-quads))
+                  (insert-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris insert-quads))
+                  ;; we can deduplicate everything
+                  (dedup-delete-quads (remove-duplicates delete-quads-with-string-file-uris :test #'quad-equal-p))
+                  (dedup-insert-quads (remove-duplicates insert-quads-with-string-file-uris :test #'quad-equal-p)))
+             (multiple-value-bind (effective-deletes effective-inserts)
+                 (detect-effective-changes :delete-quads
+                                           dedup-delete-quads
+                                           :insert-quads
+                                           dedup-insert-quads)
+               (dolist (group (support:group-by-size-and-count
+                               (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
+                                      (mapcar (lambda (a) (cons :insert a)) effective-inserts))
+                               :max-size *max-query-size-heuristic*
+                               :max-count *max-quads-per-query-heuristic*
+                               :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
+                 (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
+                                                                           when (eq key :delete)
+                                                                             collect quad)
+                                                       :insert-quads (loop for (key . quad) in group
+                                                                           when (eq key :insert)
+                                                                             collect quad))
+                               :send-to-single nil))
+               (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
+               (delta-messenger:delta-notify
+                :deletes (mapcar #'alter-quad-string-file-uri-to-string dedup-delete-quads)
+                :inserts (mapcar #'alter-quad-string-file-uri-to-string dedup-insert-quads)
+                :effective-deletes (mapcar #'alter-quad-string-file-uri-to-string effective-deletes)
+                :effective-inserts (mapcar #'alter-quad-string-file-uri-to-string effective-inserts))))))
    (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
      ;; (format t "~&Treating operation ~A~%" operation)
      ;; (break "Got operation ~A" operation)

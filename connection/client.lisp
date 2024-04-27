@@ -63,11 +63,35 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
                    (support:report-exponential-backoff-failure e)))))
     result))
 
-(defun bindings (query-result)
+(defun expand-bindings (bindings)
+  "Expands bindings for URIs which actually represent a string.  May modify bindings in place."
+  (loop for binding in bindings
+        do
+           (jsown:do-json-keys (key val) binding
+             (when (string= (jsown:val val "type") "uri")
+               (multiple-value-bind (string-replacement string-replacement-p)
+                   (support:maybe-uri-to-string (jsown:val val "value"))
+                 (when string-replacement-p
+                   ;; TODO: support language typed strings and datatypes
+                   (setf (jsown:val binding key)
+                         (jsown:new-js
+                           ("value" string-replacement)
+                           ("type" "literal"))))))))
+  bindings)
+
+(defun bindings (query-result &key (convert-string-uris t))
   "Converts the string representation of the SPARQL query result into a set
-of JSOWN compatible BINDINGS."
-  (jsown:filter (jsown:parse query-result)
-                "results" "bindings"))
+of JSOWN compatible BINDINGS.
+
+If CONVERT-STRING-URIS is truethy, any URI which actually represents a
+string, will be expanded into its string representation for further
+comparison."
+  ;; TODO: introduce a database error type and expand it if the result was nil?
+  (let ((bindings (jsown:filter (jsown:parse query-result)
+                                "results" "bindings")))
+    (if convert-string-uris
+        (expand-bindings bindings)
+        bindings)))
 
 (defun batch-map-solutions-for-select-query* (query &key (for :read) batch-size usage)
   (declare (ignore for batch-size))
