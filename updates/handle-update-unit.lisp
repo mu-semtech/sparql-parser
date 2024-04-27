@@ -652,8 +652,19 @@ variables are missing this will not lead to a pattern."
                                           dedup-delete-quads
                                           :insert-quads
                                           dedup-insert-quads)
-              (client:query (query-for-quad-changes :delete-quads effective-deletes :insert-quads effective-inserts)
-                            :send-to-single nil)
+              (dolist (group (support:group-by-size-and-count
+                              (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
+                                     (mapcar (lambda (a) (cons :insert a)) effective-inserts))
+                              :max-size *max-query-size-heuristic*
+                              :max-count *max-quads-per-query-heuristic*
+                              :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
+                (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
+                                                                          when (eq key :delete)
+                                                                            collect quad)
+                                                      :insert-quads (loop for (key . quad) in group
+                                                                          when (eq key :insert)
+                                                                            collect quad))
+                              :send-to-single nil))
               (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
               (delta-messenger:delta-notify
                :deletes dedup-delete-quads :inserts dedup-insert-quads
