@@ -21,7 +21,11 @@ second being truethy iff the string was converted into a URI."
 
 (defun uri-string-p (uri)
   "Yields truethy iff URI represents a string"
-  (and (> (length uri) (length *file-abbreviation-uri-prefix*))))
+  (let ((uri-prefix-length (length *file-abbreviation-uri-prefix*)))
+    (and (> (length uri) uri-prefix-length)
+         (string= uri *file-abbreviation-uri-prefix*
+                  :end1 uri-prefix-length
+                  :end2 uri-prefix-length))))
 
 (defun maybe-uri-to-string (uri)
   "If URI is the representation of a string, then the string will be extracted.
