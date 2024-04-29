@@ -1,5 +1,12 @@
 (in-package #:handle-update-unit)
 
+(defparameter *max-query-size-heuristic* 8000
+  "Heuristing indicating roughly how many characters the body of quads may be in a single query.
+Current implementation will try to query even if over this size.")
+
+(defparameter *max-quads-per-query-heuristic* 100
+  "Heuristing indicating roughly how many quads could be in a single query for insert or query.")
+
 (defun make-nested-match (specification)
   "Constructs a nested match through an abbreviated interface.
 
@@ -554,13 +561,6 @@ based on the supplied arguments and the state in the triplestore.
          else
            sum (length (sparql-generator:write-valid-match value)))
    4))
-
-(defparameter *max-query-size-heuristic* 8000
-  "Heuristing indicating roughly how many characters the body of quads may be in a single query.
-Current implementation will try to query even if over this size.")
-
-(defparameter *max-quads-per-query-heuristic* 100
-  "Heuristing indicating roughly how many quads could be in a single query for insert or query.")
 
 (defun find-existing-quads (quads)
   "Searches the triplestore and yields the quads which exist.
