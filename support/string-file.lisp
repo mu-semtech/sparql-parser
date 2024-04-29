@@ -34,7 +34,7 @@ value is truethy iff the URI was converted to a string."
 
 (defun make-sha-file-path (sha)
   "Constructs the file path for a given SHA."
-  #+docker (make-pathname :directory '(:absolute "data") :name filename)
+  #+docker (make-pathname :directory '(:absolute "data") :name sha)
   #-docker (asdf:system-relative-pathname :sparql-parser (format nil "data/~A" sha)))
 
 (defun make-string-file (string)
