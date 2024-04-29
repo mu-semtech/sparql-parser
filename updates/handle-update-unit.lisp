@@ -55,8 +55,9 @@ same logic to construct the submatches."
              (make-nested-match
               `(ebnf::|RDFLiteral|
                       ,(make-string-literal)
-                      ,(make-token-match 'ebnf::|LANGTAG|
-                                         (concatenate 'string "@" (jsown:val solution "xml:lang"))))))
+                      ,(sparql-manipulation:make-token-match
+                        'ebnf::|LANGTAG|
+                        (concatenate 'string "@" (jsown:val solution "xml:lang"))))))
             ((and (jsown:val-safe solution "datatype")
                   (or (string= type "literal")
                       ;; virtuoso seems to emit typed-literal in some (all?) cases,
@@ -76,8 +77,9 @@ same logic to construct the submatches."
              ;; support blank node
              (make-nested-match
               `(ebnf::|BlankNode|
-                      ,(make-token-match 'ebnf::|BLANK_NODE_LABEL|
-                                         (concatenate 'string "_:" value)))))
+                      ,(sparql-manipulation:make-token-match
+                        'ebnf::|BLANK_NODE_LABEL|
+                        (concatenate 'string "_:" value)))))
             (t (error "Unknown solution to turn into match statement ~A" solution))))))
 
 (defun match-as-binding (match)
