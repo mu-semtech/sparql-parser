@@ -478,7 +478,7 @@ destructured bindings of LAMBDA-LIST as per DESTRUCTURING-BIND."
     (ebnf::|Prologue|
            (setf (sparql-parser:match-submatches match)
                  (cons (mk-match `(ebnf::|BaseDecl| "BASE" ,(iriref base-uri)))
-                       (sparql-parser:match-submatches match)))
+                       (reverse (sparql-parser:match-submatches match))))
            match)))
 
 (defun replace-iriref (sparql-ast &key from to)
