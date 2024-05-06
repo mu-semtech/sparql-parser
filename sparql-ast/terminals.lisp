@@ -212,8 +212,7 @@ failure."
                if (char= char delimiter-char)
                  do (return position)
                else
-                 do (cond ((or (char= #.(hex-char "5C") char)
-                               (char= #.(hex-char "A") char)
+                 do (cond ((or (char= #.(hex-char "A") char)
                                (char= #.(hex-char "D") char))
                            (return nil))
                           ((char= #\\ char)

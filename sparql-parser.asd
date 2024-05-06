@@ -28,20 +28,20 @@
                (:file "acl/acl")
                (:file "acl/configuration-interface")
                (:file "acl/config")
-               ;; reasoning to determine graphs
-               (:file "reasoner/tree-mirror")
-               (:file "reasoner/prefixes")
-               (:file "reasoner/term-info-types")
-               (:file "reasoner/term-info")
-               (:file "reasoner/reasoner")
+               ;; ;; reasoning to determine graphs
+               ;; (:file "reasoner/tree-mirror")
+               ;; (:file "reasoner/prefixes")
+               ;; (:file "reasoner/term-info-types")
+               ;; (:file "reasoner/term-info")
+               ;; (:file "reasoner/reasoner")
                ;; updates
                (:file "updates/framework")
                (:file "updates/detect-quads")
                (:file "updates/handle-update-unit")
                ;; messenger
                (:file "delta/messenger")
-               ;; visualizing resulting reasonings
-               (:file "external/vis-js")
+               ;; ;; visualizing resulting reasonings
+               ;; (:file "external/vis-js")
                ;; sparql http - part 2
                (:file "connection/server")
                ;; configuration

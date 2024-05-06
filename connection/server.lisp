@@ -48,11 +48,12 @@
              (sparql-parser:sparql-ast-top-node ast)))
           ;; query
           (let ((jsown-result
-                  (jsown:parse
-                   (client::query
-                    (generate-query
-                     (manipulate-query ast))
-                    :send-to-single t))))
+                  (jsown:with-injective-reader
+                    (jsown:parse
+                     (client::query
+                      (generate-query
+                       (manipulate-query ast))
+                      :send-to-single t)))))
             (when (jsown:keyp jsown-result "results")
               ;; expand bindings if they exist
               (setf (jsown:val (jsown:val jsown-result "results") "bindings")
