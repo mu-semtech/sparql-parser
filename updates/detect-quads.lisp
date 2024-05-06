@@ -78,7 +78,11 @@
                                    (alexandria:appendf
                                     (info-operations *info*)
                                     `((:modify (:delete-patterns ,(info-quads *info*)
-                                                :query ,(make-select-query-for-patterns quad-pattern (info-prefixes *info*) (info-base *info*) (info-quads *info*)))))))))
+                                                :query ,(make-select-query-for-patterns
+                                                         quad-pattern
+                                                         (reverse (info-prefixes *info*))
+                                                         (info-base *info*)
+                                                         (info-quads *info*)))))))))
 (handle ebnf::|DeleteData|
         :local-context (:quads nil)
         :process (ebnf::|QuadData|)
@@ -250,7 +254,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
                   (let ((modify `((:modify (:delete-patterns ,delete-patterns
                                             :insert-patterns ,insert-patterns
                                             :query ,(make-select-query-for-patterns expanded-group-graph-pattern
-                                                                                    (info-prefixes *info*)
+                                                                                    (reverse (info-prefixes *info*))
                                                                                     (info-base *info*)
                                                                                     insert-patterns
                                                                                     delete-patterns))))))
