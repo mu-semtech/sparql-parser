@@ -288,17 +288,17 @@ This is the inverse of binding-as-match and can be used to create delta messages
      (delete-data-query-for-quads delete-quads))
     (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
 
-(defun quad-equal-p (a b)
+(defun quad-equal-p (a b &optional (keys (list :graph :predicate :subject :object)))
   "Yields truthy iff two quads are equal.  May provide false negatives but
 should never provide false positives."
   ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
-  (and
-   (every (lambda (key)
-            (string= (quad-term-uri (getf a key))
-                     (quad-term-uri (getf b key))))
-          '(:graph :predicate :subject))
-   (sparql-inspection:match-equal-p (quad-object-as-match-term (getf a :object))
-                                    (quad-object-as-match-term (getf b :object)))))
+  (every (lambda (key)
+            (if (eq key :object)
+                (sparql-inspection:match-equal-p (quad-object-as-match-term (getf a :object))
+                                                 (quad-object-as-match-term (getf b :object)))
+                (string= (quad-term-uri (getf a key))
+                         (quad-term-uri (getf b key)))))
+         keys))
 
 (defun remove-database-value-overlaps (quads-to-delete existing-quads-to-insert)
   "Goes to the database to verify that quads-to-delete does not contain
@@ -694,11 +694,15 @@ variables are missing this will not lead to a pattern."
         (let* ((data (operation-data operation))
                (quads (acl:dispatch-quads data)))
           (assert-no-variables-in-quads data)
+          (maybe-error-on-unwritten-data :insert-quads-before-dispatch data
+                                         :insert-quads-after-dispatch quads)
           (execute-and-dispatch-changes :insert-quads quads)))
        (:delete-triples
         (let* ((data (operation-data operation))
                (quads (acl:dispatch-quads data)))
           (assert-no-variables-in-quads data)
+          (maybe-error-on-unwritten-data :delete-quads-before-dispatch data
+                                         :delete-quads-after-dispatch quads)
           (execute-and-dispatch-changes :delete-quads quads)))
        (:modify
         ;; TODO: handle WITH iriref which should be removed for non sudo queries
@@ -708,13 +712,39 @@ variables are missing this will not lead to a pattern."
                          (operation-data-subfield operation :query)
                          :for :modify :usage :read)))
           (if bindings
-              (let ((inserts (acl:dispatch-quads (filled-in-patterns insert-patterns bindings)))
-                    (deletes (acl:dispatch-quads (filled-in-patterns delete-patterns bindings))))
+              (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
+                     (filled-in-inserts (filled-in-patterns insert-patterns bindings))
+                     (deletes (acl:dispatch-quads filled-in-deletes))
+                     (inserts (acl:dispatch-quads filled-in-inserts)))
+                (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
+                                               :delete-quads-after-dispatch deletes
+                                               :insert-quads-before-dispatch filled-in-inserts
+                                               :insert-quads-after-dispatch inserts)
                 (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))
               ;; Following is subject to change.  Nothing should depend
               ;; on the resulting output, sending out a json body could
               ;; be assumed, might as well send something sensible.
               "{ \"head\": { \"link\": [], \"vars\": [\"callret-0\"] }, \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [ { \"callret-0\": { \"type\": \"literal\", \"value\": \"Insert into <http://www.openlinksw.com/schemas/virtrdf#DefaultSparul11Target>, 0 triples -- nothing to do\" }} ] } }")))))))
+
+(defparameter *unwritten-data-actions* '(:log :error)
+  "Which actions to take on detecting unwritten data.")
+
+(defun maybe-error-on-unwritten-data (&key delete-quads-before-dispatch delete-quads-after-dispatch insert-quads-before-dispatch insert-quads-after-dispatch)
+  (when *unwritten-data-actions*
+    (let ((missing-delete-quads (set-difference delete-quads-before-dispatch
+                                                delete-quads-after-dispatch
+                                                :test (alexandria:rcurry #'quad-equal-p '(:subject :predicate :object))))
+          (missing-insert-quads (set-difference insert-quads-before-dispatch
+                                                insert-quads-after-dispatch
+                                                :test (alexandria:rcurry #'quad-equal-p '(:subject :predicate :object)))))
+      (when (or missing-delete-quads missing-insert-quads)
+        (when (member :log *unwritten-data-actions*)
+          (format t "~&Warning, triples will not be written to triplestore:~% DELETE:~{~%  ~A~}~& INSERT:~{~%  ~A~}~%"
+                  missing-delete-quads missing-insert-quads))
+        (when (member :error *unwritten-data-actions*)
+          (error 'simple-error
+                 :format-control "~&Warning, triples will not be written to triplestore:~% DELETE:~{~%  ~A~}~& INSERT:~{~%  ~A~}~%"
+                 :format-arguments (list missing-delete-quads missing-insert-quads)))))))
 
 (defun unfold-prefixed-quads (quads)
   "Unfolds the prefixed quads (represented by a CONS cell) into a match
