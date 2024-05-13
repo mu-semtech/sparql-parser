@@ -93,7 +93,7 @@
               `(200
                 (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(mu-auth-allowed-groups))
                 (,response))))))
-    (simple-error (e)
+    (error (e)
       (format t "Could not process query, yielding 500.  ~%~A~%" e)
       `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e))))))
 
