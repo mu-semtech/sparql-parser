@@ -16,7 +16,7 @@
   (:documentation "Superclass of all delta handlers."))
 
 (defclass delta-logging-handler (delta-handler) ()
-  (:documentation "Logs deltaa messages to standard output."))
+  (:documentation "Logs delta messages to standard output."))
 
 (defclass delta-remote-handler (delta-handler)
   ;; TODO: ensure delta message sending is non-blocking and failure in
@@ -36,10 +36,7 @@
   (:method ((handler delta-remote-handler) &key inserts deletes effective-inserts effective-deletes)
     (when (or inserts deletes)
       ;; TODO: share following headers for this request with the new request
-      ;;   - mu-auth-allowed-groups
       ;;   - mu-auth-sudo (or make that influence mu-auth-allowed-groups?)
-      ;;   - mu-session-id
-      ;;   - mu-call-id (does this need to be shadowed here?)
       (with-slots (endpoint method) handler
         (let ((delta-message
                 (jsown:to-json
@@ -58,7 +55,7 @@
                                   ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
                                   ("mu-call-id" . ,(random 1000000000))
                                   ("mu-session-id" . ,(connection-globals:mu-session-id))
-                                  ("mu-auth-allowed-gloups" . ,(connection-globals:mu-auth-allowed-groups)))
+                                  ("mu-auth-allowed-groups" . ,(connection-globals:mu-auth-allowed-groups)))
                        :content delta-message))))))
 
 (defun quad-to-jsown-binding (quad)
