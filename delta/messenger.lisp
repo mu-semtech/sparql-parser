@@ -35,42 +35,43 @@
             (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-inserts)))
   (:method ((handler delta-remote-handler) &key inserts deletes effective-inserts effective-deletes)
     (when (or inserts deletes)
-      (let ((delta-message nil))
-        (support:with-exponential-backoff-retry
-          (:max-time-spent 60 :max-retries 10 :initial-pause-interval 1 :pause-interval-multiplier 2)
-          (handler-case
-            ;; TODO: share following headers for this request with the new request
-            ;;   - mu-auth-sudo (or make that influence mu-auth-allowed-groups?)
-            (with-slots (endpoint method) handler
-              (setf delta-message
-                (jsown:to-json
-                  (jsown:new-js
-                    ("changeSets"
-                      (list
-                        (delta-to-jsown :deletes deletes
-                          :inserts inserts
-                          :effective-deletes effective-deletes
-                          :effective-inserts effective-inserts
-                          :scope (connection-globals:mu-call-scope)
-                          :allowed-groups (connection-globals:mu-auth-allowed-groups)))))))
-              (dex:request endpoint
-                :method method
-                :headers `(("content-type" . "application/json")
-                            ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
-                            ("mu-call-id" . ,(random 1000000000))
-                            ("mu-session-id" . ,(connection-globals:mu-session-id))
-                            ("mu-auth-allowed-groups" . ,(connection-globals:mu-auth-allowed-groups)))
-                :content delta-message))
-            (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
-              (format t
+      (let ((delta-message (jsown:to-json
+                            (jsown:new-js
+                              ("changeSets"
+                               (list
+                                (delta-to-jsown :deletes deletes
+                                                :inserts inserts
+                                                :effective-deletes effective-deletes
+                                                :effective-inserts effective-inserts
+                                                :scope (connection-globals:mu-call-scope)
+                                                :allowed-groups (connection-globals:mu-auth-allowed-groups))))))))
+        (schedule-delta-message (list handler delta-message))))))
+
+(defun execute-scheduled-remote-delta-message (delta-remote-handler json-delta-message)
+  (support:with-exponential-backoff-retry
+      (:max-time-spent 30 :max-retries 10 :initial-pause-interval 1 :pause-interval-multiplier 1.5)
+    (handler-case
+        ;; TODO: share following headers for this request with the new request
+        ;;   - mu-auth-sudo (or make that influence mu-auth-allowed-groups?)
+        (with-slots (endpoint method) delta-remote-handler
+          (dex:request endpoint
+                       :method method
+                       :headers `(("content-type" . "application/json")
+                                  ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
+                                  ("mu-call-id" . ,(random 1000000000))
+                                  ("mu-session-id" . ,(connection-globals:mu-session-id))
+                                  ("mu-auth-allowed-groups" . ,(connection-globals:mu-auth-allowed-groups)))
+                       :content json-delta-message))
+      (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
+        (format t
                 "~&Encountered error from FAST-HTTP during delta: ~A~&~@[Delta message leading to failure: ~A~&~]"
-                e delta-message)
-              (support:report-exponential-backoff-failure e))
-            (error (e)
-              (format t
+                e json-delta-message)
+        (support:report-exponential-backoff-failure e))
+      (error (e)
+        (format t
                 "~&Encountered general error when sending delta: ~A~&~@[Delta leading to failure: ~A~&~]"
-                e delta-message)
-              (support:report-exponential-backoff-failure e))))))))
+                e json-delta-message)
+        (support:report-exponential-backoff-failure e)))))
 
 (defun quad-to-jsown-binding (quad)
   "Converts QUAD to a jsown binding."
@@ -93,7 +94,7 @@
       (setf (jsown:val delta "scope") scope))
     delta))
 
-(defun delta-notify (&key inserts deletes effective-inserts effective-deletes)
+(defun delta-notify (&rest args &key inserts deletes effective-inserts effective-deletes)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
   (mapcar (alexandria:rcurry #'handle-delta :deletes deletes :inserts inserts
                                             :effective-deletes effective-deletes
@@ -108,6 +109,8 @@
 (defun add-delta-logger ()
   "Logs delta messages to the terminal."
   (push (make-instance 'delta-logging-handler) *delta-handlers*))
+
+(launch-message-consumer #'execute-scheduled-remote-delta-message)
 
 ;; (push (make-instance 'delta-logging-handler) *delta-handlers*)
 ;; (add-delta-messenger "http://localhost:8089")

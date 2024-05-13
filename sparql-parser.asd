@@ -39,6 +39,7 @@
                (:file "updates/detect-quads")
                (:file "updates/handle-update-unit")
                ;; messenger
+               (:file "delta/message-bus")
                (:file "delta/messenger")
                ;; ;; visualizing resulting reasonings
                ;; (:file "external/vis-js")

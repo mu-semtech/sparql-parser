@@ -237,19 +237,23 @@
         }")
       ;; this data has no place to live, the target must be a foaf:Person and it is a book.
       (format t "~&Jack can't add books as favorite author.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX schema: <http://schema.org/>
-        PREFIX authors: <http://example.com/authors/>
-        PREFIX books: <http://example.com/books/>
-        PREFIX favorites: <http://mu.semte.ch/favorites/>
-        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+      (handler-case
+          (progn
+           (server:execute-query-for-context
+            "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
+            PREFIX favorites: <http://mu.semte.ch/favorites/>
+            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-        INSERT {
-          favorites:me ext:hasFavoriteAuthor ?book.
-        } WHERE {
-          books:abundance schema:creator/^schema:creator ?book.
-        }")
+            INSERT {
+              favorites:me ext:hasFavoriteAuthor ?book.
+            } WHERE {
+              books:abundance schema:creator/^schema:creator ?book.
+            }")
+           (format t "~&ERROR: Oh noes, Jack shouldn't be allowed to do add a book as an author!~%"))
+        (error (e) (declare (ignore e)) t))
       ;; let's check if jack has favorite authors
       (format t "~&Jack can ask for favorite authors.~%")
       (server:execute-query-for-context
