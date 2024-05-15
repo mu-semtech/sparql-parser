@@ -277,22 +277,21 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                  append
                                  (loop for (k v) on quad-pattern by #'cddr
                                        for v-match = (if (consp v) (car v) v)
-                                       ;; when (sparql-parser:match-term-p v-match 'ebnf::|Var|)
-                                       ;;   collect v-match
                                        when (and v-match (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|))
-                                         collect v-match
-                                       ;; collect (primitive-match-string v-match)
-                                       )))
+                                         collect v-match)))
                      (sparql-manipulation:make-word-match "*")) ; match * if no variables found
                     :key #'primitive-match-string
-                    ;; (lambda (var)
-                    ;;   (primitive-match-string (first (sparql-parser:match-submatches var))))
                     :test #'string=))
+        ;; We could parse group-graph-pattern through an adaptation of
+        ;; the following code so we can verify the query is valid when
+        ;; running.  We currently don't do this for performance reasons.
+        ;; To execute this, write out the string as if it were valid,
+        ;; then parse as GroupGraphPattern.
+
         ;; (group-graph-pattern-as-string (sparql-generator:write-valid (sparql-parser::make-sparql-ast
         ;;                                                               :top-node group-graph-pattern
         ;;                                                               :string sparql-parser::*scanning-string*)))
         )
-    ;; (break "Found variables ~A" variables)
     (sparql-parser:make-sparql-ast
      :string sparql-parser:*scanning-string*
      :top-node (handle-update-unit::make-nested-match
@@ -312,12 +311,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                              "WHERE"
                                              ,group-graph-pattern)
                                       (ebnf::|SolutionModifier|))
-                               (ebnf::|ValuesClause|)))))
-    ;; (sparql-parser:with-parser-setup
-    ;;   (sparql-parser:parse-sparql-string (coerce (format nil "SELECT ~{~A ~} WHERE ~A"
-    ;;                                                      variables group-graph-pattern-as-string)
-    ;;                                              #-be-cautious 'base-string #+be-cautious 'string)))
-    ))
+                               (ebnf::|ValuesClause|)))))))
 
 (defun primitive-match-string (match)
   "We consider a primitive match to be a match which has a
