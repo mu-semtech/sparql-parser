@@ -216,6 +216,7 @@ elements.  The value returned is consed."
           (format t "~&Exponential backoff failure with ~A retries left, waiting ~A to retry.~&-> reported reason: ~A~&"
                   max-retries initial-pause-interval *exponential-backoff-failure*)
           (setf *exponential-backoff-failure* nil)
+          ;; TODO: provide option to send error on failure
           (alexandria:when-let* ; return nil on failure
               ((next-max-retries (and (> max-retries 0) (1- max-retries)))
                (time-left (- max-time-spent (/ (- (get-internal-real-time) start-time) internal-time-units-per-second)))
