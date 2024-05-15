@@ -269,20 +269,21 @@ detect-quads-processing-handlers::|VarOrTerm|."
 
 (defun make-select-query-for-patterns (group-graph-pattern prefixes base &rest quad-pattern-groups)
   "Constructs a sparql-ast which can be executed as a query to extract patterns for quads."
-  ;; TODO: cope with case in which there are no variables to select for
   (let ((variables (delete-duplicates
-                    (loop for quad-patterns in quad-pattern-groups
-                          append
-                          (loop for quad-pattern in quad-patterns
-                                append
-                                (loop for (k v) on quad-pattern by #'cddr
-                                      for v-match = (if (consp v) (car v) v)
-                                      ;; when (sparql-parser:match-term-p v-match 'ebnf::|Var|)
-                                      ;;   collect v-match
-                                      when (and v-match (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|))
-                                        collect v-match
-                                        ;; collect (primitive-match-string v-match)
-                                      )))
+                    (or
+                     (loop for quad-patterns in quad-pattern-groups
+                           append
+                           (loop for quad-pattern in quad-patterns
+                                 append
+                                 (loop for (k v) on quad-pattern by #'cddr
+                                       for v-match = (if (consp v) (car v) v)
+                                       ;; when (sparql-parser:match-term-p v-match 'ebnf::|Var|)
+                                       ;;   collect v-match
+                                       when (and v-match (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|))
+                                         collect v-match
+                                       ;; collect (primitive-match-string v-match)
+                                       )))
+                     (sparql-manipulation:make-word-match "*")) ; match * if no variables found
                     :key #'primitive-match-string
                     ;; (lambda (var)
                     ;;   (primitive-match-string (first (sparql-parser:match-submatches var))))
