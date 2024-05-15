@@ -1435,11 +1435,24 @@
   (follow "." "BIND" "FILTER" "GRAPH" "MINUS" "OPTIONAL" "SERVICE" "VALUES" "{" "}")
   (cleanup opt)
   (alt _empty PropertyListPathNotEmpty))
+ ;; (rule PropertyListPathNotEmpty "83"
+ ;;  (first "!" "(" IRIREF PNAME_LN PNAME_NS VAR1 VAR2 "^" "a")
+ ;;  (follow "." "BIND" "FILTER" "GRAPH" "MINUS" "OPTIONAL" "SERVICE" "VALUES" "]"
+ ;;   "{" "}" )
+ ;;  (seq _PropertyListPathNotEmpty_1 ObjectListPath _PropertyListPathNotEmpty_2))
+
  (rule PropertyListPathNotEmpty "83"
+  (first "!" "(" IRIREF PNAME_LN PNAME_NS VAR1 VAR2 "^" "a" _eps)
+  (follow "." "BIND" "FILTER" "GRAPH" "MINUS" "OPTIONAL" "SERVICE" "VALUES" "]"
+   "{" "}" )
+  (alt _empty _PropertyListPathNotEmpty_B))
+
+ (rule _PropertyListPathNotEmpty_B "83B"
   (first "!" "(" IRIREF PNAME_LN PNAME_NS VAR1 VAR2 "^" "a")
   (follow "." "BIND" "FILTER" "GRAPH" "MINUS" "OPTIONAL" "SERVICE" "VALUES" "]"
    "{" "}" )
   (seq _PropertyListPathNotEmpty_1 ObjectListPath _PropertyListPathNotEmpty_2))
+
  (rule _PropertyListPathNotEmpty_1 "83.1"
   (first "!" "(" IRIREF PNAME_LN PNAME_NS VAR1 VAR2 "^" "a")
   (follow "(" ANON BLANK_NODE_LABEL DECIMAL DECIMAL_NEGATIVE DECIMAL_POSITIVE
