@@ -519,7 +519,7 @@ longest match is thrown."
                  (let ((sparql-parser::*start-symbol* start-symbol))
                    (cons :ok
                          (with-reset-parser-setup-state parser-setup-initial-state
-                           (apply #'sparql-parser::parse-string string keyword-args-to-pass))))
+                           (apply #'parse-string string keyword-args-to-pass))))
                (ebnf-parse-error (parsing-error)
                  (cons :error parsing-error)))))
       (let ((errors-as-list
