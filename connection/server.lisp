@@ -45,7 +45,11 @@
           ;; update
           (let ((detect-quads::*info* (detect-quads::make-info))) ;; TODO: convert this setup into a macro and document it
             (handle-update-unit::handle-sparql-update-unit
-             (sparql-parser:sparql-ast-top-node ast)))
+             (sparql-parser:sparql-ast-top-node ast))
+            ;; Following is subject to change.  Nothing should depend
+            ;; on the resulting output, sending out a json body could
+            ;; be assumed, might as well send something sensible.
+            "{ \"head\": { \"link\": [], \"vars\": [\"callret-0\"] }, \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [ { \"callret-0\": { \"type\": \"literal\", \"value\": \"Executed update query\" }} ] } }")
           ;; query
           (let ((jsown-result
                   (jsown:with-injective-reader

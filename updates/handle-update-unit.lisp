@@ -720,11 +720,7 @@ variables are missing this will not lead to a pattern."
                                                :delete-quads-after-dispatch deletes
                                                :insert-quads-before-dispatch filled-in-inserts
                                                :insert-quads-after-dispatch inserts)
-                (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))
-              ;; Following is subject to change.  Nothing should depend
-              ;; on the resulting output, sending out a json body could
-              ;; be assumed, might as well send something sensible.
-              "{ \"head\": { \"link\": [], \"vars\": [\"callret-0\"] }, \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [ { \"callret-0\": { \"type\": \"literal\", \"value\": \"Insert into <http://www.openlinksw.com/schemas/virtrdf#DefaultSparul11Target>, 0 triples -- nothing to do\" }} ] } }")))))))
+                (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts)))))))))
 
 (defparameter *unwritten-data-actions* '(:log :error)
   "Which actions to take on detecting unwritten data.")
