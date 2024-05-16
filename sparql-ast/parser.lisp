@@ -7,7 +7,7 @@
   (name (error "Must supply rule name") :type symbol)
   (expansion nil :type list))
 
-(defstruct match
+(defstruct (match (:copier nil))
   (term (error "Must supply term when creating a match") :type (or symbol string))
   (rule nil :type (or null rule))        ; nil when rule is not known yet
   (submatches nil :type list))
