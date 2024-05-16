@@ -279,7 +279,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                        for v-match = (if (consp v) (car v) v)
                                        when (and v-match (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|))
                                          collect v-match)))
-                     (sparql-manipulation:make-word-match "*")) ; match * if no variables found
+                     (list (sparql-manipulation:make-word-match "*"))) ; match * if no variables found
                     :key #'primitive-match-string
                     :test #'string=))
         ;; We could parse group-graph-pattern through an adaptation of
