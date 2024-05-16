@@ -376,4 +376,24 @@
          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
         } WHERE {
          <http://book-store.example.com/books/my-book> schema:name ?title.
-        }"))))
+        }")
+
+      ;; we can delete the types
+
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        DELETE WHERE {
+         <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+        }")
+
+      ;; we can have an empty construct where
+
+      (server:execute-query-for-context
+       "CONSTRUCT { } WHERE { }")
+      )))

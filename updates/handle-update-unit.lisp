@@ -653,7 +653,6 @@ variables are missing this will not lead to a pattern."
 
 (defun handle-sparql-update-unit (update-unit)
   "Handles the processing of an update-unit EBNF."
-  ;; TODO: add conditional validation ensuring all triples were written somewhere
   ;; TODO: add validation ensuring all triples were written to a readable location
   (flet ((execute-and-dispatch-changes (&key delete-quads insert-quads)
            (let* (;; once we have the effective content to alter, we can safely create files from long strings
