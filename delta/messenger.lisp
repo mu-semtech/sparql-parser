@@ -57,8 +57,7 @@
           (dex:request endpoint
                        :method method
                        :headers `(("content-type" . "application/json")
-                                  ("mu-call-id-trail" . ,(jsown:to-json (cons (connection-globals:mu-call-id)
-                                                                              (connection-globals:mu-call-id-trail))))
+                                  ("mu-call-id-trail" . ,(connection-globals:mu-call-id-trail))
                                   ("mu-call-id" . ,(random 1000000000))
                                   ("mu-session-id" . ,(connection-globals:mu-session-id))
                                   ("mu-auth-allowed-groups" . ,(connection-globals:mu-auth-allowed-groups)))
