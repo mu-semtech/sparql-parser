@@ -83,7 +83,11 @@ The car is assumed to be a keyward and the cadr is assumed to be the expanded st
       (push (make-access-grant
              :usage rights
              :graph-spec graph-spec
-             :scopes (mapcar #'expand-prefix scopes)
+             :scopes (loop for scope in scopes
+                           if (eq scope '_)
+                             collect scope
+                           else
+                             collect (expand-prefix scope))
              :access allowed-group)
             *rights*))))
 
