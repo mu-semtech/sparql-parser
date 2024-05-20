@@ -207,18 +207,20 @@ those.  Allows for manipulation without destroying the original."
   (let* ((prefix-prepend " ")
          (start-prefix (loop for i below indentation-width collect prefix-prepend)))
     (labels ((print-it (match prefix)
-               (let* ((submatches (match-submatches match))
-                      (matched-token-p (and (= 1 (length submatches))
-                                            (not (match-p (first submatches))))))
-                 (cond (matched-token-p
-                        (format stream "~&~{~A~}~A :: [~A]~%" prefix (match-term match) (first submatches)))
-                       (rulep (format stream "~&~{~A~}~A :: ~A~%" prefix (match-term match) (match-rule match)))
-                       (t (format stream "~&~{~A~}~A~%" prefix (match-term match))))
-                 (unless matched-token-p
-                   (dolist (submatch submatches)
-                     (if (match-p submatch)
-                         (print-it submatch (cons prefix-prepend prefix))
-                         (format stream "~&~{~A~}[~A]~%" (cons prefix-prepend prefix) submatch)))))))
+               (if match
+                   (let* ((submatches (match-submatches match))
+                          (matched-token-p (and (= 1 (length submatches))
+                                                (not (match-p (first submatches))))))
+                     (cond (matched-token-p
+                            (format stream "~&~{~A~}~A :: [~A]~%" prefix (match-term match) (first submatches)))
+                           (rulep (format stream "~&~{~A~}~A :: ~A~%" prefix (match-term match) (match-rule match)))
+                           (t (format stream "~&~{~A~}~A~%" prefix (match-term match))))
+                     (unless matched-token-p
+                       (dolist (submatch submatches)
+                         (if (match-p submatch)
+                             (print-it submatch (cons prefix-prepend prefix))
+                             (format stream "~&~{~A~}[~A]~%" (cons prefix-prepend prefix) submatch)))))
+                   (format stream "~&~{~A~} has match NIL~%" prefix))))
       (print-it match start-prefix))))
 
 (defmethod print-object ((ast sparql-ast) stream)
@@ -517,7 +519,7 @@ longest match is thrown."
                  (let ((sparql-parser::*start-symbol* start-symbol))
                    (cons :ok
                          (with-reset-parser-setup-state parser-setup-initial-state
-                           (apply #'sparql-parser::parse-string string keyword-args-to-pass))))
+                           (apply #'parse-string string keyword-args-to-pass))))
                (ebnf-parse-error (parsing-error)
                  (cons :error parsing-error)))))
       (let ((errors-as-list

@@ -707,7 +707,6 @@ failure."
                                     (char= char #.(support:hex-char "A"))
                                     (char= char #.(support:hex-char "9")))))
                    do (incf position))
-             (incf position)
              (when (char= (elt string position) right-char)
                (1+ position))))))
   (defun scan-nil (string start)
