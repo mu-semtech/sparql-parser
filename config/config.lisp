@@ -1,3 +1,3 @@
 (in-package :cl-user)
 
-(format t "~&Configuration belongs here.~%")
+(format t "~&~%~%CONFIG NOT MOUNTED; BOOTING WITH EMPTY CONFIGURATION~%~%")
