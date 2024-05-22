@@ -62,7 +62,11 @@
       (push (make-access-grant
              :usage rights
              :graph-spec graph-spec
-             :scopes scopes
+             :scopes (loop for scope in scopes
+                           if (eq scope '_)
+                             collect scope
+                           else
+                             collect (prefix:expand scope))
              :access allowed-group)
             *rights*))))
 
