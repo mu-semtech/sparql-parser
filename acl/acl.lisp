@@ -23,8 +23,7 @@
               on *prefixes*
                 by #'cddr
             for prefix = (concatenate 'string (string-downcase (symbol-name l-prefix)) ":")
-            when (and (>= (length uri) (length prefix))
-                      (string= (subseq uri 0 (length prefix)) prefix))
+            when (search prefix uri :end2 (min (length prefix) (length uri)))
               return (concatenate 'string
                                   expansion
                                   (subseq uri (length prefix))))
