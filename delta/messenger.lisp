@@ -44,10 +44,15 @@
                                                 :scope (connection-globals:mu-call-scope)
                                                 :allowed-groups (if (connection-globals:mu-auth-sudo)
                                                                     "sudo"
-                                                                    (connection-globals:mu-auth-allowed-groups)))))))))
-        (schedule-delta-message (list handler delta-message))))))
+                                                                    (connection-globals:mu-auth-allowed-groups))))))))
+            (headers `(("content-type" . "application/json")
+                       ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
+                       ("mu-call-id" . ,(random 1000000000))
+                       ("mu-session-id" . ,(connection-globals:mu-session-id))
+                       ("mu-auth-allowed-groups" . ,(jsown:to-json (connection-globals:mu-auth-allowed-groups))))))
+        (schedule-delta-message (list handler delta-message headers))))))
 
-(defun execute-scheduled-remote-delta-message (delta-remote-handler json-delta-message)
+(defun execute-scheduled-remote-delta-message (delta-remote-handler json-delta-message headers)
   (support:with-exponential-backoff-retry
       (:max-time-spent 30 :max-retries 10 :initial-pause-interval 1 :pause-interval-multiplier 1.5)
     (handler-case
@@ -56,11 +61,7 @@
         (with-slots (endpoint method) delta-remote-handler
           (dex:request endpoint
                        :method method
-                       :headers `(("content-type" . "application/json")
-                                  ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
-                                  ("mu-call-id" . ,(random 1000000000))
-                                  ("mu-session-id" . ,(connection-globals:mu-session-id))
-                                  ("mu-auth-allowed-groups" . ,(connection-globals:mu-auth-allowed-groups)))
+                       :headers headers
                        :content json-delta-message))
       (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
         (format t
@@ -88,8 +89,9 @@
             ("insert" (mapcar #'quad-to-jsown-binding inserts))
             ("delete" (mapcar #'quad-to-jsown-binding deletes))
             ("effectiveInsert" (mapcar #'quad-to-jsown-binding effective-inserts))
-            ("effectiveDelete" (mapcar #'quad-to-jsown-binding effective-deletes))
-            ("allowedGroups" allowed-groups))))
+            ("effectiveDelete" (mapcar #'quad-to-jsown-binding effective-deletes)))))
+    (when allowed-groups
+      (setf (jsown:val delta "allowedGroups") (jsown:to-json allowed-groups)))
     (when (and scope (not (eq scope acl:_)))
       (setf (jsown:val delta "scope") scope))
     delta))

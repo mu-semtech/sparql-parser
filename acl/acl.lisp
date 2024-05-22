@@ -171,9 +171,7 @@
 
 (defun access-tokens-from-allowed-groups (mu-auth-allowed-groups)
   "Calculates access rights formthe mu-auth-allowed-groups string."
-  (loop for group in (if (stringp mu-auth-allowed-groups)
-                         (jsown:parse mu-auth-allowed-groups)
-                         mu-auth-allowed-groups)
+  (loop for group in mu-auth-allowed-groups
         for name = (jsown:val group "name")
         for parameters = (jsown:val group "variables")
         append (loop for access-grant in (access-grants-for-access-name name)
@@ -202,15 +200,14 @@
    (lambda (access-token)
      ;; TODO: verify systems are working with this deduplication enabled (remove t and test)
      (or t
-      (find mu-call-scope (access-grant-scopes (access-token-access access-token))
-            :test #'equal)))
-   (if (and mu-auth-allowed-groups
-            (not (equal mu-auth-allowed-groups "")))
+         (find mu-call-scope (access-grant-scopes (access-token-access access-token))
+               :test #'equal)))
+   (if mu-auth-allowed-groups
        (access-tokens-from-allowed-groups mu-auth-allowed-groups)
        (let ((tokens (access-tokens-from-session-id mu-session-id)))
          (setf (mu-auth-allowed-groups)
-               (jsown:to-json (jsown-dedup (mapcar #'access-token-jsown tokens)
-                                           :same-structure-p t)))
+               (jsown-dedup (mapcar #'access-token-jsown tokens)
+                            :same-structure-p t))
          tokens))))
 
 (defmacro with-access-tokens ((access-tokens-var) &body body)
