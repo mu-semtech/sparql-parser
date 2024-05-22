@@ -42,7 +42,9 @@
                                                 :effective-deletes effective-deletes
                                                 :effective-inserts effective-inserts
                                                 :scope (connection-globals:mu-call-scope)
-                                                :allowed-groups (connection-globals:mu-auth-allowed-groups))))))))
+                                                :allowed-groups (if (connection-globals:mu-auth-sudo)
+                                                                    "sudo"
+                                                                    (connection-globals:mu-auth-allowed-groups)))))))))
         (schedule-delta-message (list handler delta-message))))))
 
 (defun execute-scheduled-remote-delta-message (delta-remote-handler json-delta-message)
