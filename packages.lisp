@@ -131,7 +131,9 @@
            #:with-scope
            #:grant*
            #:grant
-           #:supply-allowed-group))
+           #:supply-allowed-group
+           #:*uri-protocol-check-on-prefix-expansion*
+           #:*uri-protocol-accept-list-for-prefix-expansion*))
 
 (defpackage #:reasoner-tree-mirror
   (:use :common-lisp)
