@@ -92,11 +92,10 @@
       (setf (jsown:val delta "scope") scope))
     delta))
 
-(defun delta-notify (&rest args &key inserts deletes effective-inserts effective-deletes)
+(defun delta-notify (&rest args &key deletes inserts effective-deletes effective-inserts)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
-  (mapcar (alexandria:rcurry #'handle-delta :deletes deletes :inserts inserts
-                                            :effective-deletes effective-deletes
-                                            :effective-inserts effective-inserts)
+  (declare (ignore deletes inserts effective-deletes effective-inserts))
+  (mapcar (alexandria:curry #'handle-delta args)
           *delta-handlers*))
 
 (defun add-delta-messenger (target &key (method :post))
