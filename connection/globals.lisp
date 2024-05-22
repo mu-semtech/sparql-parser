@@ -14,6 +14,8 @@
   "Call id in string form.")
 (defparameter *mu-session-id* nil
   "Session id in string form.")
+(defparameter *mu-call-id-trail* nil
+  "Call id trail in list form.")
 (defparameter *mu-call-scope* nil
   "Call scope for the current request.  This is nil for microservices not
 providing a call scope.")
@@ -22,12 +24,14 @@ providing a call scope.")
                                 mu-session-id
                                 mu-auth-sudo
                                 mu-auth-allowed-groups
+                                mu-call-id-trail
                                 (mu-call-scope 'acl:_))
                              &body body)
   `(let ((*mu-call-id* ,mu-call-id)
          (*mu-session-id* ,mu-session-id)
          (*mu-auth-sudo* ,mu-auth-sudo)
          (*mu-auth-allowed-groups* ,mu-auth-allowed-groups)
+         (*mu-call-id-trail* , mu-call-id-trail)
          (*mu-call-scope* ,mu-call-scope))
      ,@body))
 
@@ -37,6 +41,13 @@ providing a call scope.")
 
 (defun (setf mu-call-id) (value)
   (setf *mu-call-id* value))
+
+(defun mu-call-id-trail ()
+  "SETF-able mu-call-id-trail for the current request."
+  *mu-call-id-trail*)
+
+(defun (setf mu-call-id-trail) (value)
+  (setf *mu-call-id-trail* value))
 
 (defun mu-session-id ()
   "SETF-able mu-session for the current request."

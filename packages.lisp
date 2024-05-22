@@ -113,7 +113,7 @@
 ;; Server and client
 (defpackage #:connection-globals
   (:use :common-lisp)
-  (:export #:mu-call-id #:mu-session-id #:mu-auth-sudo #:mu-auth-allowed-groups #:mu-call-scope #:with-call-context))
+  (:export #:mu-call-id #:mu-session-id #:mu-auth-sudo #:mu-auth-allowed-groups #:mu-call-scope #:with-call-context #:mu-call-id-trail))
 
 (defpackage #:acl-config
   (:use :common-lisp))

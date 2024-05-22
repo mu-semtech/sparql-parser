@@ -83,26 +83,28 @@
                                (equal allowed-groups-header "sudo"))))
         (with-call-context (:mu-call-id (gethash "mu-call-id" headers)
                             :mu-session-id (gethash "mu-session-id" headers)
+                            :mu-call-id-trail (gethash "mu-call-id-trail" headers)
                             :mu-auth-sudo is-sudo-call
                             :mu-auth-allowed-groups (when (and (not is-sudo-call)
                                                                (stringp allowed-groups-header))
                                                       (jsown:parse allowed-groups-header))
-                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-auth-scope" headers))))
-        (with-parser-setup
-          (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
-                                 (when *log-incoming-requests-p*
-                                   (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
-                                           str
-                                           (list :mu-call-id (mu-call-id)
-                                                 :mu-session-id (mu-session-id)
-                                                 :mu-auth-sudo (mu-auth-sudo)
-                                                 :mu-auth-allowed-groups (jsown:to-json (mu-auth-allowed-groups))
-                                                 :mu-call-scope (mu-call-scope))))
-                                 str))
-                 (response (execute-query-for-context query-string)))
-            `(200
-              (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
-              (,response)))))
+                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-auth-scope" headers)))
+          (with-parser-setup
+            (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
+                                   (when *log-incoming-requests-p*
+                                     (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
+                                             str
+                                             (list :mu-call-id (mu-call-id)
+                                                   :mu-call-id-trail (mu-call-id-trail)
+                                                   :mu-session-id (mu-session-id)
+                                                   :mu-auth-sudo (mu-auth-sudo)
+                                                   :mu-auth-allowed-groups (jsown:to-json (mu-auth-allowed-groups))
+                                                   :mu-call-scope (mu-call-scope))))
+                                   str))
+                   (response (execute-query-for-context query-string)))
+              `(200
+                (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
+                (,response))))))
     (error (e)
       (format t "Could not process query, yielding 500.  ~%~A~%" e)
       `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e))))))

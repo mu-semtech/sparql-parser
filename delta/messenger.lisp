@@ -46,10 +46,14 @@
                                                                     "sudo"
                                                                     (connection-globals:mu-auth-allowed-groups))))))))
             (headers `(("content-type" . "application/json")
-                       ("mu-call-id-trail" . ,(jsown:to-json (list (connection-globals:mu-call-id)))) ; TODO: append to earlier call-id-trail
-                       ("mu-call-id" . ,(random 1000000000))
-                       ("mu-session-id" . ,(connection-globals:mu-session-id))
-                       ("mu-auth-allowed-groups" . ,(jsown:to-json (connection-globals:mu-auth-allowed-groups))))))
+                       ("mu-call-id" . ,(connection-globals:mu-call-id))
+                       ("mu-session-id" . ,(connection-globals:mu-session-id)))))
+        (when (connection-globals:mu-call-id-trail)
+          (push (cons "mu-call-id-trail" (connection-globals:mu-call-id-trail))
+                headers))
+        (when (connection-globals:mu-auth-allowed-groups)
+          (push (cons "mu-auth-allowed-groups" (jsown:to-json (connection-globals:mu-auth-allowed-groups)))
+                headers))
         (schedule-delta-message (list handler delta-message headers))))))
 
 (defun execute-scheduled-remote-delta-message (delta-remote-handler json-delta-message headers)
@@ -96,10 +100,13 @@
       (setf (jsown:val delta "scope") scope))
     delta))
 
-(defun delta-notify (&rest args &key deletes inserts effective-deletes effective-inserts)
+(defun delta-notify (&key deletes inserts effective-deletes effective-inserts)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
-  (declare (ignore deletes inserts effective-deletes effective-inserts))
-  (mapcar (alexandria:curry #'handle-delta args)
+  (mapcar (alexandria:rcurry #'handle-delta
+                             :deletes deletes
+                             :inserts inserts
+                             :effective-deletes effective-deletes
+                             :effective-inserts effective-inserts)
           *delta-handlers*))
 
 (defun add-delta-messenger (target &key (method :post))

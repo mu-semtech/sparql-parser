@@ -43,10 +43,10 @@ The car is assumed to be a keyward and the cadr is assumed to be the expanded st
                                   expansion
                                   (subseq uri (length prefix))))
       (if *uri-protocol-check-on-prefix-expansion*
-          (progn
-            (loop for prefix in *uri-protocol-accept-list-for-prefix-expansion*
-                  when (search prefix uri :end2 (min (length prefix) (length uri)))
-                    return uri)
+          (block protocol-accept-list-search
+            (loop for protocol in *uri-protocol-accept-list-for-prefix-expansion*
+                  when (search protocol uri :end2 (min (length protocol) (length uri)))
+                    do (return-from protocol-accept-list-search uri))
             (error 'simple-error
                    :format-control "~&URI ~A was supplied but we could not expand it.~%  Disable prefix checking by setting (setf prefix:*uri-protocol-check-on-prefix-expansion* nil) or by adding the prefix to prefix:*uri-protocol-accept-list-for-prefix-expansion*.~%"
                    :format-arguments (list uri)))
