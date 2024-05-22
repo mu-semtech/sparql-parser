@@ -25,6 +25,7 @@
                ;; caching
                (:file "cache/types")
                ;; access control definitions
+               (:file "acl/prefix")
                (:file "acl/acl")
                (:file "acl/configuration-interface")
                (:file "acl/config")

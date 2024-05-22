@@ -1,26 +1,5 @@
 (in-package :acl)
 
-;;;;;;;;;;;;
-;;; prefixes
-
-(defun define-prefix (prefix expansion)
-  "Defines a new prefix"
-  (alexandria:appendf *prefixes* (list prefix expansion)))
-
-(defmacro define-prefixes (&body body)
-  "Defines a series of prefixes by reading the list as a plist.
-
-The car is assumed to be a keyward and the cadr is assumed to be the expanded string."
-  `(progn ,@(loop for (prefix expansion) on body
-                  by #'cddr
-                  collect `(define-prefix ,prefix ,expansion))))
-
-(define-prefixes
-  :skos "http://www.w3.org/2004/02/skos/core#"
-  :schema "http://schema.org/"
-  :rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-
-
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;; what is in a graph
 
@@ -40,7 +19,7 @@ The car is assumed to be a keyward and the cadr is assumed to be the expanded st
     :constraints (concatenate
                   'list
                   (loop for (type-name . predicate-specifications) in type-specifications
-                        for type-sub-constraint = (if (eq type-name '_) nil `(:type ,(expand-prefix type-name)))
+                        for type-sub-constraint = (if (eq type-name '_) nil `(:type ,(prefix:expand type-name)))
                         if predicate-specifications
                           append (loop for (direction predicate) on predicate-specifications
                                          by #'cddr
@@ -53,7 +32,7 @@ The car is assumed to be a keyward and the cadr is assumed to be the expanded st
                                        for predicate-constraint
                                          = (if (eq predicate '_)
                                                `()
-                                               `(:predicate (:value ,(expand-prefix predicate))))
+                                               `(:predicate (:value ,(prefix:expand predicate))))
                                        collect `(,@type-constraint ,@predicate-constraint))
                         else
                           ;; shorthand for all predicates

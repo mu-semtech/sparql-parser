@@ -118,9 +118,19 @@
 (defpackage #:acl-config
   (:use :common-lisp))
 
+(defpackage #:prefix
+  (:use :common-lisp)
+  (:export #:expand
+           #:*uri-protocol-accept-list-for-prefix-expansion*
+           #:*uri-protocol-check-on-prefix-expansion*
+           #:define-prefixes
+           #:*prefixes*
+           #:define-prefix))
+
 (defpackage #:acl
   (:use :common-lisp #:sparql-manipulation #:connection-globals)
   (:import-from #:support #:-> #:jsown-dedup)
+  (:import-from #:prefix #:define-prefixes)
   (:export #:apply-access-rights
            #:with-test-code-json-access-tokens
            #:dispatch-quads

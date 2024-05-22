@@ -9,33 +9,6 @@
 (defparameter *rights* nil
   "All known GRANT instances connecting ACCESS-SPECIFICATION to GRAPH.")
 
-(defparameter *prefixes* nil
-  "plist of prefixes with their expansion.")
-
-(defparameter *uri-protocol-check-on-prefix-expansion* t
-  "Check URI protocol during prefix expansion.")
-(defparameter *uri-protocol-accept-list-for-prefix-expansion* '("http:" "https:" "mailto:" "ftp:" "ftps:" "share:")
-  "This list of protocols is accepted during the prefix expansion.  This list is subject to change.")
-
-(defun expand-prefix (uri)
-  "Expands the prefix if it could be found."
-  (or (loop for (l-prefix expansion)
-              on *prefixes*
-                by #'cddr
-            for prefix = (concatenate 'string (string-downcase (symbol-name l-prefix)) ":")
-            when (search prefix uri :end2 (min (length prefix) (length uri)))
-              return (concatenate 'string
-                                  expansion
-                                  (subseq uri (length prefix))))
-      (if *uri-protocol-check-on-prefix-expansion*
-          (progn
-            (loop for prefix in *uri-protocol-accept-list-for-prefix-expansion*
-                  when (search prefix uri :end2 (min (length prefix) (length uri)))
-                    return uri)
-            (error 'simple-error
-                   :format-control "~&URI ~A was supplied but we could not expand it.~%  Disable prefix checking by setting (setf acl:*uri-protocol-check-on-prefix-expansion* nil) or by adding the prefix to acl:*uri-protocol-accept-list-for-prefix-expansion*.  Updates may change the package of these overrides.~%"
-                   :format-arguments (list uri)))
-          uri)))
 
 (defconstant _ '_ "Empty node symbolizing the default or no value.")
 
@@ -180,7 +153,7 @@
       (setf (getf args :scopes)
             (mapcar (lambda (scope)
                       (etypecase scope
-                        (string (expand-prefix scope))
+                        (string (prefix:expand scope))
                         (symbol scope)))
                     scopes)))
     (apply #'make-access-grant* args)))
