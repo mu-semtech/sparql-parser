@@ -454,7 +454,7 @@ as the starting point in STRING."
           (apply #'append (mapcar #'list-simplified-match (match-submatches match))))
     match))
 
-(defun parse-string (string &key (max-steps 10000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
+(defun parse-string (string &key (max-steps 100000) (print-intermediate-states nil) (print-solution nil) (as-ebnf t))
   "Parses a set of tokens."
   (when print-intermediate-states
     (format t "~&===STACK START===~%")
@@ -493,7 +493,7 @@ as the starting point in STRING."
 (defun parse-sparql-string (string
                             &rest args
                             &key
-                              (max-steps 10000)
+                              (max-steps 100000)
                               (print-intermediate-states nil)
                               (print-solution nil)
                               (as-ebnf t)
