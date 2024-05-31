@@ -177,9 +177,9 @@ This is the inverse of binding-as-match and can be used to create delta messages
   (labels ((make-triples-template-match (graphed-group)
              (when graphed-group
                (let* ((quad (first graphed-group))
-                      (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
-                      (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
-                      (object-match (quad-object-as-match-term (getf quad :object))))
+                      (subject-iri (sparql-manipulation:make-iri (quad-term-uri (quad:subject quad))))
+                      (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (quad:predicate quad))))
+                      (object-match (quad-object-as-match-term (quad:object quad))))
                  (make-nested-match
                   `(ebnf::|TriplesTemplate|
                           (ebnf::|TriplesSameSubject|
@@ -198,8 +198,8 @@ This is the inverse of binding-as-match and can be used to create delta messages
     (loop for graphed-group
             in (support:group-by quads #'string=
                                  :key (lambda (quad)
-                                        (quad-term-uri (getf quad :graph))))
-          for graph = (quad-term-uri (getf (first graphed-group) :graph))
+                                        (quad-term-uri (quad:graph quad))))
+          for graph = (quad-term-uri (quad:graph (first graphed-group)))
           collect
           (make-nested-match
            `(ebnf::|QuadsNotTriples|
@@ -294,10 +294,10 @@ should never provide false positives."
   ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
   (every (lambda (key)
             (if (eq key :object)
-                (sparql-inspection:match-equal-p (quad-object-as-match-term (getf a :object))
-                                                 (quad-object-as-match-term (getf b :object)))
-                (string= (quad-term-uri (getf a key))
-                         (quad-term-uri (getf b key)))))
+                (sparql-inspection:match-equal-p (quad-object-as-match-term (quad:object a))
+                                                 (quad-object-as-match-term (quad:object b)))
+                (string= (quad-term-uri (quad:get-key a key))
+                         (quad-term-uri (quad:get-key b key)))))
          keys))
 
 (defun remove-database-value-overlaps (quads-to-delete existing-quads-to-insert)
@@ -311,8 +311,8 @@ being the same as per triplestore."
                     for index from 0
                     append (loop for insert-quad in existing-quads-to-insert
                                  ;; we can detect uri's perfectly, only compare with those
-                                 when (every (lambda (key) (string= (quad-term-uri (getf delete-quad key))
-                                                                    (quad-term-uri (getf insert-quad key))))
+                                 when (every (lambda (key) (string= (quad-term-uri (quad:get-key delete-quad key))
+                                                                    (quad-term-uri (quad:get-key insert-quad key))))
                                                '(:predicate :subject :graph))
                                    collect (list index
                                                  delete-quad
@@ -337,8 +337,8 @@ being the same as per triplestore."
                       = (mapcar (lambda (lst)
                                   (destructuring-bind (index delete-quad insert-quad) lst
                                     (list index
-                                          (getf delete-quad :object)
-                                          (getf insert-quad :object))))
+                                          (quad:object delete-quad)
+                                          (quad:object insert-quad))))
                                 possibly-overlapping-values-with-index-group)
                     for ast = (sparql-parser:make-sparql-ast :top-node
                                                              (query-to-detect-overlapping-values object-values-with-index)
@@ -495,10 +495,10 @@ based on the supplied arguments and the state in the triplestore.
                    ,(sparql-manipulation:make-match-up-to-scanned-token
                      :string (format nil "~A" index)
                      :match-list '(ebnf::|DataBlockValue| ebnf::|NumericLiteral| ebnf::|NumericLiteralUnsigned| ebnf::|INTEGER|))
-                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :graph))))
-                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
-                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
-                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term (getf quad :object)))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (quad:graph quad))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (quad:subject quad))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (quad:predicate quad))))
+                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term (quad:object quad)))
                    ")"))))
     (make-nested-match
      `(ebnf::|QueryUnit|
@@ -556,8 +556,8 @@ based on the supplied arguments and the state in the triplestore.
 (defun quad-as-string-size (quad)
   "Converts QUAD into an estimate for the size of its representation as a string in a sparql query."
   (+
-   (loop for part in '(:subject :predicate :object :graph)
-         for value = (getf quad part)
+   (loop for getter in (list #'quad:subject #'quad:predicate #'quad:object #'quad:graph)
+         for value = (funcall getter quad)
          if (consp value)
            sum (length (cdr value))
          else
@@ -627,17 +627,17 @@ variables are missing this will not lead to a pattern."
 
 (defun alter-quad-to-string-file-uris (quad)
   "Converts the object portion of a quad into a file uri if necessary."
-  (let ((object (getf quad :object)))
+  (let ((object (quad:object quad)))
     (when (and (not (consp object)) ; it's certainly a uri
                (sparql-inspection:ebnf-simple-string-p object)) ; it's a string
       (multiple-value-bind (uri-replacement uri-replacement-p)
           (support:maybe-string-to-uri (sparql-inspection:ebnf-string-real-string object))
         (when uri-replacement-p ; the string has been replaced by a URI
-          (setf (getf quad :object) (sparql-manipulation:iriref uri-replacement))))))
+          (setf (quad:object quad) (sparql-manipulation:iriref uri-replacement))))))
   quad)
 
 (defun alter-quad-string-file-uri-to-string (quad)
-  (let ((object (getf quad :object)))
+  (let ((object (quad:object quad)))
     (when (and (not (consp object))
                (eq (sparql-parser:match-term object) 'ebnf::|IRIREF|))
       (let ((uri-string (support:-> object
@@ -647,7 +647,7 @@ variables are missing this will not lead to a pattern."
         (multiple-value-bind (string-replacement string-replacement-p)
             (support:maybe-uri-to-string uri-string)
           (when string-replacement-p
-            (setf (getf quad :object)
+            (setf (quad:object quad)
                   (sparql-manipulation:make-rdfliteral string-replacement)))))))
   quad)
 
@@ -752,11 +752,21 @@ which houses a primitive IRI."
                                :string (cdr value)
                                :token 'ebnf::|IRIREF|)))))
     (loop for quad in quads
-          collect (loop for (k v) on quad by #'cddr
-                        if (consp v)
-                          append (list k (unfold v))
-                        else
-                          append (list k v)))))
+          for any-change = (or (consp (quad:subject quad))
+                               (consp (quad:predicate quad))
+                               (consp (quad:object quad))
+                               (consp (quad:graph quad)))
+          for changable-quad = (if any-change (quad:copy quad) quad)
+          when any-change
+            do (when (consp (quad:subject quad))
+                 (setf (quad:subject quad) (unfold (quad:subject quad))))
+               (when (consp (quad:predicate quad))
+                 (setf (quad:predicate quad) (unfold (quad:predicate quad))))
+               (when (consp (quad:object quad))
+                 (setf (quad:object quad) (unfold (quad:object quad))))
+               (when (consp (quad:graph quad))
+                 (setf (quad:graph quad) (unfold (quad:graph quad))))
+          collect changable-quad)))
 
 (defun assert-no-variables-in-quads (quads)
   "Asserts there are no variables in this quad."

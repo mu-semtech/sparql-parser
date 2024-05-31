@@ -73,11 +73,11 @@ Hence graph -> uri -> types in which every URI is expressed as a string and the 
   "Loops over deletes and inserts and updates the known cache based on the received values."
   (flet ((extract-uri-type-graph-combinations (quads)
            (loop for quad in quads
-                 for predicate = (jsown:val (handle-update-unit::match-as-binding (getf quad :predicate)) "value")
+                 for predicate = (jsown:val (handle-update-unit::match-as-binding (quad:predicate quad)) "value")
                  when (string= predicate "http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-                   collect (list (jsown:val (handle-update-unit::match-as-binding (getf quad :subject)) "value")
-                                 (jsown:val (handle-update-unit::match-as-binding (getf quad :object)) "value")
-                                 (jsown:val (handle-update-unit::match-as-binding (getf quad :graph)) "value"))))
+                   collect (list (jsown:val (handle-update-unit::match-as-binding (quad:subject quad)) "value")
+                                 (jsown:val (handle-update-unit::match-as-binding (quad:object quad)) "value")
+                                 (jsown:val (handle-update-unit::match-as-binding (quad:graph quad)) "value"))))
          (remove-overlap (left right)
            (values (set-difference left right :test #'equal)
                    (set-difference right left :test #'equal))))

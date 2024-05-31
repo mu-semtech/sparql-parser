@@ -315,42 +315,41 @@ desired graphs."
            ;; search for failing constraints and invert result
            (not
             (do-graph-constraint (constraint) (position :value value)
-              (unless (detect-quads:quad-term-uri= (getf quad position) value)
+              (unless (detect-quads:quad-term-uri= (quad:get-key quad position) value)
                 (return t)))))
          (quad-matches-constraint (quad constraint)
            (not (do-graph-constraint (constraint) (position type value)
                   (case type
-                    (:value (unless (detect-quads:quad-term-uri= (getf quad position) value)
+                    (:value (unless (detect-quads:quad-term-uri= (quad:get-key quad position) value)
                               (return t)))
-                    (:type (unless (uri-has-type (detect-quads:quad-term-uri (getf quad position))
+                    (:type (unless (uri-has-type (detect-quads:quad-term-uri (quad:get-key quad position))
                                                  value)
                              (return t)))
                     (otherwise
                      (format t "~&Did not understand typet ~A as constaint~%" type)
                      (return t))))))
          (move-quad (quad graph)
-           (let ((new-quad (copy-seq quad)))
-             (setf (getf new-quad :graph) (sparql-manipulation:iriref graph))
+           (let ((new-quad (quad:copy quad)))
+             (setf (quad:graph new-quad) (sparql-manipulation:iriref graph))
              new-quad))
          (mark-quad-to-store (quad)
            (push quad dispatched-quads))
          (s-p-o-is-uri-p (quad)
-           ;; inverse logic for fast exiting
-           (not (loop for (k v) on quad by #'cddr
-                      unless (eq k :graph)
-                        when (not (detect-quads:quad-term-uri v))
-                          do (return t)))))
+           (and (detect-quads:quad-term-uri (quad:object quad))
+                (detect-quads:quad-term-uri (quad:subject quad))
+                (detect-quads:quad-term-uri (quad:predicate quad))
+                t)))
       (if (mu-auth-sudo)
           quads
           (with-access-tokens (tokens)
             ;; Initialize type index with all types mentioned in this set of quads
             (loop for quad in quads
-                  for pred-string = (detect-quads:quad-term-uri (getf quad :predicate))
+                  for pred-string = (detect-quads:quad-term-uri (quad:predicate quad))
                   when (and pred-string
                             (s-p-o-is-uri-p quad)
-                            (detect-quads:quad-term-uri= (getf quad :predicate) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
-                    do (set-known-type (detect-quads:quad-term-uri (getf quad :subject))
-                                       (detect-quads:quad-term-uri (getf quad :object))
+                            (detect-quads:quad-term-uri= (quad:predicate quad) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
+                    do (set-known-type (detect-quads:quad-term-uri (quad:subject quad))
+                                       (detect-quads:quad-term-uri (quad:object quad))
                                        t))
             ;; Find all extra knowledge we need to have on the quad's types
 
@@ -362,7 +361,7 @@ desired graphs."
                 (loop for quad in quads
                       when (all-value-constraints-hold-p quad constraint)
                         do (do-graph-constraint (constraint) (position :type value)
-                             (alexandria:when-let ((uri (detect-quads:quad-term-uri (getf quad position))))
+                             (alexandria:when-let ((uri (detect-quads:quad-term-uri (quad:get-key quad position))))
                                ;; ask for information on the types
                                (ensure-future-type-known uri value))))))
             (fetch-types-to-fetch)

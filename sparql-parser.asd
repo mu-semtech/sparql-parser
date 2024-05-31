@@ -36,6 +36,7 @@
                ;; (:file "reasoner/term-info")
                ;; (:file "reasoner/reasoner")
                ;; updates
+               (:file "updates/quad-definition")
                (:file "updates/framework")
                (:file "updates/detect-quads")
                (:file "updates/handle-update-unit")

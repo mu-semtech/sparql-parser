@@ -121,10 +121,10 @@
         :process (ebnf::|ObjectList|))
 (handle ebnf::|ObjectList|
         :process-functions ((ebnf::|Object| (object)
-                                   (push `(:graph ,(info-graph *info*)
-                                           :subject ,(info-subject *info*)
-                                           :predicate ,(info-predicate *info*)
-                                           :object ,(detect-quads-processing-handlers::|Object| object))
+                                   (push (quad:make-quad :graph (info-graph *info*)
+                                                         :subject (info-subject *info*)
+                                                         :predicate (info-predicate *info*)
+                                                         :object (detect-quads-processing-handlers::|Object| object))
                                          (info-quads *info*)))))
 (handle ebnf::|Verb|
         :note "Processed manually because Verb may be 'a', which needs to be treated specially."

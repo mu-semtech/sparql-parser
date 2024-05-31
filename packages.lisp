@@ -127,6 +127,19 @@
            #:*prefixes*
            #:define-prefix))
 
+(defpackage #:quad
+  (:use :common-lisp)
+  (:export
+   #:quad
+   #:make-quad
+   #:subject
+   #:predicate
+   #:object
+   #:graph
+   #:persist-p
+   #:get-key
+   #:copy))
+
 (defpackage #:acl
   (:use :common-lisp #:sparql-manipulation #:connection-globals)
   (:import-from #:support #:-> #:jsown-dedup)

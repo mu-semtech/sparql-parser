@@ -81,10 +81,10 @@
 (defun quad-to-jsown-binding (quad)
   "Converts QUAD to a jsown binding."
   (jsown:new-js
-    ("subject" (handle-update-unit::match-as-binding (getf quad :subject)))
-    ("predicate" (handle-update-unit::match-as-binding (getf quad :predicate)))
-    ("object" (handle-update-unit::match-as-binding (getf quad :object)))
-    ("graph" (handle-update-unit::match-as-binding (getf quad :graph)))))
+    ("subject" (handle-update-unit::match-as-binding (quad:subject quad)))
+    ("predicate" (handle-update-unit::match-as-binding (quad:predicate quad)))
+    ("object" (handle-update-unit::match-as-binding (quad:object quad)))
+    ("graph" (handle-update-unit::match-as-binding (quad:graph quad)))))
 
 (defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope allowed-groups)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
