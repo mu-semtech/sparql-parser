@@ -667,8 +667,12 @@ variables are missing this will not lead to a pattern."
                                            :insert-quads
                                            dedup-insert-quads)
                (dolist (group (support:group-by-size-and-count
-                               (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
-                                      (mapcar (lambda (a) (cons :insert a)) effective-inserts))
+                               (nconc (loop for quad in effective-deletes
+                                            when (quad:persist-p quad)
+                                              collect (cons :delete quad))
+                                      (loop for quad in effective-inserts
+                                            when (quad:persist-p quad)
+                                              collect (cons :insert quad)))
                                :max-size *max-query-size-heuristic*
                                :max-count *max-quads-per-query-heuristic*
                                :item-size (alexandria:compose #'quad-as-string-size #'cdr)))

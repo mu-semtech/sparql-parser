@@ -120,7 +120,11 @@
   ;; applicable constraints.  Check https://github.com/quil-lang/magicl
   ;; and https://quickref.common-lisp.net/3d-matrices.html#g_t_276828_2769
   ;; in that case.
-  (constraints nil))
+  (constraints nil)
+  ;; persist-p indicates whether this graph-specification will write
+  ;; triples to the store, or if it will only generate the delta
+  ;; messages regarding the changed triples.
+  (persist-p t))
 
 (defstruct (access-grant (:constructor make-access-grant*))
   (scopes (list '_))
@@ -328,9 +332,10 @@ desired graphs."
                     (otherwise
                      (format t "~&Did not understand typet ~A as constaint~%" type)
                      (return t))))))
-         (move-quad (quad graph)
+         (move-quad (quad graph graph-spec)
            (let ((new-quad (quad:copy quad)))
              (setf (quad:graph new-quad) (sparql-manipulation:iriref graph))
+             (setf (quad:persist-p quad) (graph-specification-persist-p graph-spec))
              new-quad))
          (mark-quad-to-store (quad)
            (push quad dispatched-quads))
@@ -368,10 +373,12 @@ desired graphs."
             ;; now we know we have all relevant types, we can go over the
             ;; computations and determine in which graphs each quad should be stored
             (dolist (token-with-graph-specification (accessible-graphs :tokens tokens :usage :write :scope (mu-call-scope)))
-              (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification))))
+              (let* ((token (car token-with-graph-specification))
+                     (graph-spec (cdr token-with-graph-specification))
+                     (graph (token-graph-specification-graph token graph-spec)))
                 ;; TODO: check each quad so we only add it once
                 (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
                   (dolist (quad quads)
                     (when (quad-matches-constraint quad constraint)
-                      (mark-quad-to-store (move-quad quad graph)))))))
+                      (mark-quad-to-store (move-quad quad graph graph-spec)))))))
             dispatched-quads)))))

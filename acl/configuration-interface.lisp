@@ -39,12 +39,13 @@
                           collect (if type-name `(:subject ,type-sub-constraint) `()))
                   specifications-list))))
 
-(defmacro define-graph (name (graph) &body type-specifications)
+(defmacro define-graph (name (graph &key (persist-p t)) &body type-specifications)
   "Compact DSL for specifying common graph constraints."
   `(define-graph*
     :name ',name
     :graph ,graph
-    :type-specifications ',type-specifications))
+    :type-specifications ',type-specifications
+    :persist-p ,persist-p))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
