@@ -95,7 +95,9 @@
             ("effectiveInsert" (mapcar #'quad-to-jsown-binding effective-inserts))
             ("effectiveDelete" (mapcar #'quad-to-jsown-binding effective-deletes)))))
     (when allowed-groups
-      (setf (jsown:val delta "allowedGroups") (jsown:to-json allowed-groups)))
+      (setf (jsown:val delta "allowedGroups") (if (equal allowed-groups "sudo")
+                                                  "sudo"
+                                                  (jsown:to-json allowed-groups))))
     (when (and scope (not (eq scope acl:_)))
       (setf (jsown:val delta "scope") scope))
     delta))
