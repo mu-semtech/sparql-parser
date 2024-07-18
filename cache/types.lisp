@@ -147,6 +147,8 @@ Hence graph -> uri -> types in which every URI is expressed as a string and the 
 
 (defparameter *uri-graph-user-type-providers* nil
   "A list of functions that can calculate the types for a list of combined graph and uri.")
+(defparameter *debug-prefix-functions* nil
+  "Set to non-nil to emit debugging information for prefix functions.")
 
 (defun derive-type-from-prefix-function (prefix types &optional complete-p)
   "Constructs a function that derives the types of uris starting with PREFIX.
@@ -154,15 +156,18 @@ Hence graph -> uri -> types in which every URI is expressed as a string and the 
 If COMPLETE-P is non-nil processing may be short-circuited but no
 guarantees are given for this to be used."
   (let ((prefix-length (length prefix)))
-    (format t "~&Types is now: ~A~%" types)
+    (when *debug-prefix-functions*
+      (format t "~&Types is now: ~A~%" types))
     (lambda (uri graph)
       (declare (ignore graph))
-      (format t "~&Types is now: ~A~%" types)
+      (when *debug-prefix-functions*
+        (format t "~&Types is now: ~A~%" types))
       (let ((uri-length (length uri)))
         (if (and (>= uri-length prefix-length)
                  (string= prefix (subseq uri 0 prefix-length)))
-            (progn (format t "~&Returning types ~A for uri ~A~%"
-                           types uri)
+            (progn (when *debug-prefix-functions*
+                     (format t "~&Returning types ~A for uri ~A~%"
+                             types uri))
                    (values types complete-p))
             (values nil nil))))))
 

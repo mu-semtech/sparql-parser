@@ -93,6 +93,9 @@ comparison."
         (expand-bindings bindings)
         bindings)))
 
+(defparameter *log-batch-mapping* nil
+  "Set to t to warn on processes which want to execute batch mapping.  Batch mapping is not implemented yet and will process as one big query.")
+
 (defun batch-map-solutions-for-select-query* (query &key (for :read) batch-size usage)
   (declare (ignore for batch-size))
   (sparql-parser:with-sparql-ast query
@@ -101,7 +104,8 @@ comparison."
                               query))
            (query-string (sparql-generator:write-valid altered-query)))
       ;; (break "Batch mapping ~A" query-string)
-      (format t "~&Batch mapping ~A~%" query-string)
+      (when *log-batch-mapping*
+        (format t "~&Batch mapping ~A~%" query-string))
       (client:bindings (client:query query-string)))))
 
 (defun batch-create-full-solution-for-select-query (query &key (for :read) batch-size usage)
