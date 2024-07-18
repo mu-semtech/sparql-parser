@@ -58,15 +58,21 @@
 
 (defun execute-scheduled-remote-delta-message (delta-remote-handler json-delta-message headers)
   (support:with-exponential-backoff-retry
-      (:max-time-spent 30 :max-retries 10 :initial-pause-interval 1 :pause-interval-multiplier 1.5)
+      (:max-time-spent 600 :max-retries 20 :initial-pause-interval 1 :pause-interval-multiplier 1.5)
     (handler-case
         ;; TODO: share following headers for this request with the new request
         ;;   - mu-auth-sudo (or make that influence mu-auth-allowed-groups?)
         (with-slots (endpoint method) delta-remote-handler
-          (dex:request endpoint
-                       :method method
-                       :headers headers
-                       :content json-delta-message))
+          (multiple-value-bind (body status resp-headers uri socket)
+              (dex:request endpoint
+                           :method method
+                           :headers headers
+                           :content json-delta-message)
+            (declare (ignore body resp-headers uri socket))
+            (unless (<= 200 status 299)
+              (error 'simple-error
+                     "Received status code ~A from delta messenger which is not in 2xx range"
+                     status))))
       (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
         (format t
                 "~&Encountered error from FAST-HTTP during delta: ~A~&~@[Delta message leading to failure: ~A~&~]"
