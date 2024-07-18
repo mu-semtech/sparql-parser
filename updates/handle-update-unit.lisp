@@ -136,7 +136,8 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                      (ecase number-type
                                        (:integer "http://www.w3.org/2001/XMLSchema#integer")
                                        (:decimal "http://www.w3.org/2001/XMLSchema#decimal")
-                                       (:double "http://www.w3.org/2001/XMLSchema#double"))))))
+                                       (:double "http://www.w3.org/2001/XMLSchema#double")))
+                                    ("type" "literal"))))
         (ebnf::|VAR1| (error "Cannot make binding for variable"))
         (ebnf::|VAR2| (error "Cannot make binding for variable"))
         (otherwise (error "Unknown match ~A encountered to convert to binding." match)))))
