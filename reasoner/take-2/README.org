@@ -1,0 +1,6 @@
+#+TITLE: Reasoner take 2
+
+A reasoner which first builds up a tree of variables which are logically
+connected to each other, and then passes derived information between
+them.
+
