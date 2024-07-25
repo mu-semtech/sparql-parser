@@ -100,7 +100,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
       (case (sparql-parser:match-term match)
         (ebnf::|IRIREF| (jsown:new-js
                           ("type" "uri")
-                          ("value" (sparql-manipulation:uri-unwrap-marks (detect-quads::primitive-match-string match)))))
+                          ("value" (sparql-manipulation:uri-unwrap-marks (terminal-match-string match)))))
         (ebnf::|RDFLiteral|
          ;; we can extract all cases by destructuring
          (destructuring-bind (ebnf-value-string &optional langtag-or-hathat hathat-iri)
@@ -109,7 +109,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
            (let ((value-string (sparql-inspection:ebnf-string-real-string ebnf-value-string))
                  (langtag-or-hathat-string (and langtag-or-hathat
                                                 (not hathat-iri)
-                                                (detect-quads::primitive-match-string langtag-or-hathat)))
+                                                (terminal-match-string langtag-or-hathat)))
                  (hathat-iri-string (and hathat-iri
                                          (sparql-inspection:rdf-literal-datatype match))))
              (cond (hathat-iri (jsown:new-js
@@ -606,9 +606,9 @@ variables are missing this will not lead to a pattern."
            (loop for (place match) on pattern by #'cddr
                  if (and (sparql-parser:match-p match)
                          (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
-                         (jsown:keyp bindings (subseq (sparql-parser:terminal-match-string match) 1))) ; binding contains key (OPTIONAL in queries)
+                         (jsown:keyp bindings (subseq (terminal-match-string match) 1))) ; binding contains key (OPTIONAL in queries)
                    append (list place
-                                (let ((solution (jsown:val bindings (subseq (sparql-parser:terminal-match-string match) 1))))
+                                (let ((solution (jsown:val bindings (subseq (terminal-match-string match) 1))))
                                   (if solution
                                       (binding-as-match solution)
                                       match)))

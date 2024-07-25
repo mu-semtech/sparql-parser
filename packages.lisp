@@ -288,7 +288,8 @@
 (defpackage #:detect-quads
   (:use :common-lisp)
   (:import-from #:sparql-parser
-                #:match-term)
+                #:match-term
+                #:terminal-match-string)
   (:export
    #:operation-type
    #:operation-data
@@ -304,7 +305,8 @@
                 #:operation-type
                 #:operation-data)
   (:import-from #:sparql-parser 
-                #:make-match))
+                #:make-match
+                #:terminal-match-string))
 
 (defpackage #:sparql-visjs
   (:use :common-lisp)

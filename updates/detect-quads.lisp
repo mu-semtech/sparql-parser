@@ -181,15 +181,15 @@ detect-quads-processing-handlers::|VarOrTerm|."
         :process (ebnf::|PNAME_LN| ebnf::|PNAME_NS|))
 (handle ebnf::|PNAME_LN|
         :function ((pname-ln)
-                   (let* ((string (primitive-match-string pname-ln))
+                   (let* ((string (terminal-match-string pname-ln))
                           (split-idx (search ":" string))
                           (pname-ns (subseq string 0 (1+ split-idx)))
                           (pn-local (subseq string (1+ split-idx)))
                           (found-prefix (find pname-ns (info-prefixes *info*)
-                                              :key (alexandria:compose #'primitive-match-string #'car)
+                                              :key (alexandria:compose #'terminal-match-string #'car)
                                               :test #'string=)))
                      (assert found-prefix)
-                     (let ((prefix-uri-representation (primitive-match-string (cdr found-prefix))))
+                     (let ((prefix-uri-representation (terminal-match-string (cdr found-prefix))))
                        ;; (format t "~&Found prefix uri representation ~A with pn-local ~A~%" prefix-uri-representation pn-local)
                        (cons pname-ln
                              (concatenate 'string
@@ -197,12 +197,12 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                           pn-local))))))
 (handle ebnf::|PNAME_NS|
         :function ((pname-ns)
-                   (let* ((string (primitive-match-string pname-ns))
+                   (let* ((string (terminal-match-string pname-ns))
                           (found-prefix (find string (info-prefixes *info*)
-                                              :key (alexandria:compose #'primitive-match-string #'car)
+                                              :key (alexandria:compose #'terminal-match-string #'car)
                                               :test #'string=)))
                      (assert found-prefix)
-                     (let ((pname-ns-uri-representation (primitive-match-string (cdr found-prefix))))
+                     (let ((pname-ns-uri-representation (terminal-match-string (cdr found-prefix))))
                        (cons pname-ns
                              (concatenate 'string
                                           (sparql-manipulation:uri-unwrap-marks pname-ns-uri-representation)
@@ -280,7 +280,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                        when (and v-match (sparql-parser:match-term-p v-match 'ebnf::|VAR1| 'ebnf::|VAR2|))
                                          collect v-match)))
                      (list (sparql-manipulation:make-word-match "*"))) ; match * if no variables found
-                    :key #'primitive-match-string
+                    :key #'terminal-match-string
                     :test #'string=))
         ;; We could parse group-graph-pattern through an adaptation of
         ;; the following code so we can verify the query is valid when
@@ -313,20 +313,12 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                       (ebnf::|SolutionModifier|))
                                (ebnf::|ValuesClause|)))))))
 
-(defun primitive-match-string (match)
-  "We consider a primitive match to be a match which has a
-sparql-parser:scanned-token as its only child element.  This returns its
-string representation."
-  (assert (and (typep (first (sparql-parser:match-submatches match)) 'sparql-parser:scanned-token)
-               (= (length (sparql-parser:match-submatches match)) 1)))
-  (sparql-parser:scanned-token-effective-string (first (sparql-parser:match-submatches match))))
-
 (defun quad-term-uri (quad-term)
   "Yields the quad-term's URI representation if that exists."
   (cond ((consp quad-term)
          (cdr quad-term))
         ((sparql-parser:match-term-p quad-term 'ebnf::|IRIREF|)
-         (let ((str (primitive-match-string quad-term)))
+         (let ((str (terminal-match-string quad-term)))
            (subseq str 1 (1- (length str)))))))
 
 (defun quad-term-uri= (quad-term uri-string)
