@@ -297,6 +297,26 @@
    #:quad-term-uri=
    #:quad-term-uri))
 
+(defpackage #:quad
+  (:use :common-lisp)
+  (:export
+   #:make-quad
+   #:quad-subject
+   #:quad-predicate
+   #:quad-object
+   #:quad-graph
+   #:make #:copy #:subject #:predicate #:object #:graph
+   #:quad))
+
+(defpackage #:quad-transformations
+  (:use :common-lisp)
+  (:export
+   #:user-transform-quads
+   #:add-quad-processor
+   #:define-quad-transformation
+   #:keep
+   #:update))
+
 (defpackage #:handle-update-unit
   (:use :common-lisp)
   (:import-from #:detect-quads
