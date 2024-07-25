@@ -660,8 +660,14 @@ variables are missing this will not lead to a pattern."
                   (delete-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris delete-quads))
                   (insert-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris insert-quads))
                   ;; we can deduplicate everything
-                  (dedup-delete-quads (remove-duplicates delete-quads-with-string-file-uris :test #'quad-equal-p))
-                  (dedup-insert-quads (remove-duplicates insert-quads-with-string-file-uris :test #'quad-equal-p)))
+                  (dedup-delete-quads-1 (remove-duplicates delete-quads-with-string-file-uris :test #'quad-equal-p))
+                  (dedup-insert-quads-1 (remove-duplicates insert-quads-with-string-file-uris :test #'quad-equal-p))
+                  ;; we can run user transformations on the quads
+                  (user-transformed-delete-quads (quad-transformations:user-transform-quads dedup-delete-quads-1 :method :insert))
+                  (user-transformed-insert-quads (quad-transformations:user-transform-quads dedup-insert-quads-1 :method :delete))
+                  ;; we can deduplicate everything again
+                  (dedup-delete-quads (remove-duplicates user-transformed-delete-quads :test #'quad-equal-p))
+                  (dedup-insert-quads (remove-duplicates user-transformed-insert-quads :test #'quad-equal-p)))
              (multiple-value-bind (effective-deletes effective-inserts)
                  (detect-effective-changes :delete-quads
                                            dedup-delete-quads

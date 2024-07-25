@@ -43,14 +43,73 @@
 
 (defmacro with-acl-config (&body body)
   "Executes body with the access rights specification required for these tests."
-  `(let ((acl::*prefixes* nil)
+  `(let ((prefix::*prefixes* nil)
          (acl::*access-specifications* nil)
          (acl::*graphs* nil)
          (acl::*rights* nil)
+         (client::*backend* "http://localhost:8891/sparql")
          (client::*log-sparql-query-roundtrip* t)
-         (type-cache::*uri-graph-user-type-providers* nil))
+         (type-cache::*uri-graph-user-type-providers* nil)
+         (quad-transformations::*user-quad-transform-functions* nil))
 
      (type-cache::add-type-for-prefix "http://book-store.example.com/books/" "http://schema.org/Book")
+
+     (quad-transformations:define-quad-transformation (quad method)
+       ;; make quad objects which have datatype in uuid specification just strings
+       (if (and
+            ;; predicate is uuid
+            (string= (detect-quads::quad-term-uri (quad:predicate quad))
+                     "http://mu.semte.ch/vocabularies/core/uuid")
+            ;; object has datatype
+            (= (length (sparql-parser:match-submatches (quad:object quad))) 3))
+           (let ((new-quad (quad:copy quad))) ; make new quad
+             (setf (quad:object new-quad)
+                   (handle-update-unit::make-nested-match
+                    `(ebnf::|RDFLiteral| ,(first (sparql-parser:match-submatches (quad:object quad))))))
+             ;; use the new quad
+             (quad-transformations:update new-quad))
+           ;; otherwise keep it
+           (quad-transformations:keep)))
+
+     ;; (quad-transformations:add-quad-processor
+     ;;  (lambda (quad &key method)
+     ;;    (declare (ignorable method))
+     ;;    (labels ((quad-transformations:update (quad-transformations::quads)
+     ;;               (cond ((null quad-transformations::quads) (values nil t t))
+     ;;                     ((listp (first quad-transformations::quads))
+     ;;                      (values quad-transformations::quads t t))
+     ;;                     (t (values (list quad-transformations::quads) t t))))
+     ;;             (quad-transformations:keep ()
+     ;;               (values nil nil t))
+     ;;             (quad-transformations::execute-body ()
+     ;;               (multiple-value-bind
+     ;;                     (quad-transformations::result
+     ;;                      quad-transformations::update-quad-p
+     ;;                      quad-transformations::used-internal-function-p)
+     ;;                   (progn
+     ;;                     (if (and
+     ;;                          (string=
+     ;;                           (detect-quads:quad-term-uri (quad:predicate quad))
+     ;;                           "http://mu.semte.ch/vocabularies/core/uuid")
+     ;;                          (=
+     ;;                           (length
+     ;;                            (sparql-parser:match-submatches (quad:object quad)))
+     ;;                           3))
+     ;;                         (let ((new-quad (quad:copy quad)))
+     ;;                           (setf (quad:object new-quad)
+     ;;                                 (handle-update-unit::make-nested-match
+     ;;                                  `(ebnf::|RDFLiteral|
+     ;;                                          ,(first
+     ;;                                            (sparql-parser:match-submatches
+     ;;                                             (quad:object quad))))))
+     ;;                           (quad-transformations:update new-quad))
+     ;;                         (quad-transformations:keep)))
+     ;;                 (unless quad-transformations::used-internal-function-p
+     ;;                   (format t
+     ;;                           "~&[ERROR][QUAD-PROCESSOR] Quad processor user function did not call internal replacement function REPLACE or KEEP. Ignoring possible changes.~%"))
+     ;;                 (values quad-transformations::result
+     ;;                         quad-transformations::update-quad-p))))
+     ;;      (quad-transformations::execute-body))))
 
      ;; initialize rights
      (acl::define-prefixes
@@ -396,4 +455,10 @@
 
       (server:execute-query-for-context
        "CONSTRUCT { } WHERE { }")
-      )))
+
+      ;; inserting the UUID with xsd:string will just insert the UUID (configured above)
+
+      (server:execute-query-for-context
+       "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+        INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }"))))

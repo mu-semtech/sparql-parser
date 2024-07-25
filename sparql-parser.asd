@@ -37,6 +37,8 @@
                ;; (:file "reasoner/reasoner")
                ;; updates
                (:file "updates/framework")
+               (:file "updates/quad")
+               (:file "updates/quad-transformations")
                (:file "updates/detect-quads")
                (:file "updates/handle-update-unit")
                ;; messenger
