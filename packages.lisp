@@ -98,7 +98,8 @@
            #:make-match-up-to-scanned-token
            #:make-token-match
            #:make-string-literal
-           #:make-rdfliteral))
+           #:make-rdfliteral
+           #:string-literal-string))
 
 (defpackage #:type-cache
   (:use :common-lisp)

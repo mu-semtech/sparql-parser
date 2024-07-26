@@ -90,12 +90,15 @@ Assumes URI-STRING is wrapped."
       :string string
       :token term)))
 
-(defun make-rdfliteral (string)
+(defun make-rdfliteral (string &key datatype-match)
   "This constructs an ebnf::|RDFLiteral| from STRING.
 
 Currently supports only string, but could be extended with datatype and lang keywords when necessary."
   (handle-update-unit::make-nested-match
-   `(ebnf::|RDFLiteral| ,(make-string-literal string))))
+   `(ebnf::|RDFLiteral|
+           ,(make-string-literal string)
+           ,@(and datatype-match
+                  (list "^^" datatype-match)))))
 
 (defun make-string-literal (string)
   "Constructs a string literal for string, escaping as necessary."
@@ -103,6 +106,31 @@ Currently supports only string, but could be extended with datatype and lang key
    `(ebnf::|String|
            ,(make-token-match 'ebnf::|STRING_LITERAL_LONG2|
                               (sparql-escape-string string)))))
+
+(defun string-literal-string (ebnf-string)
+  "Gets the original string for an 'ebnf::|String|, unescaping as necessary.
+
+  Escapes quoting but not special characters such as \\t and \\n."
+  (let* ((specific-match (first (match-submatches ebnf-string)))
+         (term (sparql-parser:match-term specific-match))
+         (string (sparql-parser:terminal-match-string specific-match)))
+    (case term
+      (ebnf::|STRING_LITERAL_LONG1|
+       (cl-ppcre:regex-replace-all "\\\\(['\\\\])"
+                                   (subseq string 3 (- (length string) 3))
+                                   "\\1"))
+      (ebnf::|STRING_LITERAL_LONG2|
+       (cl-ppcre:regex-replace-all "\\\\([\"\\\\])"
+                                   (subseq string 3 (- (length string) 3))
+                                   "\\1"))
+      (ebnf::|STRING_LITERAL1|
+       (cl-ppcre:regex-replace-all "\\\\([\'\\\\])"
+                                   (subseq string 1 (1- (length string)))
+                                   "\\1"))
+      (ebnf::|STRING_LITERAL2|
+       (cl-ppcre:regex-replace-all "\\\\([\"\\\\])"
+                                   (subseq string 1 (1- (length string)))
+                                   "\\1")))))
 
 (defun make-word-match (string)
   "Constructs a match for fixed content in the EBNF.
