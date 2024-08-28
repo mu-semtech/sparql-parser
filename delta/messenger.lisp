@@ -70,6 +70,7 @@
                            :content json-delta-message)
             (declare (ignore body resp-headers uri socket))
             (unless (<= 200 status 299)
+              (format t "~&Discovered incorrect status code ~A~%" status)
               (error 'simple-error
                      "Received status code ~A from delta messenger which is not in 2xx range"
                      status))))
