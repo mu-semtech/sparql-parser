@@ -107,6 +107,8 @@
                     (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
                     (,response)))
               (error (e)
+                (format t "~&Failed to process query, yielding 500.  Backtrace: ~A~%") ; more info from inside let
+                (trivial-backtrace:print-backtrace e)
                 (let ((jsown (jsown:new-js ("status" 500)
                                ("message" "Failed to process query.")
                                ("mu-call-id" (mu-call-id))
@@ -116,11 +118,12 @@
                                ("mu-auth-allowed-groups" (jsown:to-json (mu-auth-allowed-groups)))
                                ("mu-call-scope" (mu-call-scope))
                                ("internal-error" (format nil "~A" e)))))
-                  (format t "~&Failed to process query, yielding 500.~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
+                  (format t "~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
                   `(500 (:content-type "application/json")
                         (,(jsown:to-json jsown)))))))))
     (error (e)
       (format t "Could not process query, yielding 500.  ~%~A~%" e)
+      (trivial-backtrace:print-backtrace e)
       `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e))))))
 
 (defun boot (&key (port 8890) (worker-count 32))
