@@ -722,6 +722,7 @@ variables are missing this will not lead to a pattern."
                      (filled-in-inserts (filled-in-patterns insert-patterns bindings))
                      (deletes (acl:dispatch-quads filled-in-deletes))
                      (inserts (acl:dispatch-quads filled-in-inserts)))
+                ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
                 (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
                                                :delete-quads-after-dispatch deletes
                                                :insert-quads-before-dispatch filled-in-inserts

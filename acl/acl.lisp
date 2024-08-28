@@ -326,7 +326,7 @@ desired graphs."
                                                  value)
                              (return t)))
                     (otherwise
-                     (format t "~&Did not understand typet ~A as constaint~%" type)
+                     (format t "~&Did not understand type ~A as constaint~%" type)
                      (return t))))))
          (move-quad (quad graph)
            (let ((new-quad (copy-seq quad)))
