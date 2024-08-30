@@ -19,6 +19,7 @@
     :constraints (concatenate
                   'list
                   (loop for (type-name . predicate-specifications) in type-specifications
+                        for group = (gensym "GROUP")
                         for type-sub-constraint = (if (eq type-name '_) nil `(:type ,(prefix:expand type-name)))
                         if predicate-specifications
                           append (loop for (direction predicate) on predicate-specifications
@@ -28,11 +29,16 @@
                                              (case direction
                                                (-> `(:subject ,type-sub-constraint))
                                                (<- `(:object ,type-sub-constraint))
+                                               (x> `(:subject ,type-sub-constraint))
+                                               (<x `(:object ,type-sub-constraint))
                                                (otherwise (error "Direction must be <- or -> but got ~s" direction))))
                                        for predicate-constraint
-                                         = (if (eq predicate '_)
-                                               `()
-                                               `(:predicate (:value ,(prefix:expand predicate))))
+                                         = (cond ((eq predicate '_) nil)
+                                                 ((find direction '(-> <-))
+                                                  `(:predicate (:value ,(prefix:expand predicate))))
+                                                 ((find direction '(x> <x))
+                                                  `(:predicate (:not-value ,(prefix:expand predicate))
+                                                    :group ,group)))
                                        collect `(,@type-constraint ,@predicate-constraint))
                         else
                           ;; shorthand for all predicates

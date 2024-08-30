@@ -265,7 +265,11 @@ MATCH may be updated in place but updated MATCH is returned."
 - KIND is either a variable that will be bound to the KIND of constraint or otherwise a keyword (being :VALUE or :TYPE) to be used as a constraint.
 - VALUE is a variable that will be bound to the specific VALUE."
   (let ((kind-sym (if (keywordp kind) (gensym "KIND") kind)))
-    `(loop for (,position (,kind-sym ,value)) on ,graph-constraint by #'cddr
+    `(loop for (,position (,kind-sym ,value))
+             on (loop for (k v) on ,graph-constraint by #'cddr
+                      unless (eq k :group)
+                        append (list k v))
+               by #'cddr
            ,@(if (keywordp kind) `(when (eq ,kind ,kind-sym)))
            ,collection ,@body)))
 
@@ -322,6 +326,8 @@ desired graphs."
                   (case type
                     (:value (unless (detect-quads:quad-term-uri= (getf quad position) value)
                               (return t)))
+                    (:not-value (when (detect-quads:quad-term-uri= (getf quad position) value)
+                                  (return t)))
                     (:type (unless (uri-has-type (detect-quads:quad-term-uri (getf quad position))
                                                  value)
                              (return t)))
@@ -369,10 +375,21 @@ desired graphs."
             ;; now we know we have all relevant types, we can go over the
             ;; computations and determine in which graphs each quad should be stored
             (dolist (token-with-graph-specification (accessible-graphs :tokens tokens :usage :write :scope (mu-call-scope)))
-              (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification))))
+              (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification)))
+                    (constraints (graph-specification-constraints (cdr token-with-graph-specification))))
                 ;; TODO: check each quad so we only add it once
-                (dolist (constraint (graph-specification-constraints (cdr token-with-graph-specification)))
+                (dolist (constraint-group (support:group-by
+                                           constraints #'eq
+                                           :key (lambda (constraint) (getf constraint :group))))
                   (dolist (quad quads)
-                    (when (quad-matches-constraint quad constraint)
-                      (mark-quad-to-store (move-quad quad graph)))))))
+                    (if (getf (first constraint-group) :group)
+                        ;; when a group is given all the constraints in that group must hold
+                        (when (every (lambda (constraint)
+                                       (quad-matches-constraint quad constraint))
+                                     constraint-group)
+                          (mark-quad-to-store (move-quad quad graph)))
+                        ;; without a group, each constraint stands on its own
+                        (dolist (constraint constraint-group)
+                          (when (quad-matches-constraint quad constraint)
+                            (mark-quad-to-store (move-quad quad graph)))))))))
             dispatched-quads)))))
