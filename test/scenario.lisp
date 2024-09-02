@@ -148,7 +148,8 @@
         acl::-> "ext:hasBook"
         acl::-> "ext:hasSuperFavorite"
         acl::-> "ext:longContent")
-       ("foaf:Person" acl::<- "ext:hasFavoriteAuthor"))
+       ("foaf:Person" acl::<- "ext:hasFavoriteAuthor")
+       ("ext:NoNameOrLabel" acl::x> "ext:name" acl::x> "ext:label"))
 
      (acl:grant (acl::read acl::write)
                 :to acl::public-data
@@ -461,4 +462,42 @@
       (server:execute-query-for-context
        "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
         PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-        INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }"))))
+        INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }"))
+    (with-impersonation-for :jack
+      ;; can insert some random content
+      (server:execute-query-for-context
+       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        INSERT DATA {
+          ext:myDisplay a ext:NoNameOrLabel;
+            ext:score 9001;
+            ext:level 12.
+        }")
+      ;; can't insert name or label
+      (block :no-error
+        (handler-case
+            (server:execute-query-for-context
+             "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+              INSERT DATA {
+                ext:myDisplay ext:name \"Failing name\".
+              }")
+          (handle-update-unit:unwritten-data-error (e)
+            (format t "Received expected error ~A" e)
+            (return-from :no-error t)))
+        (error 'simple-error :format-control "Expected triples not being written, but received no error."))
+      (block :no-error
+        (handler-case
+            (server:execute-query-for-context
+             "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+              INSERT DATA {
+                ext:myDisplay ext:label \"Failing label\".
+              }")
+          (handle-update-unit:unwritten-data-error (e)
+            (format t "Received expected error ~A" e)
+            (return-from :no-error t)))
+        (error 'simple-error :format-control "Expected triples not being written, but received no error."))
+      (server:execute-query-for-context
+       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        INSERT DATA {
+          ext:myDisplay ext:anotherThing \"Another thing\".
+        }")
+      )))

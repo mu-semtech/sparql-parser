@@ -732,6 +732,18 @@ variables are missing this will not lead to a pattern."
 (defparameter *unwritten-data-actions* '(:log :error)
   "Which actions to take on detecting unwritten data.")
 
+(define-condition unwritten-data-error (error)
+  ((missing-insert-quads :initform nil :initarg :missing-insert-quads)
+   (missing-delete-quads :initform nil :initarg :missing-delete-quads))
+  (:documentation "Error thrown when some data would not be written to the triplestore.  See *unwritten-data-actions*"))
+
+(defmethod print-object ((ud unwritten-data-error) stream)
+  (print-unreadable-object (ud stream :type "UNWRITTEN-DATA-ERROR")
+    (format stream
+            "~&  DELETE:~%~{    ~A~%~}~%  INSERT:~%~{    ~A~%~}~%"
+            (slot-value ud 'missing-delete-quads)
+            (slot-value ud 'missing-insert-quads))))
+
 (defun maybe-error-on-unwritten-data (&key delete-quads-before-dispatch delete-quads-after-dispatch insert-quads-before-dispatch insert-quads-after-dispatch)
   (when *unwritten-data-actions*
     (let ((missing-delete-quads (set-difference delete-quads-before-dispatch
@@ -745,9 +757,9 @@ variables are missing this will not lead to a pattern."
           (format t "~&Warning, triples will not be written to triplestore:~% DELETE:~{~%  ~A~}~& INSERT:~{~%  ~A~}~%"
                   missing-delete-quads missing-insert-quads))
         (when (member :error *unwritten-data-actions*)
-          (error 'simple-error
-                 :format-control "~&Warning, triples will not be written to triplestore:~% DELETE:~{~%  ~A~}~& INSERT:~{~%  ~A~}~%"
-                 :format-arguments (list missing-delete-quads missing-insert-quads)))))))
+          (error 'unwritten-data-error
+                 :missing-delete-quads missing-delete-quads
+                 :missing-insert-quads missing-insert-quads))))))
 
 (defun unfold-prefixed-quads (quads)
   "Unfolds the prefixed quads (represented by a CONS cell) into a match

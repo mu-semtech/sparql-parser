@@ -326,7 +326,9 @@
                 #:operation-data)
   (:import-from #:sparql-parser 
                 #:make-match
-                #:terminal-match-string))
+                #:terminal-match-string)
+  (:export
+   #:unwritten-data-error))
 
 (defpackage #:sparql-visjs
   (:use :common-lisp)
