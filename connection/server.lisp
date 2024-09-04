@@ -107,7 +107,7 @@
                     (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
                     (,response)))
               (error (e)
-                (format t "~&Failed to process query, yielding 500.  Backtrace: ~A~%") ; more info from inside let
+                (format t "~&Failed to process query, yielding 500.~%") ; more info from inside let
                 (trivial-backtrace:print-backtrace e)
                 (let ((jsown (jsown:new-js ("status" 500)
                                ("message" "Failed to process query.")
