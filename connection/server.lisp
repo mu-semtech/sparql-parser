@@ -144,5 +144,10 @@
 (setf woo.specials:*debug* t)
 
 (when (find :docker *features*)
+  #+docker
+  (when (and (not (find :docker-build *features*))
+             (probe-file (make-pathname :directory '(:absolute "data") :name ".unmounted-data-folder")))
+    (format t "~&Data folder not mounted.~%Please mount `/data/`.  Eg:~%    volumes:~%      - ./config/authorization:/config/~%      - ./data/authorization:/data/~%")
+    #+sbcl (sb-ext:quit :recklessly-p t)
+    #-sbcl (error 'simple-error :format-control "Data folder not mounted, long strings will be lost."))
   (boot))
-

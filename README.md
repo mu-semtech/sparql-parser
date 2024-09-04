@@ -15,6 +15,7 @@ services:
     image: semtech/sparql-parser:0.0.1
     volumes:
       - ./config/authorization:/config
+      - ./data/authorization:/data
 ```
 
 Next, add the following contents to the config file mounted in `./config/authorization/config.lisp`.
