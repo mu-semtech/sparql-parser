@@ -13,7 +13,7 @@
         (loop for function in *user-quad-transform-functions*
               do
                  (setf current-quads
-                       (loop for quad in quads
+                       (loop for quad in current-quads
                              for (new-quads changedp)
                                = (multiple-value-list (funcall function quad :method method))
                              when changedp
@@ -21,7 +21,7 @@
                              if changedp
                                append new-quads
                              else
-                               append quads)))
+                               append (list quad))))
         (values current-quads any-quads-changed-p))
       (values quads nil)))
 

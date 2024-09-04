@@ -118,7 +118,8 @@
        :ext "http://mu.semte.ch/vocabularies/ext/"
        :schema "http://schema.org/"
        :books "http://example.com/books/"
-       :favorites "http://mu.semte.ch/favorites/")
+       :favorites "http://mu.semte.ch/favorites/"
+       :geo "http://www.opengis.net/ont/geosparql#")
 
      (acl:supply-allowed-group "public")
 
@@ -142,7 +143,8 @@
 
      (acl:define-graph acl::public-data ("http://mu.semte.ch/graphs/public")
        ("foaf:Person" acl::-> acl::_)
-       ("schema:Book" acl::-> acl::_))
+       ("schema:Book" acl::-> acl::_)
+       ("geo:Geometry" acl::-> acl::_))
      (acl:define-graph acl::user-data ("http://mu.semte.ch/graphs/personal/")
        (acl::_
         acl::-> "ext:hasBook"
@@ -364,6 +366,32 @@
         }"))
 
     (with-impersonation-for :joll
+      (quad-transformations:define-quad-transformation (quad method)
+        ;; fix wktLiteral string representation
+        (let* ((object (quad:object quad))
+               (datatype-match (and
+                                (sparql-parser:match-p object)
+                                (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                                (= 3 (length (sparql-parser:match-submatches object)))
+                                (third (sparql-parser:match-submatches object))))
+               (datatype-uri (and datatype-match
+                                  (detect-quads::quad-term-uri
+                                   (first
+                                    (sparql-parser:match-submatches datatype-match)))))
+               (string-value (and (sparql-parser:match-p object)
+                                  (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                                  (sparql-manipulation:string-literal-string
+                                   (first (sparql-parser:match-submatches object))))))
+          (if (and datatype-uri
+                   (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
+                   (search "https://www.opengis.net/" string-value))
+              (let ((new-quad (quad:copy quad))
+                    (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
+                (setf (quad:object new-quad)
+                      (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
+                (quad-transformations:update new-quad))
+              (quad-transformations:keep))))
+
       (format t "~&Joll can write a book title with the right URI and no type.~%")
 
       (server:execute-query-for-context
@@ -462,7 +490,19 @@
       (server:execute-query-for-context
        "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
         PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-        INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }"))
+        INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }")
+
+      (server:execute-query-for-context
+       "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+        PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+        INSERT DATA {
+          <http://book-store.example.com/geometries/a>
+             a geo:Geometry;
+             geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
+         }"))
+
     (with-impersonation-for :jack
       ;; can insert some random content
       (server:execute-query-for-context
@@ -499,5 +539,4 @@
        "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay ext:anotherThing \"Another thing\".
-        }")
-      )))
+        }"))))
