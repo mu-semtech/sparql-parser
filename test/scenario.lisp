@@ -193,6 +193,10 @@
                   }"
                  #-be-cautious 'base-string #+be-cautious 'string)))
 
+(defparameter *run-geosparql-tests* nil
+  "These require geosparql support.  Should work with nbittich/virtuoso at
+this point and likely a redpencil image too.")
+
 ;;;; Scenario
 ;;;; Boot up a container using:
 ;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.2.0-rc.1; dr rm virtuoso
@@ -492,16 +496,17 @@
         PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
         INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }")
 
-      (server:execute-query-for-context
-       "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-        PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-        PREFIX geo: <http://www.opengis.net/ont/geosparql#>
-        INSERT DATA {
-          <http://book-store.example.com/geometries/a>
-             a geo:Geometry;
-             geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
-         }"))
+      (when *run-geosparql-tests*
+        (server:execute-query-for-context
+         "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+          PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+          INSERT DATA {
+            <http://book-store.example.com/geometries/a>
+               a geo:Geometry;
+               geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
+           }")))
 
     (with-impersonation-for :jack
       ;; can insert some random content
