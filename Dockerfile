@@ -1,7 +1,7 @@
 FROM madnificent/lisp-webservice:feature-modernize
 
 RUN apt-get update; apt-get -y upgrade; apt-get install -y libev-dev gcc;
-RUN mkdir -p /data
+RUN mkdir -p /data/strings/
 RUN touch /data/.unmounted-data-folder
 
 ENV SYSTEMS="SPARQL-PARSER"

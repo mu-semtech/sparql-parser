@@ -38,8 +38,8 @@ value is truethy iff the URI was converted to a string."
 
 (defun make-sha-file-path (sha)
   "Constructs the file path for a given SHA."
-  #+docker (make-pathname :directory '(:absolute "data") :name sha)
-  #-docker (asdf:system-relative-pathname :sparql-parser (format nil "data/~A" sha)))
+  #+docker (make-pathname :directory '(:absolute "data" "strings") :name sha)
+  #-docker (asdf:system-relative-pathname :sparql-parser (format nil "data/strings/~A" sha)))
 
 (defun make-string-file (string)
   "Writes contents of string to a file and yields its SHA.
@@ -50,11 +50,13 @@ Corresponds with READ-STRING-FILE."
     (if (probe-file target)
         sha
         ;; TODO: add retry mechanism in case of overlapping calls
-        (with-open-file (out target :direction :output
-                                    :if-exists :supersede
-                                    :if-does-not-exist :create)
-          (write-sequence string out)
-          sha))))
+        (progn
+          (ensure-directories-exist target)
+          (with-open-file (out target :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
+            (write-sequence string out)
+            sha)))))
 
 (defun read-string-file (sha)
   "Yields the contents of the file with the specified SHA as a string."
