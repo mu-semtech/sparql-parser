@@ -1,7 +1,7 @@
 (asdf:defsystem :sparql-parser
   :name "sparql-parser"
   :author "Aad Versteden <madnificent@gmail.com>"
-  :version "0.0.7"
+  :version "0.0.8"
   :maintainer "Aad Versteden <madnificent@gmail.com>"
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."

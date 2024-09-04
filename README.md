@@ -12,7 +12,7 @@ Add the service to your `docker-compose.yml`:
 ```yaml
 services:
   database:
-    image: semtech/sparql-parser:0.0.1
+    image: semtech/sparql-parser:0.0.8
     volumes:
       - ./config/authorization:/config
       - ./data/authorization:/data
