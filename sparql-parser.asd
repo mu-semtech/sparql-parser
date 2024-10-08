@@ -48,5 +48,7 @@
                ;; (:file "external/vis-js")
                ;; sparql http - part 2
                (:file "connection/server")
+               ;; shame
+               (:file "support/monkeypatch")
                ;; configuration
                (:file "config/config")))
