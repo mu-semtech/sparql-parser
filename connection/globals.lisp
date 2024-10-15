@@ -19,20 +19,24 @@
 (defparameter *mu-call-scope* nil
   "Call scope for the current request.  This is nil for microservices not
 providing a call scope.")
+(defparameter *source-ip* nil
+  "The source-ip header of the request.  May be removed in the future.")
 
 (defmacro with-call-context ((&key mu-call-id
                                 mu-session-id
                                 mu-auth-sudo
                                 mu-auth-allowed-groups
                                 mu-call-id-trail
-                                (mu-call-scope 'acl:_))
+                                (mu-call-scope 'acl:_)
+                                source-ip)
                              &body body)
   `(let ((*mu-call-id* ,mu-call-id)
          (*mu-session-id* ,mu-session-id)
          (*mu-auth-sudo* ,mu-auth-sudo)
          (*mu-auth-allowed-groups* ,mu-auth-allowed-groups)
          (*mu-call-id-trail* , mu-call-id-trail)
-         (*mu-call-scope* ,mu-call-scope))
+         (*mu-call-scope* ,mu-call-scope)
+         (*source-ip* ,source-ip))
      ,@body))
 
 (defun mu-call-id ()
@@ -73,3 +77,10 @@ providing a call scope.")
 
 (defun (setf mu-call-scope) (value)
   (setf *mu-call-scope* value))
+
+(defun source-ip ()
+  "SETF-able source ip address for the current request."
+  *source-ip*)
+
+(defun (setf source-ip) (value)
+  (setf *source-ip* value))

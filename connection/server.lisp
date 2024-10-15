@@ -88,7 +88,8 @@
                             :mu-auth-allowed-groups (when (and (not is-sudo-call)
                                                                (stringp allowed-groups-header))
                                                       (jsown:parse allowed-groups-header))
-                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-auth-scope" headers)))
+                            :mu-call-scope (parse-mu-call-scope-header (gethash "mu-auth-scope" headers))
+                            :source-ip (getf env :remote-addr))
           (with-parser-setup
             (handler-case
                 (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
@@ -100,7 +101,8 @@
                                                        :mu-session-id (mu-session-id)
                                                        :mu-auth-sudo (mu-auth-sudo)
                                                        :mu-auth-allowed-groups (jsown:to-json (mu-auth-allowed-groups))
-                                                       :mu-call-scope (mu-call-scope))))
+                                                       :mu-call-scope (mu-call-scope)
+                                                       :source-ip (source-ip))))
                                        str))
                        (response (execute-query-for-context query-string)))
                   `(200
@@ -117,7 +119,8 @@
                                ("mu-auth-sudo" (mu-auth-sudo))
                                ("mu-auth-allowed-groups" (jsown:to-json (mu-auth-allowed-groups)))
                                ("mu-call-scope" (mu-call-scope))
-                               ("internal-error" (format nil "~A" e)))))
+                               ("internal-error" (format nil "~A" e))
+                               ("source-ip" (source-ip)))))
                   (format t "~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
                   `(500 (:content-type "application/json")
                         (,(jsown:to-json jsown)))))))))
