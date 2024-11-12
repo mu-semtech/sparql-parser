@@ -45,7 +45,8 @@ value is truethy iff the URI was converted to a string."
   "Writes contents of string to a file and yields its SHA.
 
 Corresponds with READ-STRING-FILE."
-  (let* ((sha (format nil "~{~16r~}" (sha1:sha1-digest string)))
+  (let* ((octets (flexi-streams:string-to-octets string :external-format :utf-8))
+         (sha (format nil "~{~16r~}" (sha1:sha1-digest octets)))
          (target (make-sha-file-path sha)))
     (if (probe-file target)
         sha
