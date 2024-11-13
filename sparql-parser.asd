@@ -12,6 +12,7 @@
                (:file "support/support")
                (:file "support/tree-db")
                (:file "support/string-file")
+               (:file "support/semaphores")
                ;; parsing an EBNF tree
                (:file "sparql-ast/ebnf")
                (:file "sparql-ast/terminals")

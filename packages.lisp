@@ -24,7 +24,11 @@
            #:*string-max-size*
            #:*file-abbreviation-uri-prefix*
            #:maybe-uri-to-string
-           #:maybe-string-to-uri))
+           #:maybe-string-to-uri
+           #:semaphore-timeout
+           #:with-semaphore
+           #:with-multiple-semaphores*
+           #:with-multiple-semaphores))
 
 (defpackage :ebnf
   (:use :common-lisp)

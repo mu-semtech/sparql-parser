@@ -3,64 +3,115 @@
 (defparameter *backend*
   (if (find :docker *features*)
       "http://triplestore:8890/sparql"
-      "http://localhost:8891/sparql"))
+      "http://localhost:8891/sparql")
+  "Backends to talk to.  If this is a list, ")
+
+(defparameter *backends*
+  nil
+  "If this special variable is set, it will contain objects representing the current backends.  It will replace *backend* over time.")
+
+(defparameter *max-concurrent-connections* 9
+  "The maximum amount of concurrent queries sent to a sparql endpoint.")
 
 (defparameter *log-sparql-query-roundtrip* nil)
+
+(defparameter *aquire-db-semaphore-timeout* nil
+  "Amount of time (in seconds) to wait to aquire the semaphore (default: NIL).
+
+NIL symolizes to wait forever.")
+
+(defstruct sparql-endpoint
+  "Descriptor struct for a SPARQL endpoint to execute max connections."
+  (url "http://triplestore:8890/sparql" :type string)
+  (semaphore (bt:make-semaphore :name (format nil "endpoint-semaphore")
+                                :count *max-concurrent-connections*)))
+
+(defun make-backend-structs (backend-endpoints)
+  "Returns the backend structs for `BACKEND-ENDPOINTS'.
+
+This function may have a race condition making it return a different
+list of backends.  Assuming setf is atomic, the impact should be local
+to the first queries so we consider this to be fine."
+  (loop for endpoint in backend-endpoints
+        collect
+        (make-sparql-endpoint :url endpoint)))
+
+(defun backends ()
+  "Retrieves the backends as a list."
+  *backends*)
+
+(defun (setf backends) (backends)
+  (setf *backends* backends))
+
+(defun set-backend-urls (&rest endpoint-urls)
+  "Sets endpoints based on their URLs."
+  (setf (backends) (make-backend-structs endpoint-urls)))
 
 (defun query (string &key (send-to-single nil))
   "Sends a query to the backend and responds with the response body.
 
 When SEND-TO-SINGLE is truethy and multple endpoints are available, the request is sent to only one of them."
-  (let ((endpoints
-          (if (listp *backend*)
-              (if send-to-single
-                  (list (alexandria:random-elt *backend*))
-                  *backend*)
-              (list *backend*)))
-        result)
-    (loop for endpoint in endpoints
-          do
-             (support:with-exponential-backoff-retry
-                 (:max-time-spent 60 :max-retries 10 :initial-pause-interval 1 :pause-interval-multiplier 2)
-               (handler-case
-                   (multiple-value-bind (body code headers)
-                       (let ((uri (quri:uri endpoint))
-                             (headers `(("accept" . "application/sparql-results+json")
-                                        ("mu-call-id" . ,(mu-call-id))
-                                        ("mu-session-id" . ,(mu-session-id)))))
-                         (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
-                             (progn
-                               (setf (quri:uri-query-params uri)
-                                     `(("query" . ,string)))
-                               (dex:request uri
-                                            :method :get
-                                            :use-connection-pool t
-                                            :keep-alive t
-                                            :force-string t
-                                            ;; :verbose t
-                                            :headers headers))
-                             (dex:request uri
-                                          :method :post
-                                          :use-connection-pool nil
-                                          :keep-alive nil
-                                          :force-string t
-                                          :headers headers
-                                          :content `(("query" . ,string)))))
-                     (declare (ignore code headers))
-                     (when *log-sparql-query-roundtrip*
-                       (format t "~&Requested:~%~A~%and received~%~A~%"
-                               string body))
-                     (setf result body))
-                 (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
-                   (format t
-                           "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
-                           e (when *log-sparql-query-roundtrip* string))
-                   (support:report-exponential-backoff-failure e))
-                 (error (e)
-                   (format t
-                           "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
-                           e (when *log-sparql-query-roundtrip* string))
-                   (support:report-exponential-backoff-failure e)))))
+  (unless *backends*
+    (if (listp *backend*)
+        (apply #'set-backend-urls *backend*)
+        (set-backend-urls *backend*)))
+  (let* ((selected-endpoints
+           (if send-to-single
+               (list (alexandria:random-elt (backends)))
+               (backends)))
+         (result nil))
+    ;; 1. collect locks
+    ;; NOTEs:
+    ;; - we always get the semaphore locks in the same order which should ensure all of this is stable
+    ;; - a single failing endpoint will bring the whole setup down in this implementation
+    ;; - the implementation does not fire off the queries in parallel, we may want a thread per semaphore for that
+    ;; - a full-fledged and parallel implementation likely means rewriting this whole logic and the construction of the sparql-endpoint struct
+    (support:with-multiple-semaphores ((mapcar #'sparql-endpoint-semaphore selected-endpoints) :timeout *aquire-db-semaphore-timeout*)
+      (support:with-exponential-backoff-retry
+          (:max-time-spent 60 :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2)
+        (dolist (endpoint selected-endpoints)
+          ;; 2. send out queries
+          (handler-case
+              (multiple-value-bind (body code headers)
+                  (let ((uri (quri:uri (sparql-endpoint-url endpoint)))
+                        (headers `(("accept" . "application/sparql-results+json")
+                                   ("mu-call-id" . ,(mu-call-id))
+                                   ("mu-session-id" . ,(mu-session-id)))))
+                    (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
+                        (progn
+                          (setf (quri:uri-query-params uri)
+                                `(("query" . ,string)))
+                          (dex:request uri
+                                       :method :get
+                                       :use-connection-pool t
+                                       :keep-alive t
+                                       :force-string t
+                                       ;; :verbose t
+                                       :headers headers))
+                        (dex:request uri
+                                     :method :post
+                                     :use-connection-pool nil
+                                     :keep-alive nil
+                                     :force-string t
+                                     :headers headers
+                                     :content `(("query" . ,string)))))
+                (declare (ignore code headers))
+                (when *log-sparql-query-roundtrip*
+                  (format t "~&Requested:~%~A~%and received~%~A~%"
+                          string body))
+                (setf result body))
+            (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
+              (format t
+                      "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
+                      e (when *log-sparql-query-roundtrip* string))
+              (support:report-exponential-backoff-failure e))
+            (error (e)
+              (format t
+                      "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
+                      e (when *log-sparql-query-roundtrip* string))
+              (support:report-exponential-backoff-failure e)))))
+      ;; 3. release locks
+      )
     result))
 
 (defun expand-bindings (bindings)
