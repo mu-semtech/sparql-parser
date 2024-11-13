@@ -220,7 +220,7 @@ elements.  The value returned is consed."
           (alexandria:when-let* ; return nil on failure
               ((next-max-retries (and (> max-retries 0) (1- max-retries)))
                (time-left (- max-time-spent (/ (- (get-internal-real-time) start-time) internal-time-units-per-second)))
-               (next-max-time-spent (and (> time-left) time-left)))
+               (next-max-time-spent (and (> time-left 0) time-left)))
             (sleep initial-pause-interval)
             (exponential-backoff-retry* functor
                                         :max-time-spent next-max-time-spent
