@@ -9,7 +9,9 @@ Throws SEMAPHORE-TIMEOUT when timeout passed."
   (let ((semaphore-sym (gensym "SEMAPHORE")))
     `(let ((,semaphore-sym ,semaphore))
        (if (bt:wait-on-semaphore ,semaphore-sym :timeout ,timeout)
-           (progn ,@body)
+           (unwind-protect
+                (progn ,@body)
+             (sb-thread:signal-semaphore ,semaphore-sym))
            (error 'semaphore-timeout :semaphore ,semaphore-sym)))))
 
 (defun with-multiple-semaphores* (semaphores functor &key timeout)

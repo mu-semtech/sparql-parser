@@ -192,11 +192,11 @@ elements.  The value returned is consed."
                     (satisfies ,typed-plist-test-function-sym))))))
 
 ;;;; exponential backoff
-(defmacro with-exponential-backoff-retry ((&rest args &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2))
+(defmacro with-exponential-backoff-retry ((&rest args &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2) (total-time-spent 0))
                                           &body body)
-  (declare (ignore max-time-spent max-retries initial-pause-interval pause-interval-multiplier))
+  (declare (ignore max-time-spent max-retries initial-pause-interval pause-interval-multiplier total-time-spent))
   `(let (*exponential-backoff-failure*)
-     (declare (special *exponential-backoff-failure*))
+     (declare (special *exponential-backoff-failure* *total-time-spent*))
      (exponential-backoff-retry*
       (lambda () ,@body)
       ,@args)))
@@ -206,28 +206,32 @@ elements.  The value returned is consed."
   (declare (special *exponential-backoff-failure*))
   (setf *exponential-backoff-failure* argument))
 
-(defun exponential-backoff-retry* (functor &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2))
+(defun exponential-backoff-retry* (functor &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2) (total-time-spent 0))
   "Calls functor with exponential backoff."
   (declare (special *exponential-backoff-failure*))
-  (let ((start-time (get-internal-real-time))
-        (response (multiple-value-list (funcall functor))))
-    (if *exponential-backoff-failure*
-        (progn
-          (format t "~&Exponential backoff failure with ~A retries left, waiting ~A to retry.~&-> reported reason: ~A~&"
-                  max-retries initial-pause-interval *exponential-backoff-failure*)
-          (setf *exponential-backoff-failure* nil)
-          ;; TODO: provide option to send error on failure
-          (alexandria:when-let* ; return nil on failure
-              ((next-max-retries (and (> max-retries 0) (1- max-retries)))
-               (time-left (- max-time-spent (/ (- (get-internal-real-time) start-time) internal-time-units-per-second)))
-               (next-max-time-spent (and (> time-left 0) time-left)))
-            (sleep initial-pause-interval)
-            (exponential-backoff-retry* functor
-                                        :max-time-spent next-max-time-spent
-                                        :max-retries next-max-retries
-                                        :initial-pause-interval (* pause-interval-multiplier initial-pause-interval)
-                                        :pause-interval-multiplier pause-interval-multiplier)))
-        (apply #'values response))))
+  (let ((*total-time-spent* total-time-spent))  ; this is actually of the previous loop, but 🤷
+    (declare (special *total-time-spent*))
+    (let ((start-time (get-internal-real-time))
+           (response (multiple-value-list (funcall functor))))
+      (if *exponential-backoff-failure*
+          (progn
+            (format t "~&Exponential backoff failure with ~A retries left, waiting ~A to retry.~&-> reported reason: ~A~&"
+                    max-retries initial-pause-interval *exponential-backoff-failure*)
+            (setf *exponential-backoff-failure* nil)
+            ;; TODO: provide option to send error on failure
+            (alexandria:when-let*        ; return nil on failure
+                ((time-spent (- (get-internal-real-time) start-time))
+                 (next-max-retries (and (> max-retries 0) (1- max-retries)))
+                 (time-left (- max-time-spent (/ time-spent internal-time-units-per-second)))
+                 (next-max-time-spent (and (> time-left 0) time-left)))
+              (sleep initial-pause-interval)
+              (exponential-backoff-retry* functor
+                                          :max-time-spent next-max-time-spent
+                                          :total-time-spent (+ time-spent total-time-spent)
+                                          :max-retries next-max-retries
+                                          :initial-pause-interval (* pause-interval-multiplier initial-pause-interval)
+                                          :pause-interval-multiplier pause-interval-multiplier)))
+          (apply #'values response)))))
 
 ;;;; jsown supporting functions
 (defun jsown-equal (a b &key same-structure-p)

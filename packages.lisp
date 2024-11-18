@@ -28,7 +28,15 @@
            #:semaphore-timeout
            #:with-semaphore
            #:with-multiple-semaphores*
-           #:with-multiple-semaphores))
+           #:with-multiple-semaphores
+           #:*total-time-spent*))
+
+(defpackage :woo.worker.utils
+  (:use :common-lisp)
+  (:export
+   #:*max-tries-for-adding-job*
+   #:decomission
+   #:recomission))
 
 (defpackage :ebnf
   (:use :common-lisp)

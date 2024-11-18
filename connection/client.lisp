@@ -67,49 +67,56 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
     ;; - the implementation does not fire off the queries in parallel, we may want a thread per semaphore for that
     ;; - a full-fledged and parallel implementation likely means rewriting this whole logic and the construction of the sparql-endpoint struct
     (support:with-multiple-semaphores ((mapcar #'sparql-endpoint-semaphore selected-endpoints) :timeout *aquire-db-semaphore-timeout*)
-      (support:with-exponential-backoff-retry
-          (:max-time-spent 60 :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2)
-        (dolist (endpoint selected-endpoints)
-          ;; 2. send out queries
-          (handler-case
-              (multiple-value-bind (body code headers)
-                  (let ((uri (quri:uri (sparql-endpoint-url endpoint)))
-                        (headers `(("accept" . "application/sparql-results+json")
-                                   ("mu-call-id" . ,(mu-call-id))
-                                   ("mu-session-id" . ,(mu-session-id)))))
-                    (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
-                        (progn
-                          (setf (quri:uri-query-params uri)
-                                `(("query" . ,string)))
-                          (dex:request uri
-                                       :method :get
-                                       :use-connection-pool t
-                                       :keep-alive t
-                                       :force-string t
-                                       ;; :verbose t
-                                       :headers headers))
-                        (dex:request uri
-                                     :method :post
-                                     :use-connection-pool nil
-                                     :keep-alive nil
-                                     :force-string t
-                                     :headers headers
-                                     :content `(("query" . ,string)))))
-                (declare (ignore code headers))
-                (when *log-sparql-query-roundtrip*
-                  (format t "~&Requested:~%~A~%and received~%~A~%"
-                          string body))
-                (setf result body))
-            (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
-              (format t
-                      "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
-                      e (when *log-sparql-query-roundtrip* string))
-              (support:report-exponential-backoff-failure e))
-            (error (e)
-              (format t
-                      "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
-                      e (when *log-sparql-query-roundtrip* string))
-              (support:report-exponential-backoff-failure e)))))
+      (let ((post-handler (lambda () nil))) ; overwritten with handler on error
+        (unwind-protect
+             (support:with-exponential-backoff-retry
+                 (:max-time-spent 60 :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2)
+               (dolist (endpoint selected-endpoints)
+                 ;; if we took too long, we should ensure no one else is waiting
+                 (when (> support:*total-time-spent* 5)
+                   (setf post-handler #'woo.worker.utils:recomission)
+                   (woo.worker.utils:decomission))
+                 ;; 2. send out queries
+                 (handler-case
+                     (multiple-value-bind (body code headers)
+                         (let ((uri (quri:uri (sparql-endpoint-url endpoint)))
+                               (headers `(("accept" . "application/sparql-results+json")
+                                          ("mu-call-id" . ,(mu-call-id))
+                                          ("mu-session-id" . ,(mu-session-id)))))
+                           (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
+                               (progn
+                                 (setf (quri:uri-query-params uri)
+                                       `(("query" . ,string)))
+                                 (dex:request uri
+                                              :method :get
+                                              :use-connection-pool t
+                                              :keep-alive t
+                                              :force-string t
+                                              ;; :verbose t
+                                              :headers headers))
+                               (dex:request uri
+                                            :method :post
+                                            :use-connection-pool nil
+                                            :keep-alive nil
+                                            :force-string t
+                                            :headers headers
+                                            :content `(("query" . ,string)))))
+                       (declare (ignore code headers))
+                       (when *log-sparql-query-roundtrip*
+                         (format t "~&Requested:~%~A~%and received~%~A~%"
+                                 string body))
+                       (setf result body))
+                   (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
+                     (format t
+                             "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
+                             e (when *log-sparql-query-roundtrip* string))
+                     (support:report-exponential-backoff-failure e))
+                   (error (e)
+                     (format t
+                             "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
+                             e (when *log-sparql-query-roundtrip* string))
+                     (support:report-exponential-backoff-failure e)))))
+          (funcall post-handler)))
       ;; 3. release locks
       )
     result))

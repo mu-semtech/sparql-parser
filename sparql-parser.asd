@@ -13,6 +13,7 @@
                (:file "support/tree-db")
                (:file "support/string-file")
                (:file "support/semaphores")
+               (:file "support/woo-workers")
                ;; parsing an EBNF tree
                (:file "sparql-ast/ebnf")
                (:file "sparql-ast/terminals")
