@@ -8,11 +8,14 @@
 Throws SEMAPHORE-TIMEOUT when timeout passed."
   (let ((semaphore-sym (gensym "SEMAPHORE")))
     `(let ((,semaphore-sym ,semaphore))
-       (if (bt:wait-on-semaphore ,semaphore-sym :timeout ,timeout)
-           (unwind-protect
-                (progn ,@body)
-             (sb-thread:signal-semaphore ,semaphore-sym))
-           (error 'semaphore-timeout :semaphore ,semaphore-sym)))))
+       (with-semaphore* (lambda () ,@body)
+         ,semaphore-sym :timeout ,timeout))))
+
+(defun with-semaphore* (functor semaphore &key timeout)
+  (if (bt:wait-on-semaphore semaphore :timeout timeout)
+      (unwind-protect (funcall functor)
+        (sb-thread:signal-semaphore semaphore))
+      (error 'semaphore-timeout :semaphore semaphore)))
 
 (defun with-multiple-semaphores* (semaphores functor &key timeout)
   "Executes functor when all fo the SEMAPHOREs"

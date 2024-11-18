@@ -132,7 +132,7 @@
       (trivial-backtrace:print-backtrace e)
       `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e))))))
 
-(defun boot (&key (port 8890) (worker-count 32))
+(defun boot (&key (port 8890) (worker-count 64))
   (format t "Booting server on port ~A with ~A workers" port worker-count)
 
   (bordeaux-threads:make-thread

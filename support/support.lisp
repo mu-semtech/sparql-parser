@@ -192,9 +192,9 @@ elements.  The value returned is consed."
                     (satisfies ,typed-plist-test-function-sym))))))
 
 ;;;; exponential backoff
-(defmacro with-exponential-backoff-retry ((&rest args &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2) (total-time-spent 0))
+(defmacro with-exponential-backoff-retry ((&rest args &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2) (total-time-spent 0) (log t) (log-condition t))
                                           &body body)
-  (declare (ignore max-time-spent max-retries initial-pause-interval pause-interval-multiplier total-time-spent))
+  (declare (ignore max-time-spent max-retries initial-pause-interval pause-interval-multiplier total-time-spent log log-condition))
   `(let (*exponential-backoff-failure*)
      (declare (special *exponential-backoff-failure* *total-time-spent*))
      (exponential-backoff-retry*
@@ -206,7 +206,7 @@ elements.  The value returned is consed."
   (declare (special *exponential-backoff-failure*))
   (setf *exponential-backoff-failure* argument))
 
-(defun exponential-backoff-retry* (functor &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2) (total-time-spent 0))
+(defun exponential-backoff-retry* (functor &key (max-time-spent 60) (max-retries 10) (initial-pause-interval 1) (pause-interval-multiplier 2) (total-time-spent 0) (log t) (log-condition nil))
   "Calls functor with exponential backoff."
   (declare (special *exponential-backoff-failure*))
   (let ((*total-time-spent* total-time-spent))  ; this is actually of the previous loop, but 🤷
@@ -218,13 +218,13 @@ elements.  The value returned is consed."
                  (next-max-retries (and (> max-retries 0) (1- max-retries)))
                  (time-left (- max-time-spent (/ time-spent internal-time-units-per-second) initial-pause-interval))
                  (next-max-time-spent (and (> time-left 0) time-left)))
-            (format t "~&Exponential backoff failure with ~A retries left, ~A time left, ~A time spent, ~A time left to spend, waiting ~A to retry.~&-> reported reason: ~A~&"
-                    max-retries
-                    time-left
-                    time-spent
-                    initial-pause-interval
-                    next-max-time-spent
-                    *exponential-backoff-failure*)
+            (when log
+             (format t "~&Exponential backoff :: ~A retries left, ~A time left, ~A total time spent, waiting ~A to retry.~&~@[-> reported reason: ~A~]~&"
+                     max-retries
+                     time-left
+                     (+ time-spent total-time-spent)
+                     initial-pause-interval
+                     (and log-condition *exponential-backoff-failure*)))
             (setf *exponential-backoff-failure* nil)
             ;; TODO: provide option to send error on failure
             (when (and next-max-time-spent next-max-retries)

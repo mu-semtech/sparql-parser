@@ -35,8 +35,8 @@
   (:use :common-lisp)
   (:export
    #:*max-tries-for-adding-job*
-   #:decomission
-   #:recomission))
+   #:decommission
+   #:recommission))
 
 (defpackage :ebnf
   (:use :common-lisp)

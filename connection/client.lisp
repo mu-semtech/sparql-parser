@@ -10,13 +10,13 @@
   nil
   "If this special variable is set, it will contain objects representing the current backends.  It will replace *backend* over time.")
 
-(defparameter *max-concurrent-connections* 9
+(defparameter *max-concurrent-connections* 8
   "The maximum amount of concurrent queries sent to a sparql endpoint.")
 
 (defparameter *log-sparql-query-roundtrip* nil)
 
-(defparameter *aquire-db-semaphore-timeout* nil
-  "Amount of time (in seconds) to wait to aquire the semaphore (default: NIL).
+(defparameter *aquire-db-semaphore-timeout* 55
+  "Amount of time (in seconds) to wait to aquire the semaphore (default is now 55).
 
 NIL symolizes to wait forever.")
 
@@ -50,6 +50,12 @@ to the first queries so we consider this to be fine."
 (defparameter *max-query-time-for-retries* 10
   "This is the max amount of time to spend within which we'll retry to send the query.")
 
+(defparameter *log-failing-query-tries* t
+  "Whether to log queries which fail in exponential backoff retry.")
+
+(defparameter *log-failing-query-tries-with-condition* t
+  "Whether to log the condition for queries which fail in exponential backoff retry.")
+
 (defun query (string &key (send-to-single nil))
   "Sends a query to the backend and responds with the response body.
 
@@ -73,12 +79,12 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
       (let ((post-handler (lambda () nil))) ; overwritten with handler on error
         (unwind-protect
              (support:with-exponential-backoff-retry
-                 (:max-time-spent *max-query-time-for-retries* :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2)
+                 (:max-time-spent *max-query-time-for-retries* :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2 :log *log-failing-query-tries* :log-condition *log-failing-query-tries-with-condition*)
                (dolist (endpoint selected-endpoints)
                  ;; if we took too long, we should ensure no one else is waiting
                  (when (> support:*total-time-spent* 5)
-                   (setf post-handler #'woo.worker.utils:recomission)
-                   (woo.worker.utils:decomission))
+                   (setf post-handler #'woo.worker.utils:recommission)
+                   (woo.worker.utils:decommission))
                  ;; 2. send out queries
                  (handler-case
                      (multiple-value-bind (body code headers)
@@ -110,14 +116,16 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
                                  string body))
                        (setf result body))
                    (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
-                     (format t
-                             "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
-                             e (when *log-sparql-query-roundtrip* string))
+                     ;; This should also be logged in exponential backoff retry so might be good enough to log there.
+                     ;; (format t
+                     ;;         "~&Encountered error from FAST-HTTP: ~A~&~@[Query leading to failure: ~A~&~]"
+                     ;;         e (when *log-sparql-query-roundtrip* string))
                      (support:report-exponential-backoff-failure e))
                    (error (e)
-                     (format t
-                             "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
-                             e (when *log-sparql-query-roundtrip* string))
+                     ;; This should also be logged in exponential backoff retry so might be good enough to log there.
+                     ;; (format t
+                     ;;         "~&Encountered general error when executing query: ~A~&~@[Query leading to failure: ~A~&~]"
+                     ;;         e (when *log-sparql-query-roundtrip* string))
                      (support:report-exponential-backoff-failure e)))))
           (funcall post-handler)))
       ;; 3. release locks
