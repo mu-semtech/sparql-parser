@@ -214,16 +214,20 @@ elements.  The value returned is consed."
     (let ((start-time (get-internal-real-time))
            (response (multiple-value-list (funcall functor))))
       (if *exponential-backoff-failure*
-          (progn
-            (format t "~&Exponential backoff failure with ~A retries left, waiting ~A to retry.~&-> reported reason: ~A~&"
-                    max-retries initial-pause-interval *exponential-backoff-failure*)
+          (let* ((time-spent (- (get-internal-real-time) start-time))
+                 (next-max-retries (and (> max-retries 0) (1- max-retries)))
+                 (time-left (- max-time-spent (/ time-spent internal-time-units-per-second) initial-pause-interval))
+                 (next-max-time-spent (and (> time-left 0) time-left)))
+            (format t "~&Exponential backoff failure with ~A retries left, ~A time left, ~A time spent, ~A time left to spend, waiting ~A to retry.~&-> reported reason: ~A~&"
+                    max-retries
+                    time-left
+                    time-spent
+                    initial-pause-interval
+                    next-max-time-spent
+                    *exponential-backoff-failure*)
             (setf *exponential-backoff-failure* nil)
             ;; TODO: provide option to send error on failure
-            (alexandria:when-let*        ; return nil on failure
-                ((time-spent (- (get-internal-real-time) start-time))
-                 (next-max-retries (and (> max-retries 0) (1- max-retries)))
-                 (time-left (- max-time-spent (/ time-spent internal-time-units-per-second)))
-                 (next-max-time-spent (and (> time-left 0) time-left)))
+            (when (and next-max-time-spent next-max-retries)
               (sleep initial-pause-interval)
               (exponential-backoff-retry* functor
                                           :max-time-spent next-max-time-spent

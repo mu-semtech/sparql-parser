@@ -51,17 +51,20 @@
             ;; be assumed, might as well send something sensible.
             "{ \"head\": { \"link\": [], \"vars\": [\"callret-0\"] }, \"results\": { \"distinct\": false, \"ordered\": true, \"bindings\": [ { \"callret-0\": { \"type\": \"literal\", \"value\": \"Executed update query\" }} ] } }")
           ;; query
-          (let ((jsown-result
-                  (jsown:with-injective-reader
-                    (jsown:parse
-                     (client::query
-                      (generate-query
-                       (manipulate-query ast))
-                      :send-to-single t)))))
-            (when (jsown:keyp jsown-result "results")
-              ;; expand bindings if they exist
-              (setf (jsown:val (jsown:val jsown-result "results") "bindings")
-                    (expand-bindings (jsown:filter jsown-result "results" "bindings"))))
+          (let* ((raw-result (client::query
+                              (generate-query
+                               (manipulate-query ast))
+                              :send-to-single t))
+                 (has-result (not (null raw-result)))
+                 (jsown-result (when has-result
+                                 (jsown:with-injective-reader
+                                     (jsown:parse raw-result)))))
+            (if has-result
+                (when (jsown:keyp jsown-result "results")
+                  ;; expand bindings if they exist
+                  (setf (jsown:val (jsown:val jsown-result "results") "bindings")
+                        (expand-bindings (jsown:filter jsown-result "results" "bindings"))))
+                (error 'simple-error :format-control "Failed to execute query"))
             (jsown:to-json jsown-result))))))
 
 (defun parse-mu-call-scope-header (header)
@@ -110,7 +113,7 @@
                     (,response)))
               (error (e)
                 (format t "~&Failed to process query, yielding 500.~%") ; more info from inside let
-                (trivial-backtrace:print-backtrace e)
+                ;; (trivial-backtrace:print-backtrace e)
                 (let ((jsown (jsown:new-js ("status" 500)
                                ("message" "Failed to process query.")
                                ("mu-call-id" (mu-call-id))

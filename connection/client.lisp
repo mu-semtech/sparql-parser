@@ -47,6 +47,9 @@ to the first queries so we consider this to be fine."
   "Sets endpoints based on their URLs."
   (setf (backends) (make-backend-structs endpoint-urls)))
 
+(defparameter *max-query-time-for-retries* 10
+  "This is the max amount of time to spend within which we'll retry to send the query.")
+
 (defun query (string &key (send-to-single nil))
   "Sends a query to the backend and responds with the response body.
 
@@ -70,7 +73,7 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
       (let ((post-handler (lambda () nil))) ; overwritten with handler on error
         (unwind-protect
              (support:with-exponential-backoff-retry
-                 (:max-time-spent 60 :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2)
+                 (:max-time-spent *max-query-time-for-retries* :max-retries 10 :initial-pause-interval 0.5 :pause-interval-multiplier 2)
                (dolist (endpoint selected-endpoints)
                  ;; if we took too long, we should ensure no one else is waiting
                  (when (> support:*total-time-spent* 5)
