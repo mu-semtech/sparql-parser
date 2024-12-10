@@ -180,7 +180,7 @@ failure."
                                   (let ((next-char (elt string (1+ position))))
                                     (or (char= next-char #\n)
                                         (char= next-char #\")
-                                        (char= next-char quote-char)
+                                        (char= next-char #\')
                                         (char= next-char #\\)
                                         (char= next-char #\r)
                                         (char= next-char #\f)
