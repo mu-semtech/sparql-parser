@@ -83,7 +83,7 @@
             (loop for binding
                     in (-> new-query
                          (sparql-generator:write-valid)
-                         (client:query)
+                         (client:query :send-to-single t)
                          (client:bindings))
                   append
                   (mapcar (lambda (grant)
