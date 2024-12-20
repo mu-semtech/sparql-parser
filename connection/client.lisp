@@ -175,7 +175,7 @@ comparison."
       ;; (break "Batch mapping ~A" query-string)
       (when *log-batch-mapping*
         (format t "~&Batch mapping ~A~%" query-string))
-      (client:bindings (client:query query-string)))))
+      (client:bindings (client:query query-string :send-to-single t)))))
 
 (defun batch-create-full-solution-for-select-query (query &key (for :read) batch-size usage)
   "Executes a sparql query, possibly batching the solutions and combining
@@ -191,7 +191,7 @@ them into a set of JSOWN compatible BINDINGS."
            ;; this case higher up and provide an option here not to
            ;; verify further.
            (query-string (sparql-generator:write-valid altered-query)))
-      (client:bindings (client:query query-string)))))
+      (client:bindings (client:query query-string :send-to-single t)))))
 
 (defmacro batch-map-solutions-for-select-query ((query &rest args &key for batch-size usage) (bindings) &body body)
   "Executes the given operation in batches.
