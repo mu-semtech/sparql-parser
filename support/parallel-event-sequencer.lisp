@@ -17,10 +17,10 @@
   ;; until you find one without a semaphore and register for that.  That creates a structure where we are only waiting
   ;; for what is necessary and will unblock requests as they arrive.  If/when it becomes possible to cancel requests, we
   ;; must rewrite the next-update and rely on signaling the sleeping thread instead.
-  finished-semaphore ; signaled when update has finished
-  lock               ; for manipulating this struct
-  tokens             ; affected graph-subject-predicate, read-only in hash for fast checking
-  next-update)       ; update which will be signaled to run after this update
+  (finished-semaphore (bt:make-semaphore)) ; signaled when update has finished
+  (lock (bt:make-lock))                    ; for manipulating this struct
+  tokens                                   ; affected graph-subject-predicate, read-only in hash for fast checking
+  (next-update nil))                       ; update which will be signaled to run after this update
 
 (defun make-tokens (token-list)
   "Converts a list of tokens into an internal data structured used for more quickly comparing tokens"
@@ -39,28 +39,27 @@
           when (gethash k b)
             return t)))
 
-(defparameter *flight-check-sequence* 0
-  ;; TODO: start flight sequence from higher number.
-  "Current index of the flight check.")
+(defstruct parallel-event-sequencer
+  (index 0)
+  (ongoing-updates nil)
+  (ongoing-updates-lock (bt:make-lock "event-sequencer")))
 
-(defparameter *ongoing-updates* nil
-  "List of currently ongoing updates.")
-(defparameter *ongoing-updates-lock* (bt:make-lock "ongoing-updates")
-  "Lock to be held when updating *ongoing-updates*")
 
-(defun end-update (update)
+
+(defun end-update (sequencer update)
   "Finishes an update for the given index."
-  (bt:with-lock-held (*ongoing-updates-lock*)
-    (setf *ongoing-updates*
+  (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
+    (setf (parallel-event-sequencer-ongoing-updates sequencer)
           (delete-if (lambda (x) (eq update x))
-                     *ongoing-updates*
+                     (parallel-event-sequencer-ongoing-updates sequencer)
                      :count 1)))
   (bt:with-lock-held ((ongoing-update-lock update))
     (bt:signal-semaphore (ongoing-update-finished-semaphore update))))
 
-(defun start-update (token-list)
+(defun start-update (sequencer token-list)
   (let* ((tokens (make-tokens token-list))
-         (index (incf *flight-check-sequence*))
+         (index (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
+                  (incf (parallel-event-sequencer-index sequencer))))
          (new-update (make-ongoing-update :key index
                                           :finished-semaphore (bt:make-semaphore
                                                                :name (format nil "update-sem-~A" index)
@@ -78,9 +77,9 @@
     ;;     - add the semaphore to a list to wait for
 
     (let (semaphores)
-      (bt:with-lock-held (*ongoing-updates-lock*)
-        (dolist (previous-update *ongoing-updates*)
-          (when (overlapping-tokens-p (ongoing-update-tokens  previous-update) tokens)
+      (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
+        (dolist (previous-update (parallel-event-sequencer-ongoing-updates sequencer))
+          (when (overlapping-tokens-p (ongoing-update-tokens previous-update) tokens)
             (loop for update-in-focus = previous-update then (ongoing-update-next-update update-in-focus)
                   when (eq update-in-focus new-update)
                     return nil ;; we already visited this update
@@ -89,7 +88,7 @@
                     return (bt:with-lock-held ((ongoing-update-lock update-in-focus))
                              (push (ongoing-update-finished-semaphore update-in-focus) semaphores)
                              (setf (ongoing-update-next-update update-in-focus) new-update)))))
-        (push new-update *ongoing-updates*))
+        (push new-update (parallel-event-sequencer-ongoing-updates sequencer)))
       ;; Why lock the list?  We will be registering ourselves.  If we
       ;; don't lock the list others may add themselves to the list.  We
       ;; may discover that they overlap with our content, but we might not
@@ -113,13 +112,15 @@
       ;; everything necessary has ran, we can continue
       new-update)))
 
-(defmacro with-update-flight-check ((index-var) (tokens) &body body)
+(defmacro with-update-flight-check ((index-var) (sequencer tokens) &body body)
   "Executes a flight check for the supplied nested graph-combinations."
   (let ((ongoing-update-sym (gensym "this-ongoing-update"))
-        (result-sym (gensym "with-update-flight-check-result")))
-    `(let* ((,ongoing-update-sym (start-update ,tokens))
+        (result-sym (gensym "with-update-flight-check-result"))
+        (sequencer-sym (gensym "parallel-event-sequencer")))
+    `(let* ((,sequencer-sym ,sequencer)
+            (,ongoing-update-sym (start-update ,sequencer-sym ,tokens))
             (,index-var (bt:with-lock-held ((ongoing-update-lock ,ongoing-update-sym))
                           (ongoing-update-key ,ongoing-update-sym)))
             (,result-sym (progn ,@body)))
-       (end-update ,ongoing-update-sym)
+       (end-update ,sequencer-sym ,ongoing-update-sym)
        ,result-sym)))

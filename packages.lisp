@@ -29,7 +29,8 @@
            #:with-semaphore
            #:with-multiple-semaphores*
            #:with-multiple-semaphores
-           #:*total-time-spent*))
+           #:*total-time-spent*
+           #:with-update-flight-check #:make-parallel-event-sequencer))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
