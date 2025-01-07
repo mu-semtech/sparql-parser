@@ -25,14 +25,15 @@
 
 (defgeneric handle-delta (handler &key inserts deletes effective-inserts effective-deletes)
   (:documentation "Handles a delta message for the raw insert and delete quads.  This may include sending it out to an external provider.")
-  (:method ((handler delta-logging-handler) &key inserts deletes effective-inserts effective-deletes)
-    (format t "~&Notify others on quads having been written from ~A:~% Deleted Quads: ~{~%  ~A~}~% Inserted Quads: ~{~%  ~A~}~% Effectively Deleted Quads: ~{~%  ~A~}~% Effectively Inserted Quads: ~{~%  ~A~}"
+  (:method ((handler delta-logging-handler) &key inserts deletes effective-inserts effective-deletes sequence-id)
+    (format t "~&Notify others on id ~A quads having been written from ~A:~% Deleted Quads: ~{~%  ~A~}~% Inserted Quads: ~{~%  ~A~}~% Effectively Deleted Quads: ~{~%  ~A~}~% Effectively Inserted Quads: ~{~%  ~A~}"
+            sequence-id
             (connection-globals:source-ip)
             (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) deletes)
             (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) inserts)
             (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-deletes)
             (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-inserts)))
-  (:method ((handler delta-remote-handler) &key inserts deletes effective-inserts effective-deletes)
+  (:method ((handler delta-remote-handler) &key sequence-id inserts deletes effective-inserts effective-deletes)
     (when (or inserts deletes)
       (let ((delta-message (jsown:to-json
                             (jsown:new-js
@@ -46,7 +47,8 @@
                                                 :allowed-groups (if (connection-globals:mu-auth-sudo)
                                                                     "sudo"
                                                                     (connection-globals:mu-auth-allowed-groups))
-                                                :source-ip (connection-globals:source-ip)))))))
+                                                :source-ip (connection-globals:source-ip)
+                                                :sequence-id sequence-id))))))
             (headers `(("content-type" . "application/json")
                        ("mu-call-id" . ,(connection-globals:mu-call-id))
                        ("mu-session-id" . ,(connection-globals:mu-session-id)))))
@@ -95,7 +97,7 @@
     ("object" (handle-update-unit::match-as-binding (getf quad :object)))
     ("graph" (handle-update-unit::match-as-binding (getf quad :graph)))))
 
-(defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope allowed-groups source-ip)
+(defun delta-to-jsown (&key inserts deletes effective-inserts effective-deletes scope allowed-groups source-ip sequence-id)
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
   (let ((delta
           (jsown:new-js
@@ -103,6 +105,7 @@
             ("delete" (mapcar #'quad-to-jsown-binding deletes))
             ("effectiveInsert" (mapcar #'quad-to-jsown-binding effective-inserts))
             ("effectiveDelete" (mapcar #'quad-to-jsown-binding effective-deletes))
+            ("sequenceId" sequence-id)
             ("origin" source-ip)))) ; source ip is shared in origin key
     (when allowed-groups
       (setf (jsown:val delta "allowedGroups") (if (equal allowed-groups "sudo")
@@ -112,9 +115,10 @@
       (setf (jsown:val delta "scope") scope))
     delta))
 
-(defun delta-notify (&key deletes inserts effective-deletes effective-inserts)
+(defun delta-notify (&key deletes inserts effective-deletes effective-inserts sequence-id)
   "Entrypoint of the delta messenger.  Dispatches messages to all relevant places."
   (mapcar (alexandria:rcurry #'handle-delta
+                             :sequence-id sequence-id
                              :deletes deletes
                              :inserts inserts
                              :effective-deletes effective-deletes

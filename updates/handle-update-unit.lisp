@@ -652,6 +652,26 @@ variables are missing this will not lead to a pattern."
                   (sparql-manipulation:make-rdfliteral string-replacement)))))))
   quad)
 
+
+(defparameter *update-sequencer* (support:make-parallel-event-sequencer)
+  "Sequencer to ensure quads are sequenced when being written to the triplestore.")
+
+(defun make-sequencer-keys-for-quads (&rest quad-lists)
+  "Constructs the sequencer keys for lists of quads.
+
+Currently uses the URI of graph subject and predicate as a key because object may incorrectly overlap."
+  (flet ((quad-hash-key (quad)
+           (format nil "~A ~A ~A"
+                   (quad-term-uri (quad:graph quad))
+                   (quad-term-uri (quad:subject quad))
+                   (quad-term-uri (quad:predicate quad)))))
+    (let ((hash (make-hash-table :test 'equal)))
+      (dolist (quad-list quad-lists)
+        (dolist (quad quad-list)
+          (setf (gethash (quad-hash-key quad) hash)
+                t)))
+      (loop for key being the hash-keys of hash collect key))))
+
 (defun handle-sparql-update-unit (update-unit)
   "Handles the processing of an update-unit EBNF."
   ;; TODO: add validation ensuring all triples were written to a readable location
@@ -673,61 +693,65 @@ variables are missing this will not lead to a pattern."
                                            dedup-delete-quads
                                            :insert-quads
                                            dedup-insert-quads)
-               (dolist (group (support:group-by-size-and-count
-                               (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
-                                      (mapcar (lambda (a) (cons :insert a)) effective-inserts))
-                               :max-size *max-query-size-heuristic*
-                               :max-count *max-quads-per-query-heuristic*
-                               :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
-                 (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
-                                                                           when (eq key :delete)
-                                                                             collect quad)
-                                                       :insert-quads (loop for (key . quad) in group
-                                                                           when (eq key :insert)
-                                                                             collect quad))
-                               :send-to-single nil))
-               (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
-               (delta-messenger:delta-notify
-                :deletes (mapcar #'alter-quad-string-file-uri-to-string dedup-delete-quads)
-                :inserts (mapcar #'alter-quad-string-file-uri-to-string dedup-insert-quads)
-                :effective-deletes (mapcar #'alter-quad-string-file-uri-to-string effective-deletes)
-                :effective-inserts (mapcar #'alter-quad-string-file-uri-to-string effective-inserts))))))
-   (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
-     ;; (format t "~&Treating operation ~A~%" operation)
-     ;; (break "Got operation ~A" operation)
-     (case (operation-type operation)
-       (:insert-triples
-        (let* ((data (operation-data operation))
-               (quads (acl:dispatch-quads data)))
-          (assert-no-variables-in-quads data)
-          (maybe-error-on-unwritten-data :insert-quads-before-dispatch data
-                                         :insert-quads-after-dispatch quads)
-          (execute-and-dispatch-changes :insert-quads quads)))
-       (:delete-triples
-        (let* ((data (operation-data operation))
-               (quads (acl:dispatch-quads data)))
-          (assert-no-variables-in-quads data)
-          (maybe-error-on-unwritten-data :delete-quads-before-dispatch data
-                                         :delete-quads-after-dispatch quads)
-          (execute-and-dispatch-changes :delete-quads quads)))
-       (:modify
-        ;; TODO: handle WITH iriref which should be removed for non sudo queries
-        (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
-              (delete-patterns (operation-data-subfield operation :delete-patterns))
-              (bindings (client:batch-create-full-solution-for-select-query
-                         (operation-data-subfield operation :query)
-                         :for :modify :usage :read)))
-          (if bindings
-              (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
-                     (filled-in-inserts (filled-in-patterns insert-patterns bindings))
-                     (deletes (acl:dispatch-quads filled-in-deletes))
-                     (inserts (acl:dispatch-quads filled-in-inserts)))
-                ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
-                (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
-                                               :delete-quads-after-dispatch deletes
-                                               :insert-quads-before-dispatch filled-in-inserts
-                                               :insert-quads-after-dispatch inserts)
-                (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts)))))))))
+               (support:with-update-flight-check (delta-sequence-id)
+                   (*update-sequencer*
+                    (make-sequencer-keys-for-quads effective-deletes effective-inserts))
+                 (dolist (group (support:group-by-size-and-count
+                                 (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
+                                        (mapcar (lambda (a) (cons :insert a)) effective-inserts))
+                                 :max-size *max-query-size-heuristic*
+                                 :max-count *max-quads-per-query-heuristic*
+                                 :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
+                   (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
+                                                                             when (eq key :delete)
+                                                                               collect quad)
+                                                         :insert-quads (loop for (key . quad) in group
+                                                                             when (eq key :insert)
+                                                                               collect quad))
+                                 :send-to-single nil))
+                 (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
+                 (delta-messenger:delta-notify
+                  :sequence-id delta-sequence-id
+                  :deletes (mapcar #'alter-quad-string-file-uri-to-string dedup-delete-quads)
+                  :inserts (mapcar #'alter-quad-string-file-uri-to-string dedup-insert-quads)
+                  :effective-deletes (mapcar #'alter-quad-string-file-uri-to-string effective-deletes)
+                  :effective-inserts (mapcar #'alter-quad-string-file-uri-to-string effective-inserts)))))))
+    (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
+      ;; (format t "~&Treating operation ~A~%" operation)
+      ;; (break "Got operation ~A" operation)
+      (case (operation-type operation)
+        (:insert-triples
+         (let* ((data (operation-data operation))
+                (quads (acl:dispatch-quads data)))
+           (assert-no-variables-in-quads data)
+           (maybe-error-on-unwritten-data :insert-quads-before-dispatch data
+                                          :insert-quads-after-dispatch quads)
+           (execute-and-dispatch-changes :insert-quads quads)))
+        (:delete-triples
+         (let* ((data (operation-data operation))
+                (quads (acl:dispatch-quads data)))
+           (assert-no-variables-in-quads data)
+           (maybe-error-on-unwritten-data :delete-quads-before-dispatch data
+                                          :delete-quads-after-dispatch quads)
+           (execute-and-dispatch-changes :delete-quads quads)))
+        (:modify
+         ;; TODO: handle WITH iriref which should be removed for non sudo queries
+         (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
+               (delete-patterns (operation-data-subfield operation :delete-patterns))
+               (bindings (client:batch-create-full-solution-for-select-query
+                          (operation-data-subfield operation :query)
+                          :for :modify :usage :read)))
+           (if bindings
+               (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
+                      (filled-in-inserts (filled-in-patterns insert-patterns bindings))
+                      (deletes (acl:dispatch-quads filled-in-deletes))
+                      (inserts (acl:dispatch-quads filled-in-inserts)))
+                 ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
+                 (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
+                                                :delete-quads-after-dispatch deletes
+                                                :insert-quads-before-dispatch filled-in-inserts
+                                                :insert-quads-after-dispatch inserts)
+                 (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts)))))))))
 
 (defparameter *unwritten-data-actions* '(:log :error)
   "Which actions to take on detecting unwritten data.")
