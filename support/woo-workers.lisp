@@ -1,6 +1,7 @@
 (in-package :woo.worker.utils)
 
-(defparameter *backup-cluster* nil)
+(defparameter *backup-cluster* nil
+  "Woo cluster used by sparql-parser.")
 
 (defparameter *log-commission-events* t
   "When truethy, commission and decommission events are logged.")

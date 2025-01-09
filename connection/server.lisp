@@ -27,6 +27,44 @@
                                      :test #'string=)))
         (coerce (string-trim (list #\Newline #\Space #\Tab #\Return) (cdr query-assoc)) #-be-cautious 'base-string #+be-cautious 'string))))
 
+(defun recovery-status-request-p (env)
+  "Truethy iff the current request is a request for the recovery-status."
+  (string= (or (getf env :path-info) "")
+           "/recovery-status"))
+
+(defun return-recovery-status ()
+  (let* ((cluster woo.worker.utils::*backup-cluster*)
+         (workers (woo.worker::cluster-workers cluster))
+         (amount-of-workers (length workers))
+         (worker-states
+           (let ((obj (jsown:new-js)))
+             (loop for (key . rest)
+                     in (group-by (mapcar #'woo.worker::worker-status workers) #'eq)
+                   do (setf (jsown:val obj (string key))
+                            (1+ (length rest))))
+             obj))
+         (worker-queues (mapcar #'woo.worker::worker-queue workers))
+         (total-queue (loop for queue in worker-queues
+                            sum (sb-concurrency:queue-count queue)))
+         (workers-without-work (loop for queue in worker-queues
+                                     when (sb-concurrency:queue-empty-p queue)
+                                       sum 1))
+         (total-waiting-queue
+           ;; queues where there's more than the running thing in the queue (thus waiting threads)
+           (loop for queue in worker-queues
+                 sum (max 0 (1- (sb-concurrency:queue-count queue)))))
+         )
+    `(200
+      (:content-type "application/sparql-results+json")
+      (,(jsown:to-json
+         (jsown:new-js
+           ("worker-states" worker-states)
+           ("amount-of-workers" amount-of-workers)
+           ("total-queue" total-queue)
+           ("workers-without-work" workers-without-work)
+           ("total-waiting-queue" total-waiting-queue)
+           ))))))
+
 (defun manipulate-query (ast)
   "Manipulates the requested query for current access rights."
   (acl:apply-access-rights ast))
@@ -93,40 +131,43 @@
                                                       (jsown:parse allowed-groups-header))
                             :mu-call-scope (parse-mu-call-scope-header (gethash "mu-auth-scope" headers))
                             :source-ip (getf env :remote-addr))
-          (with-parser-setup
-            (handler-case
-                (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
-                                       (when *log-incoming-requests-p*
-                                         (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
-                                                 str
-                                                 (list :mu-call-id (mu-call-id)
-                                                       :mu-call-id-trail (mu-call-id-trail)
-                                                       :mu-session-id (mu-session-id)
-                                                       :mu-auth-sudo (mu-auth-sudo)
-                                                       :mu-auth-allowed-groups (jsown:to-json (mu-auth-allowed-groups))
-                                                       :mu-call-scope (mu-call-scope)
-                                                       :source-ip (source-ip))))
-                                       str))
-                       (response (execute-query-for-context query-string)))
-                  `(200
-                    (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
-                    (,response)))
-              (error (e)
-                (format t "~&Failed to process query, yielding 500.~%") ; more info from inside let
-                ;; (trivial-backtrace:print-backtrace e)
-                (let ((jsown (jsown:new-js ("status" 500)
-                               ("message" "Failed to process query.")
-                               ("mu-call-id" (mu-call-id))
-                               ("mu-call-id-trail" (mu-call-id-trail))
-                               ("mu-session-id" (mu-session-id))
-                               ("mu-auth-sudo" (mu-auth-sudo))
-                               ("mu-auth-allowed-groups" (jsown:to-json (mu-auth-allowed-groups)))
-                               ("mu-call-scope" (mu-call-scope))
-                               ("internal-error" (format nil "~A" e))
-                               ("source-ip" (source-ip)))))
-                  (format t "~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
-                  `(500 (:content-type "application/json")
-                        (,(jsown:to-json jsown)))))))))
+          (if
+           (recovery-status-request-p env)
+           (return-recovery-status)
+           (with-parser-setup
+             (handler-case
+                 (let* ((query-string (let ((str (extract-query-string env (gethash "content-type" headers))))
+                                        (when *log-incoming-requests-p*
+                                          (format t "Requested query as string:~%~A~%With access rights:~{~A: ~A~&~}"
+                                                  str
+                                                  (list :mu-call-id (mu-call-id)
+                                                        :mu-call-id-trail (mu-call-id-trail)
+                                                        :mu-session-id (mu-session-id)
+                                                        :mu-auth-sudo (mu-auth-sudo)
+                                                        :mu-auth-allowed-groups (jsown:to-json (mu-auth-allowed-groups))
+                                                        :mu-call-scope (mu-call-scope)
+                                                        :source-ip (source-ip))))
+                                        str))
+                        (response (execute-query-for-context query-string)))
+                   `(200
+                     (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
+                     (,response)))
+               (error (e)
+                 (format t "~&Failed to process query, yielding 500.~%") ; more info from inside let
+                 ;; (trivial-backtrace:print-backtrace e)
+                 (let ((jsown (jsown:new-js ("status" 500)
+                                ("message" "Failed to process query.")
+                                ("mu-call-id" (mu-call-id))
+                                ("mu-call-id-trail" (mu-call-id-trail))
+                                ("mu-session-id" (mu-session-id))
+                                ("mu-auth-sudo" (mu-auth-sudo))
+                                ("mu-auth-allowed-groups" (jsown:to-json (mu-auth-allowed-groups)))
+                                ("mu-call-scope" (mu-call-scope))
+                                ("internal-error" (format nil "~A" e))
+                                ("source-ip" (source-ip)))))
+                   (format t "~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
+                   `(500 (:content-type "application/json")
+                         (,(jsown:to-json jsown))))))))))
     (error (e)
       (format t "Could not process query, yielding 500.  ~%~A~%" e)
       (trivial-backtrace:print-backtrace e)
