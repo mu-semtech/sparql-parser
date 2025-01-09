@@ -5,10 +5,10 @@
 (defparameter *log-commission-events* t
   "When truethy, commission and decommission events are logged.")
 
-(defparameter *log-scheduling-on-decomissioned-workers* t
-  "When truethy, log scheduling of requests on a decomissioned worker.
+(defparameter *log-scheduling-on-decommissioned-workers* t
+  "When truethy, log scheduling of requests on a decommissioned worker.
 This scheduling should only happen when too many workers are
-decomissioned.")
+decommissioned.")
 
 (defun decommission ()
   "Decommission the current worker.
@@ -17,7 +17,7 @@ Ensures no new assignments are given to the worker and its queue is
 cleared for others."
   (let ((worker woo.worker::*worker*))
     (when *log-commission-events*
-      (format t "~&Decomissioning ~A~%" (woo.worker::worker-id worker)))
+      (format t "~&Decommissioning ~A~%" (woo.worker::worker-id worker)))
     (setf (woo.worker::worker-status worker)
           :decommissioned)
     (let ((queue (woo.worker::worker-queue worker)))
@@ -28,7 +28,7 @@ cleared for others."
 (defun recommission ()
   "Recommission the current worker."
   (when *log-commission-events*
-    (format t "~&Recomissioning ~A~%" (woo.worker::worker-id woo.worker::*worker*)))
+    (format t "~&Recommissioning ~A~%" (woo.worker::worker-id woo.worker::*worker*)))
   (setf (woo.worker::worker-status woo.worker::*worker*)
         :running))
 
@@ -49,14 +49,14 @@ cleared for others."
                  :decommissioned))
         (progn
           (when *log-commission-events*
-            (format t "~&Skipping decomissioned worker ~A (~A tries left)~%"
+            (format t "~&Skipping decommissioned worker ~A (~A tries left)~%"
                     (woo.worker::worker-id worker)
                     tries))
           (woo.worker::add-job-to-cluster cluster job :tries (1- tries)))
         (progn
           (when (eq (woo.worker::worker-status worker)
                     :decommissioned)
-            (format t "~&Scheduling job on decomissioned worker ~A~%"
+            (format t "~&Scheduling job on decommissioned worker ~A~%"
                     (woo.worker::worker-id worker)))
           (woo.worker::add-job worker job)
           (woo.worker::notify-new-job worker)))))
