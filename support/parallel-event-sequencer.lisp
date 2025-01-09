@@ -57,6 +57,9 @@
     (bt:signal-semaphore (ongoing-update-finished-semaphore update))))
 
 (defun start-update (sequencer token-list)
+  "Starts an update."
+  ;; this code is more complex than what it should be because we have to ensure we lock correctly _and_ we want to clean
+  ;; up our state to the best of our ability because a failure might bring the whole application down.
   (let* ((tokens (make-tokens token-list))
          (index (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
                   (incf (parallel-event-sequencer-index sequencer))))
@@ -75,52 +78,92 @@
     ;;   - if we did not encounter ourselves in this list
     ;;     - add ourselves to that item
     ;;     - add the semaphore to a list to wait for
+    (let (semaphores updates complete-p)
+      (unwind-protect
+           (progn
+             (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
+               (dolist (previous-update (parallel-event-sequencer-ongoing-updates sequencer))
+                 (when (overlapping-tokens-p (ongoing-update-tokens previous-update) tokens)
+                   (loop for update-in-focus = previous-update then (ongoing-update-next-update update-in-focus)
+                         when (eq update-in-focus new-update)
+                           return nil ;; we already visited this update
+                         unless (ongoing-update-next-update update-in-focus)
+                           ;; no further update, we're next in line, just have to verify
+                           return
+                           (let ((inner-update-in-focus update-in-focus))
+                             (loop
+                               while inner-update-in-focus
+                               do
+                                  (bt:with-lock-held ((ongoing-update-lock inner-update-in-focus))
+                                    (if (ongoing-update-next-update inner-update-in-focus)
+                                        ;; was empty but now exists, let's move one further
+                                        (setf inner-update-in-focus
+                                              (ongoing-update-next-update inner-update-in-focus))
+                                        (progn
+                                          (setf (ongoing-update-next-update inner-update-in-focus)
+                                                new-update) ; set update
+                                          (push (ongoing-update-finished-semaphore update-in-focus)
+                                                semaphores)                        ; set semaphore
+                                          (push update-in-focus updates)           ; remember update for cleanup
+                                          (setf inner-update-in-focus nil))))))))) ; stop loop
+               ;; last step before waiting is adding ourselves
 
-    (let (semaphores)
-      (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
-        (dolist (previous-update (parallel-event-sequencer-ongoing-updates sequencer))
-          (when (overlapping-tokens-p (ongoing-update-tokens previous-update) tokens)
-            (loop for update-in-focus = previous-update then (ongoing-update-next-update update-in-focus)
-                  when (eq update-in-focus new-update)
-                    return nil ;; we already visited this update
-                  unless (ongoing-update-next-update update-in-focus)
-                    ;; no further update, we're next in line
-                    return (bt:with-lock-held ((ongoing-update-lock update-in-focus))
-                             (push (ongoing-update-finished-semaphore update-in-focus) semaphores)
-                             (setf (ongoing-update-next-update update-in-focus) new-update)))))
-        (push new-update (parallel-event-sequencer-ongoing-updates sequencer)))
-      ;; Why lock the list?  We will be registering ourselves.  If we
-      ;; don't lock the list others may add themselves to the list.  We
-      ;; may discover that they overlap with our content, but we might not
-      ;; detect that they are dependent on us somewhere in a longer tree.
-      ;; At that point we have a broken loop.  This could be resolved by
-      ;; studying what we have.  Then too there might be a case where we
-      ;; are depending on some semaphores of them and they may be waiting
-      ;; on some semaphore of us, this is tricky to reason on so we choose
-      ;; to keep it simpler as long as that doesn't turn out to be a
-      ;; problem.
+               ;; NOTE: This approach will crash when anything errors out in the
+               ;; above code.  It may be worth extending such that an error above
+               ;; will produce a failed check _after_ cleaning up its own state.
+               (push new-update (parallel-event-sequencer-ongoing-updates sequencer)))
+             ;; Why lock the list?  We will be registering ourselves.  If we
+             ;; don't lock the list others may add themselves to the list.  We
+             ;; may discover that they overlap with our content, but we might not
+             ;; detect that they are dependent on us somewhere in a longer tree.
+             ;; At that point we have a broken loop.  This could be resolved by
+             ;; studying what we have.  Then too there might be a case where we
+             ;; are depending on some semaphores of them and they may be waiting
+             ;; on some semaphore of us, this is tricky to reason on so we choose
+             ;; to keep it simpler as long as that doesn't turn out to be a
+             ;; problem.
 
-      ;; This approach with creating a long list may mean we wait longer
-      ;; than we have to.  We join the dependency list if any of these
-      ;; dependencies match our requirements even though the later items
-      ;; in that list may have nothing to do with our request.  The
-      ;; approach presented here should be fairly performant and should
-      ;; be fairly easy to reason on when something would go haywire
-      ;; hence we accept it for what it is.
-      (dolist (semaphore semaphores)
-        (bt:wait-on-semaphore semaphore))
-      ;; everything necessary has ran, we can continue
-      new-update)))
+             ;; This approach with creating a long list may mean we wait longer
+             ;; than we have to.  We join the dependency list if any of these
+             ;; dependencies match our requirements even though the later items
+             ;; in that list may have nothing to do with our request.  The
+             ;; approach presented here should be fairly performant and should
+             ;; be fairly easy to reason on when something would go haywire
+             ;; hence we accept it for what it is.
+             (dolist (semaphore semaphores)
+               (bt:wait-on-semaphore semaphore))
+             ;; everything necessary has ran, we can continue
+             (setf complete-p t)
+             new-update)
+        ;; clean up when something went wrong in the process but keep nonlocal exit
+        (unless complete-p
+          (format t "~&Something went wrong when processing flight check.~%  token-list: ~{~A~,^ ~}~%" token-list)
+          ;; we should not be in the list to check anymore
+          (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock sequencer))
+            (setf (parallel-event-sequencer-ongoing-updates sequencer)
+                  (delete new-update
+                      (parallel-event-sequencer-ongoing-updates sequencer)
+                    :test #'eq)))
+          ;; we should cut ourselves out of any item to which we added ourselves
+          (loop for update in updates
+                do (bt:with-lock-held ((ongoing-update-lock update))
+                     (when (eq new-update (ongoing-update-next-update update))
+                       ;; yup, we're the child so we cut ourselves from the list
+                       (setf (ongoing-update-next-update update)
+                             (ongoing-update-next-update new-update)))))
+          ;; lastly we should signal our semaphore in case anyone chose to depend on us.  this could be the wrong
+          ;; semaphore but we have no good place to listen as we already crashed.
+          (bt:with-lock-held ((ongoing-update-lock new-update))
+            (bt:signal-semaphore (ongoing-update-finished-semaphore new-update))))))))
 
 (defmacro with-update-flight-check ((index-var) (sequencer tokens) &body body)
   "Executes a flight check for the supplied nested graph-combinations."
   (let ((ongoing-update-sym (gensym "this-ongoing-update"))
-        (result-sym (gensym "with-update-flight-check-result"))
         (sequencer-sym (gensym "parallel-event-sequencer")))
     `(let* ((,sequencer-sym ,sequencer)
-            (,ongoing-update-sym (start-update ,sequencer-sym ,tokens))
-            (,index-var (bt:with-lock-held ((ongoing-update-lock ,ongoing-update-sym))
-                          (ongoing-update-key ,ongoing-update-sym)))
-            (,result-sym (progn ,@body)))
-       (end-update ,sequencer-sym ,ongoing-update-sym)
-       ,result-sym)))
+            (,ongoing-update-sym (start-update ,sequencer-sym ,tokens)))
+       (unwind-protect
+            (let* ((,index-var (bt:with-lock-held ((ongoing-update-lock ,ongoing-update-sym))
+                             (ongoing-update-key ,ongoing-update-sym))))
+              ,@body)
+         (end-update ,sequencer-sym ,ongoing-update-sym)))))
