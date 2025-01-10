@@ -53,17 +53,31 @@
            ;; queues where there's more than the running thing in the queue (thus waiting threads)
            (loop for queue in worker-queues
                  sum (max 0 (1- (sb-concurrency:queue-count queue)))))
-         )
+         (update-sequencer-count (support::parallel-event-sequencer-known-event-count handle-update-unit::*update-sequencer*))
+         (update-sequencer-state-counts
+           (let ((obj (jsown:new-js)))
+             (loop for (key . value) in (support::parallel-event-sequencer-state-counts handle-update-unit::*update-sequencer*)
+                   do
+                      (setf (jsown:val obj (string key)) value))
+             obj)))
     `(200
       (:content-type "application/sparql-results+json")
       (,(jsown:to-json
          (jsown:new-js
-           ("worker-states" worker-states)
+           ;; how many workers to do we have?
            ("amount-of-workers" amount-of-workers)
+           ;; how many running, how many decommissioned
+           ("worker-states" worker-states)
+           ;; How many threads are in a worker's queue
            ("total-queue" total-queue)
-           ("workers-without-work" workers-without-work)
+           ;;; How many threads are not the first in a worker's queue
            ("total-waiting-queue" total-waiting-queue)
-           ))))))
+           ;; How many workers don't have work
+           ("workers-without-work" workers-without-work)
+           ;; How many items are in the update sequencer (which are INSERT/DELETE data items for the SPARQL endpoint)
+           ("update-sequencer-count" update-sequencer-count)
+           ;; What are the states for items in the update sequencer (gives an indication to how congested overlapping updates are)
+           ("update-sequencer-states" update-sequencer-state-counts)))))))
 
 (defun manipulate-query (ast)
   "Manipulates the requested query for current access rights."

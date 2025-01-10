@@ -20,7 +20,9 @@
   (finished-semaphore (bt:make-semaphore)) ; signaled when update has finished
   (lock (bt:make-lock))                    ; for manipulating this struct
   tokens                                   ; affected graph-subject-predicate, read-only in hash for fast checking
-  (next-update nil))                       ; update which will be signaled to run after this update
+  (next-update nil)                        ; update which will be signaled to run after this update
+  (state :initialized))                    ; state of this event, :initialized, :waiting, :running, :finished
+
 
 (defun make-tokens (token-list)
   "Converts a list of tokens into an internal data structured used for more quickly comparing tokens"
@@ -32,6 +34,8 @@
 
 (defun overlapping-tokens-p (left-tokens right-tokens)
   "Checks if a token in LEFT-TOKENS is also in RIGHT-TOKENS or vice-versa."
+  ;; (when (< (random 10000) 10)
+  ;;   (error 'simple-error :format-control "Requested failure in OVERLAPPING-TOKENS-P"))
   (let* ((left-large-p (> (hash-table-size left-tokens) (hash-table-size right-tokens)))
          (a (if left-large-p right-tokens left-tokens))
          (b (if left-large-p left-tokens right-tokens)))
@@ -44,7 +48,23 @@
   (ongoing-updates nil)
   (ongoing-updates-lock (bt:make-lock "event-sequencer")))
 
+(defun parallel-event-sequencer-known-event-count (parallel-event-sequencer)
+  "Yields the amount of known (maybe running) events in the sequencer."
+  (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock parallel-event-sequencer))
+    (length (parallel-event-sequencer-ongoing-updates parallel-event-sequencer))))
 
+(defun parallel-event-sequencer-state-counts (parallel-event-sequencer)
+  "Yields an alist of (state . count) for the parallel-event-sequencer."
+  (let* ((ongoing-updates
+           (bt:with-lock-held ((parallel-event-sequencer-ongoing-updates-lock parallel-event-sequencer))
+             (copy-seq (parallel-event-sequencer-ongoing-updates parallel-event-sequencer))))
+         (states (mapcar (lambda (x)
+                           (bt:with-lock-held ((ongoing-update-lock x))
+                             (ongoing-update-state x)))
+                         ongoing-updates)))
+    (loop for key in '(:initialized :waiting :running :finished)
+          collect
+          (cons key (count key states :test #'eq)))))
 
 (defun end-update (sequencer update)
   "Finishes an update for the given index."
@@ -54,6 +74,7 @@
                      (parallel-event-sequencer-ongoing-updates sequencer)
                      :count 1)))
   (bt:with-lock-held ((ongoing-update-lock update))
+    (setf (ongoing-update-state update) :running)
     (bt:signal-semaphore (ongoing-update-finished-semaphore update))))
 
 (defun start-update (sequencer token-list)
@@ -69,7 +90,8 @@
                                                                :count 0)
                                           :lock (bt:make-lock (format nil "update-lock-~A" index))
                                           :tokens tokens
-                                          :next-update nil)))
+                                          :next-update nil
+                                          :state :initialized)))
     ;; we have to search for each update which may depend on our data
 
     ;; Lock the list of current updates so we're the only ones updating it
@@ -130,9 +152,13 @@
              ;; approach presented here should be fairly performant and should
              ;; be fairly easy to reason on when something would go haywire
              ;; hence we accept it for what it is.
+             (bt:with-lock-held ((ongoing-update-lock new-update))
+               (setf (ongoing-update-state new-update) :waiting))
              (dolist (semaphore semaphores)
                (bt:wait-on-semaphore semaphore))
              ;; everything necessary has ran, we can continue
+             (bt:with-lock-held ((ongoing-update-lock new-update))
+               (setf (ongoing-update-state new-update) :running))
              (setf complete-p t)
              new-update)
         ;; clean up when something went wrong in the process but keep nonlocal exit
@@ -165,5 +191,7 @@
        (unwind-protect
             (let* ((,index-var (bt:with-lock-held ((ongoing-update-lock ,ongoing-update-sym))
                              (ongoing-update-key ,ongoing-update-sym))))
+              ;; (when (< (random 10000) 50)
+              ;;   (error 'simple-error :format-control "Not processing after flight check"))
               ,@body)
          (end-update ,sequencer-sym ,ongoing-update-sym)))))
