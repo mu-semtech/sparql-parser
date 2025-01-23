@@ -222,7 +222,7 @@ elements.  The value returned is consed."
              (format t "~&Exponential backoff :: ~A retries left, ~A time left, ~A total time spent, waiting ~A to retry.~&~@[-> reported reason: ~A~]~&"
                      max-retries
                      time-left
-                     (+ time-spent total-time-spent)
+                     (round (/ (+ time-spent total-time-spent) internal-time-units-per-second))
                      initial-pause-interval
                      (and log-condition *exponential-backoff-failure*)))
             (setf *exponential-backoff-failure* nil)
