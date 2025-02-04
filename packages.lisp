@@ -292,7 +292,8 @@
   (:export #:query #:bindings
            #:batch-map-solutions-for-select-query
            #:batch-create-full-solution-for-select-query
-           #:expand-bindings))
+           #:expand-bindings
+           #:with-increased-max-query-time-for-retries))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)

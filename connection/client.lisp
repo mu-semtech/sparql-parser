@@ -47,8 +47,29 @@ to the first queries so we consider this to be fine."
   "Sets endpoints based on their URLs."
   (setf (backends) (make-backend-structs endpoint-urls)))
 
+;; begin max query time
 (defparameter *max-query-time-for-retries* 10
   "This is the max amount of time to spend within which we'll retry to send the query.")
+
+(defparameter *max-query-time-for-retries-in-followup-queries* 50
+  "This is the max amount of time to spend within which we'll retry to send the query once we've already sent the first query.")
+
+(defparameter *has-increased-max-query-time-for-retries* nil
+  "Set to t in `WITH-INCREASED-MAX-QUERY-TIME-FOR-RETRIES' to automatically increase the time after the first request.")
+
+(defmacro with-increased-max-query-time-for-retries (&body body)
+  "First query in body has `*max-query-time-for-retries*' and followup get `*max-query-time-for-retries-in-followup-queries*'."
+  `(let ((*max-query-time-for-retries* *max-query-time-for-retries*)
+         (*has-increased-max-query-time-for-retries* t))
+     ,@body))
+
+(defun complete-query-for-max-query-time-retries ()
+  "Called when completing a query.
+  When in `with-increased-max-query-time-for-retries' macro, will set `*max-query-time-for-retries*' to
+  `*max-query-time-for-retries-in-followup-queries*'."
+  (when *has-increased-max-query-time-for-retries*
+    (setf *max-query-time-for-retries* *max-query-time-for-retries-in-followup-queries*)))
+;; end max query time
 
 (defparameter *log-failing-query-tries* t
   "Whether to log queries which fail in exponential backoff retry.")
@@ -130,6 +151,7 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
           (funcall post-handler)))
       ;; 3. release locks
       )
+    (complete-query-for-max-query-time-retries)
     result))
 
 (defun expand-bindings (bindings)

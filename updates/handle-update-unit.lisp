@@ -716,42 +716,43 @@ Currently uses the URI of graph subject and predicate as a key because object ma
                   :inserts (mapcar #'alter-quad-string-file-uri-to-string dedup-insert-quads)
                   :effective-deletes (mapcar #'alter-quad-string-file-uri-to-string effective-deletes)
                   :effective-inserts (mapcar #'alter-quad-string-file-uri-to-string effective-inserts)))))))
-    (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
-      ;; (format t "~&Treating operation ~A~%" operation)
-      ;; (break "Got operation ~A" operation)
-      (case (operation-type operation)
-        (:insert-triples
-         (let* ((data (operation-data operation))
-                (quads (acl:dispatch-quads data)))
-           (assert-no-variables-in-quads data)
-           (maybe-error-on-unwritten-data :insert-quads-before-dispatch data
-                                          :insert-quads-after-dispatch quads)
-           (execute-and-dispatch-changes :insert-quads quads)))
-        (:delete-triples
-         (let* ((data (operation-data operation))
-                (quads (acl:dispatch-quads data)))
-           (assert-no-variables-in-quads data)
-           (maybe-error-on-unwritten-data :delete-quads-before-dispatch data
-                                          :delete-quads-after-dispatch quads)
-           (execute-and-dispatch-changes :delete-quads quads)))
-        (:modify
-         ;; TODO: handle WITH iriref which should be removed for non sudo queries
-         (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
-               (delete-patterns (operation-data-subfield operation :delete-patterns))
-               (bindings (client:batch-create-full-solution-for-select-query
-                          (operation-data-subfield operation :query)
-                          :for :modify :usage :read)))
-           (if bindings
-               (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
-                      (filled-in-inserts (filled-in-patterns insert-patterns bindings))
-                      (deletes (acl:dispatch-quads filled-in-deletes))
-                      (inserts (acl:dispatch-quads filled-in-inserts)))
-                 ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
-                 (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
-                                                :delete-quads-after-dispatch deletes
-                                                :insert-quads-before-dispatch filled-in-inserts
-                                                :insert-quads-after-dispatch inserts)
-                 (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts)))))))))
+    (client:with-increased-max-query-time-for-retries
+      (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
+        ;; (format t "~&Treating operation ~A~%" operation)
+        ;; (break "Got operation ~A" operation)
+        (case (operation-type operation)
+          (:insert-triples
+           (let* ((data (operation-data operation))
+                  (quads (acl:dispatch-quads data)))
+             (assert-no-variables-in-quads data)
+             (maybe-error-on-unwritten-data :insert-quads-before-dispatch data
+                                            :insert-quads-after-dispatch quads)
+             (execute-and-dispatch-changes :insert-quads quads)))
+          (:delete-triples
+           (let* ((data (operation-data operation))
+                  (quads (acl:dispatch-quads data)))
+             (assert-no-variables-in-quads data)
+             (maybe-error-on-unwritten-data :delete-quads-before-dispatch data
+                                            :delete-quads-after-dispatch quads)
+             (execute-and-dispatch-changes :delete-quads quads)))
+          (:modify
+           ;; TODO: handle WITH iriref which should be removed for non sudo queries
+           (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
+                 (delete-patterns (operation-data-subfield operation :delete-patterns))
+                 (bindings (client:batch-create-full-solution-for-select-query
+                            (operation-data-subfield operation :query)
+                            :for :modify :usage :read)))
+             (if bindings
+                 (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
+                        (filled-in-inserts (filled-in-patterns insert-patterns bindings))
+                        (deletes (acl:dispatch-quads filled-in-deletes))
+                        (inserts (acl:dispatch-quads filled-in-inserts)))
+                   ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
+                   (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
+                                                  :delete-quads-after-dispatch deletes
+                                                  :insert-quads-before-dispatch filled-in-inserts
+                                                  :insert-quads-after-dispatch inserts)
+                   (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))))))))))
 
 (defparameter *unwritten-data-actions* '(:log :error)
   "Which actions to take on detecting unwritten data.")
