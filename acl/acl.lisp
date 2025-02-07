@@ -254,6 +254,7 @@ MATCH may be updated in place but updated MATCH is returned."
           (-> query-ast
             (remove-dataset-clauses)
             (remove-graph-graph-patterns)
+            (fold-and-remove-quads-not-triples)
             (add-default-base-decl-to-prologue)
             (add-from-graphs (or (graphs-for-tokens tokens usage (mu-call-scope))
                                  (list "http://mu-authorization.service.semantic.works/empty-graph"))))))))
