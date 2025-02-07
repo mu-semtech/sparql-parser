@@ -20,6 +20,10 @@
 
 NIL symolizes to wait forever.")
 
+;; Overriding the default values here for now.  Ideally these get calculated based on how much time we have left.
+(setf dexador.util:*default-connect-timeout* 60)
+(setf dexador.util:*default-read-timeout* 60)
+
 (defstruct sparql-endpoint
   "Descriptor struct for a SPARQL endpoint to execute max connections."
   (url "http://triplestore:8890/sparql" :type string)
