@@ -424,6 +424,53 @@ destructured bindings of LAMBDA-LIST as per DESTRUCTURING-BIND."
     (traverse (sparql-parser:sparql-ast-top-node sparql-ast)))
   sparql-ast)
 
+(defun fold-and-remove-quads-not-triples (sparql-ast)
+  "Removes QuadsNotTriples statements and folds into TriplesTemplate."
+  ;; The relevant manipulations are:
+  ;; [50] Quads ::= TriplesTemplate? ( QuadsNotTriples '.'? TriplesTemplate? )*
+  ;; [51] QuadsNotTriples ::= 'GRAPH' VarOrIri '{' TriplesTemplate? '}'
+  ;; [52] TriplesTemplate := TriplesSameSubject ( '.' TriplesTemplate? )?
+  ;;
+  ;; We will therefore search for QuadsNotTriples inside of Quads (the only place they can live), pull ourselves higher
+  ;; into QuadsNotTriples and then fold the corresponding TriplesTemplate statements.
+  ;;
+  ;; Note that QuadsNotTriples can't be nested in itself, it can only be part of Quads.  Lacking loops we don't have to
+  ;; consider further nesting and only need to join TriplesTemplate from Quads onwards and know all of the
+  ;; TriplesTemplate starting points from Quads and QuadsNotTriples.
+  (labels ((traverse (match)
+             (when (match-p match)
+               (when (eq (match-term match) 'ebnf::|Quads|)
+                 (let ((triples-templates
+                         (loop for submatch in (sparql-parser:match-submatches match)
+                               if (match-p submatch)
+                                 collect (case (match-term submatch)
+                                           (ebnf::|TriplesTemplate| submatch)
+                                           (ebnf::|QuadsNotTriples| (when (match-p (fourth (match-submatches submatch)))
+                                                                      (fourth (match-submatches submatch))))))))
+                   (when triples-templates
+                     (join-triples-templates (first triples-templates) (rest triples-templates))
+                     (setf (match-submatches match) (list (first triples-templates))))))
+               (mapcar #'traverse (sparql-parser:match-submatches match))))
+           (join-triples-templates (main-template other-templates)
+             ;; Inlines the triple-templates, a bit more complex because they are defined as a recursive list.  Always
+             ;; search for the first TriplesTemplate which has less than 2 elements and then reconstruct its children.  May destroy the supplied ebnf:|TriplesTemplate|s
+             (when other-templates
+               (if (< (length (sparql-parser:match-submatches main-template)) 3)
+                   ;; this is a last element
+                   (let ((new-children
+                           (list (first (sparql-parser:match-submatches main-template))
+                                 (or (second (sparql-parser:match-submatches main-template))
+                                     (make-word-match ".")
+                                     (first other-templates)))))
+                     (setf (sparql-parser:match-submatches main-template) new-children)
+                     ;; everything set up, recurse over other-templates
+                     (join-triples-templates (first other-templates) (rest other-templates)))
+                   ;; not a last element, recurse
+                   (join-triples-templates (third (sparql-parser:match-submatches main-template))
+                                           other-templates)))))
+    (traverse (sparql-parser:sparql-ast-top-node sparql-ast)))
+  sparql-ast)
+
 (defun add-from-graphs (sparql-ast graphs)
   "Adds a series of graphs as the FROM graphs for MATCH."
   (let ((dataset-clauses

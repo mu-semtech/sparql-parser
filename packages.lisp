@@ -112,7 +112,8 @@
            #:make-token-match
            #:make-string-literal
            #:make-rdfliteral
-           #:string-literal-string))
+           #:string-literal-string
+           #:fold-and-remove-quads-not-triples))
 
 (defpackage #:type-cache
   (:use :common-lisp)
