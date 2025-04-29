@@ -601,7 +601,13 @@ variables are missing this will not lead to a pattern."
            (loop for (place match) on pattern by #'cddr
                  when (and (sparql-parser:match-p match)
                            (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|))
-                   return t))
+                   do
+                      (progn
+                        ;; TODO: this should be integrated with *error-on-unwritten-data*.  If the quad doesn't exist
+                        ;; _only_ because the graph is still a variable, then we would want to error on this case.
+                        (when (eq place :graph)
+                          (format t "~&WARNING: Quad pattern contains graph variable ~A which is not supported, quad will be dropped ~A~%" match pattern))
+                        (return t))))
          (fill-in-pattern (pattern bindings)
            (loop for (place match) on pattern by #'cddr
                  if (and (sparql-parser:match-p match)
