@@ -786,7 +786,8 @@ Currently uses the URI of graph subject and predicate as a key because object ma
       (when (or missing-delete-quads missing-insert-quads)
         (when (member :log *unwritten-data-actions*)
           (format t "~&Warning, triples will not be written to triplestore:~% DELETE:~{~%  ~A~}~& INSERT:~{~%  ~A~}~%"
-                  missing-delete-quads missing-insert-quads))
+                  (mapcar #'quad:to-human-string missing-delete-quads)
+                  (mapcar #'quad:to-human-string missing-insert-quads)))
         (when (member :error *unwritten-data-actions*)
           (error 'unwritten-data-error
                  :missing-delete-quads missing-delete-quads

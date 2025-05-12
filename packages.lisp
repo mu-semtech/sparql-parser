@@ -323,7 +323,8 @@
    #:quad-object
    #:quad-graph
    #:make #:copy #:subject #:predicate #:object #:graph
-   #:quad))
+   #:quad
+   #:to-human-string))
 
 (defpackage #:quad-transformations
   (:use :common-lisp)

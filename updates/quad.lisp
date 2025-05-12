@@ -41,6 +41,19 @@
 (defun (setf quad-graph) (value quad)
   (setf (getf quad :graph) value))
 
+(defun to-human-string (quad)
+  "Prints QUAD to a human string."
+  (format nil "~A ~A ~A ~A"
+          (quad-part-as-string (quad-graph quad))
+          (quad-part-as-string (quad-subject quad))
+          (quad-part-as-string (quad-predicate quad))
+          (quad-part-as-string (quad-object quad))))
+
+(defun quad-part-as-string (quad-part)
+  "Gets string representation for one of `QUAD-GRAPH' `QUAD-SUBJECT' `QUAD-PREDICATE' or `QUAD-OBJECT'."
+  (if (consp quad-part)
+      (sparql-manipulation:uri-wrap-marks (cdr quad-part))
+      (sparql-generator:write-valid-match quad-part)))
 
 ;; We can bind a bunch of functions automatically so we drop "-?quad-?"
 ;; from the symbol for nicer `quad:predicate` usage externally
