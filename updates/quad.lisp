@@ -51,9 +51,12 @@
 
 (defun quad-part-as-string (quad-part)
   "Gets string representation for one of `QUAD-GRAPH' `QUAD-SUBJECT' `QUAD-PREDICATE' or `QUAD-OBJECT'."
-  (if (consp quad-part)
-      (sparql-manipulation:uri-wrap-marks (cdr quad-part))
-      (sparql-generator:write-valid-match quad-part)))
+  (typecase quad-part
+    (cons (sparql-manipulation:uri-wrap-marks (cdr quad-part)))
+    (nil "UNDEF")
+    (sparql-parser:match (sparql-generator:write-valid-match quad-part))
+    ;; NOTE: following case should not happen but we don't want to throw real errors for a log.
+    (t "ERROR")))
 
 ;; We can bind a bunch of functions automatically so we drop "-?quad-?"
 ;; from the symbol for nicer `quad:predicate` usage externally
