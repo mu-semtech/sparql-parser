@@ -14,7 +14,7 @@
    implementation. It could be set to NIL to disable the feature.")
 (defparameter *message-bus-consumer* nil
   "Consumer to be called for each message on the message bus.")
-(defparameter *log-delta-messenger-message-bus-processing* t
+(defparameter *log-delta-messenger-message-bus-processing* nil
   "Logs when the delta messenger runs and for what.")
 
 (defun message-bus-loop ()
