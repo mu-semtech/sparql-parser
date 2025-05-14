@@ -280,12 +280,17 @@ MATCH may be updated in place but updated MATCH is returned."
     (or (graphs-for-tokens tokens usage (mu-call-scope))
         (list "http://mu-authorization.service.semantic.works/empty-graph"))))
 
-(defun dispatch-quads (quads)
-  "Applies current access rights to quads and updates them to contain the
-desired graphs."
+(defun dispatch-quads-to-graph-specifications (quads)
+  "Dispatches quads to the corresponding graph-parameter combinations.
+
+The result is shared as an alist in which the car is the token-with-graph-specification and the cdr is the list of quads to
+be redistributed to that location."
   (let ((known-type-uri-index (make-hash-table :test 'equal))
         (types-to-fetch (make-hash-table :test 'equal))
-        (dispatched-quads nil))
+        (dispatched-quads
+          ;; key: (CONS TOKEN GRAPH-SPECIFICATION)
+          ;; value: unmoved quad
+          (make-hash-table :test 'equal)))
     ;; The type is either T (it has this type) NIL (it does not have
     ;; this type) or it is not set (and therefore unknown)
     (labels
@@ -335,12 +340,8 @@ desired graphs."
                     (otherwise
                      (format t "~&Did not understand type ~A as constaint~%" type)
                      (return t))))))
-         (move-quad (quad graph)
-           (let ((new-quad (copy-seq quad)))
-             (setf (getf new-quad :graph) (sparql-manipulation:iriref graph))
-             new-quad))
-         (mark-quad-to-store (quad)
-           (push quad dispatched-quads))
+         (mark-quad-to-store (quad token-with-graph-specification)
+           (push quad (gethash token-with-graph-specification dispatched-quads)))
          (s-p-o-is-uri-p (quad)
            ;; inverse logic for fast exiting
            (not (loop for (k v) on quad by #'cddr
@@ -373,12 +374,11 @@ desired graphs."
                                ;; ask for information on the types
                                (ensure-future-type-known uri value))))))
             (fetch-types-to-fetch)
+
             ;; now we know we have all relevant types, we can go over the
             ;; computations and determine in which graphs each quad should be stored
             (dolist (token-with-graph-specification (accessible-graphs :tokens tokens :usage :write :scope (mu-call-scope)))
-              (let ((graph (token-graph-specification-graph (car token-with-graph-specification) (cdr token-with-graph-specification)))
-                    (constraints (graph-specification-constraints (cdr token-with-graph-specification))))
-                ;; TODO: check each quad so we only add it once
+              (let ((constraints (graph-specification-constraints (cdr token-with-graph-specification))))
                 (dolist (constraint-group (support:group-by
                                            constraints #'eq
                                            :key (lambda (constraint) (getf constraint :group))))
@@ -388,9 +388,30 @@ desired graphs."
                         (when (every (lambda (constraint)
                                        (quad-matches-constraint quad constraint))
                                      constraint-group)
-                          (mark-quad-to-store (move-quad quad graph)))
+                          (mark-quad-to-store quad token-with-graph-specification))
                         ;; without a group, each constraint stands on its own
                         (dolist (constraint constraint-group)
                           (when (quad-matches-constraint quad constraint)
-                            (mark-quad-to-store (move-quad quad graph)))))))))
-            dispatched-quads)))))
+                            (mark-quad-to-store quad token-with-graph-specification))))))))
+            (loop for key being the hash-keys of dispatched-quads
+                  for quads = (gethash key dispatched-quads)
+                  collect (cons key quads)))))))
+
+(defun dispatch-quads (quads)
+  "Applies current access rights to quads and updates them to contain the
+desired graphs.
+
+Yields a new set of quads and how they should be treated."
+  (let (dispatched-quads)
+    (flet ((move-quad (quad graph)
+             (let ((new-quad (copy-seq quad)))
+               (setf (getf new-quad :graph) (sparql-manipulation:iriref graph))
+               new-quad)))
+      (loop for ((token . graph-specification) . quads)
+              in (dispatch-quads-to-graph-specifications quads)
+            for graph = (token-graph-specification-graph token graph-specification)
+            do
+               (dolist (quad quads)
+                 ;; TODO: check each quad so we only add it once
+                 (push (move-quad quad graph) dispatched-quads))))
+    dispatched-quads))
