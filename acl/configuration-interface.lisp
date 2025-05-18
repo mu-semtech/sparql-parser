@@ -11,11 +11,12 @@
       (setf *graphs* (delete name *graphs* :key #'graph-specification-name)))
     (push graph-specification *graphs*)))
 
-(defun define-graph* (&key name graph type-specifications specifications-list)
+(defun define-graph* (&key name graph options type-specifications specifications-list)
   (add-or-replace-graph
    (make-graph-specification
     :name name
     :base-graph graph
+    :options options
     :constraints (concatenate
                   'list
                   (loop for (type-name . predicate-specifications) in type-specifications
@@ -45,12 +46,21 @@
                           collect (if type-name `(:subject ,type-sub-constraint) `()))
                   specifications-list))))
 
-(defmacro define-graph (name (graph) &body type-specifications)
-  "Compact DSL for specifying common graph constraints."
+(defmacro define-graph (name (graph &rest args &key (sparql t sparql-p) (delta t delta-p) (file nil file-p) (operations #'identity operations-p)) &body type-specifications)
+  "Compact DSL for specifying common graph constraints.
+
+A future implementation may add :file, to write the delta messages to a specific file, and :transform for transformation
+operations of deltas which would land in this graph."
+  (declare (ignore sparql delta file file-p operations operations-p))
+  ;; (unless operations-p (setf args `(:delta t ,@args)))
+  (unless delta-p (setf args `(:delta t ,@args)))
+  (unless sparql-p (setf args `(:sparql t ,@args)))
+
   `(define-graph*
-    :name ',name
-    :graph ,graph
-    :type-specifications ',type-specifications))
+     :name ',name
+     :graph ,graph
+     :options ',args
+     :type-specifications ',type-specifications))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

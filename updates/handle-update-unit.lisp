@@ -291,7 +291,9 @@ This is the inverse of binding-as-match and can be used to create delta messages
 
 (defun quad-equal-p (a b &optional (keys (list :graph :predicate :subject :object)))
   "Yields truthy iff two quads are equal.  May provide false negatives but
-should never provide false positives."
+should never provide false positives.
+
+NOTE: this function works without interaction with the backing triplestore."
   ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
   (every (lambda (key)
             (if (eq key :object)
@@ -620,17 +622,17 @@ variables are missing this will not lead to a pattern."
                                       match)))
                  else
                    append (list place match))))
-   (let* ((patterns-without-bindings (remove-if #'pattern-has-variables patterns))
-          (patterns-with-bindings (set-difference patterns patterns-without-bindings :test #'eq)))
-     (concatenate
-      'list
-      patterns-without-bindings        ; pattern without binding is quad
-      (loop for binding in bindings
-            append
-            (loop for pattern in patterns-with-bindings
-                  for filled-in-pattern = (fill-in-pattern pattern binding)
-                  unless (pattern-has-variables filled-in-pattern)
-                    collect filled-in-pattern))))))
+    (let* ((patterns-without-bindings (remove-if #'pattern-has-variables patterns))
+           (patterns-with-bindings (set-difference patterns patterns-without-bindings :test #'eq)))
+      (concatenate
+       'list
+       patterns-without-bindings        ; pattern without binding is quad
+       (loop for binding in bindings
+             append
+             (loop for pattern in patterns-with-bindings
+                   for filled-in-pattern = (fill-in-pattern pattern binding)
+                   unless (pattern-has-variables filled-in-pattern)
+                     collect filled-in-pattern))))))
 
 (defun alter-quad-to-string-file-uris (quad)
   "Converts the object portion of a quad into a file uri if necessary."
@@ -678,69 +680,123 @@ Currently uses the URI of graph subject and predicate as a key because object ma
                 t)))
       (loop for key being the hash-keys of hash collect key))))
 
+(defun process-quads-to-operations (&key delete insert)
+  "Processes the dispatching of quads for insertion, yielding multiple values for various types of operations.
+
+ALL-USED-INSERTS and ALL-USED-DELETES are determined after dispatching to the right graph and can thus be used for
+locking.
+
+(VALUES
+    EFFECTIVE-SPARQL-DELETES EFFECTIVE-SPARQL-INSERTS
+    DELTA-EFFECTIVE-DELETES DELTA-EFFECTIVE-INSERTS
+    DELTA-ALL-DELETES DELTA-ALL-INSERTS
+    DELTA-EFFECTIVE-DELETES DELTA-EFFECTIVE-INSERTS
+    ALL-USED-DELETES ALL-USED-INSERTS
+    ALL-UNTREATED-DELETES ALL-UNTREATED-INSERTS)"
+  ;; (break "processing quads to operations")
+  (let* (;; we first ensure inserts and deletes are matched through ACL
+         (delete-quads-and-undispatched (multiple-value-list (acl:dispatch-quads delete)))
+         (insert-quads-and-undispatched (multiple-value-list (acl:dispatch-quads insert)))
+         ;; now expand used values
+         (delete-quads (first delete-quads-and-undispatched))
+         (insert-quads (first insert-quads-and-undispatched))
+         (treated-delete-quads (second delete-quads-and-undispatched))
+         (treated-insert-quads (second insert-quads-and-undispatched))
+         (untreated-delete-quads (third delete-quads-and-undispatched))
+         (untreated-insert-quads (third insert-quads-and-undispatched))
+         ;; once we have the effective content to alter, we can safely create files from long strings
+         (delete-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris delete-quads))
+         (insert-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris insert-quads))
+         ;; we can deduplicate everything
+         (dedup-delete-quads-1 (remove-duplicates delete-quads-with-string-file-uris :test #'quad-equal-p))
+         (dedup-insert-quads-1 (remove-duplicates insert-quads-with-string-file-uris :test #'quad-equal-p))
+         ;; we can run user transformations on the quads
+         (user-transformed-delete-quads (quad-transformations:user-transform-quads dedup-delete-quads-1 :method :insert))
+         (user-transformed-insert-quads (quad-transformations:user-transform-quads dedup-insert-quads-1 :method :delete))
+         ;; we can deduplicate everything again
+         (dedup-delete-quads (remove-duplicates user-transformed-delete-quads :test #'quad-equal-p))
+         (dedup-insert-quads (remove-duplicates user-transformed-insert-quads :test #'quad-equal-p)))
+    (multiple-value-bind (effective-deletes effective-inserts)
+        ;; TODO: this only works for quads which will be written through SPARQL, hence we should split off
+        ;; quads not written to SPARQL here and join back up later.
+        (detect-effective-changes :delete-quads
+                                  dedup-delete-quads
+                                  :insert-quads
+                                  dedup-insert-quads)
+      (values
+       ;; effective sparql
+       effective-deletes effective-inserts
+       ;; effective delta
+       (mapcar #'alter-quad-string-file-uri-to-string effective-deletes) (mapcar #'alter-quad-string-file-uri-to-string effective-inserts)
+       ;; all delta
+       (mapcar #'alter-quad-string-file-uri-to-string dedup-delete-quads)
+       (mapcar #'alter-quad-string-file-uri-to-string dedup-insert-quads)
+       ;; used changes (this is after ACL dispatching and should be so but without value transformation)
+       (mapcar #'alter-quad-string-file-uri-to-string effective-deletes) (mapcar #'alter-quad-string-file-uri-to-string effective-inserts)
+       ;; used changes before dispatch
+       treated-delete-quads treated-insert-quads
+       ;; untreated changes
+       untreated-delete-quads untreated-insert-quads))))
+
 (defun handle-sparql-update-unit (update-unit)
   "Handles the processing of an update-unit EBNF."
   ;; TODO: add validation ensuring all triples were written to a readable location
   (flet ((execute-and-dispatch-changes (&key delete-quads insert-quads)
-           (let* (;; once we have the effective content to alter, we can safely create files from long strings
-                  (delete-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris delete-quads))
-                  (insert-quads-with-string-file-uris (mapcar #'alter-quad-to-string-file-uris insert-quads))
-                  ;; we can deduplicate everything
-                  (dedup-delete-quads-1 (remove-duplicates delete-quads-with-string-file-uris :test #'quad-equal-p))
-                  (dedup-insert-quads-1 (remove-duplicates insert-quads-with-string-file-uris :test #'quad-equal-p))
-                  ;; we can run user transformations on the quads
-                  (user-transformed-delete-quads (quad-transformations:user-transform-quads dedup-delete-quads-1 :method :insert))
-                  (user-transformed-insert-quads (quad-transformations:user-transform-quads dedup-insert-quads-1 :method :delete))
-                  ;; we can deduplicate everything again
-                  (dedup-delete-quads (remove-duplicates user-transformed-delete-quads :test #'quad-equal-p))
-                  (dedup-insert-quads (remove-duplicates user-transformed-insert-quads :test #'quad-equal-p)))
-             (multiple-value-bind (effective-deletes effective-inserts)
-                 (detect-effective-changes :delete-quads
-                                           dedup-delete-quads
-                                           :insert-quads
-                                           dedup-insert-quads)
-               (support:with-update-flight-check (delta-sequence-id)
-                   (*update-sequencer*
-                    (make-sequencer-keys-for-quads effective-deletes effective-inserts))
-                 (dolist (group (support:group-by-size-and-count
-                                 (nconc (mapcar (lambda (a) (cons :delete a)) effective-deletes)
-                                        (mapcar (lambda (a) (cons :insert a)) effective-inserts))
-                                 :max-size *max-query-size-heuristic*
-                                 :max-count *max-quads-per-query-heuristic*
-                                 :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
-                   (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
-                                                                             when (eq key :delete)
-                                                                               collect quad)
-                                                         :insert-quads (loop for (key . quad) in group
-                                                                             when (eq key :insert)
-                                                                               collect quad))
-                                 :send-to-single nil))
-                 (type-cache:update-known-types :deletes effective-deletes :inserts effective-inserts)
-                 (delta-messenger:delta-notify
-                  :sequence-id delta-sequence-id
-                  :deletes (mapcar #'alter-quad-string-file-uri-to-string dedup-delete-quads)
-                  :inserts (mapcar #'alter-quad-string-file-uri-to-string dedup-insert-quads)
-                  :effective-deletes (mapcar #'alter-quad-string-file-uri-to-string effective-deletes)
-                  :effective-inserts (mapcar #'alter-quad-string-file-uri-to-string effective-inserts)))))))
+           (multiple-value-bind
+                 (effective-sparql-deletes effective-sparql-inserts
+                  delta-effective-deletes delta-effective-inserts
+                  delta-all-deletes delta-all-inserts
+                  all-used-dispatched-deletes all-used-dispatched-inserts
+                  all-treated-deletes all-treated-inserts
+                  all-untreated-deletes all-untreated-inserts)
+               (process-quads-to-operations :delete delete-quads :insert insert-quads)
+             ;; TODO: maybe-error-on-unwritten-data can be simplified because we've done the calculations already
+             ;; (declare (ignore all-untreated-deletes all-untreated-inserts))
+             (format t "~&untreated deletes: ~A ~%untreated inserts: ~A~%" all-untreated-deletes all-untreated-inserts)
+             (maybe-error-on-unwritten-data :delete-quads-before-dispatch delete-quads
+                                            :delete-quads-after-dispatch all-treated-deletes
+                                            :insert-quads-before-dispatch insert-quads
+                                            :insert-quads-after-dispatch all-treated-inserts)
+             (support:with-update-flight-check (delta-sequence-id)
+                 (*update-sequencer*
+                  (make-sequencer-keys-for-quads all-used-dispatched-deletes all-used-dispatched-inserts))
+               (dolist (group (support:group-by-size-and-count
+                               (nconc (mapcar (lambda (a) (cons :delete a)) effective-sparql-deletes)
+                                      (mapcar (lambda (a) (cons :insert a)) effective-sparql-inserts))
+                               :max-size *max-query-size-heuristic*
+                               :max-count *max-quads-per-query-heuristic*
+                               :item-size (alexandria:compose #'quad-as-string-size #'cdr)))
+                 (client:query (query-for-quad-changes :delete-quads (loop for (key . quad) in group
+                                                                           when (eq key :delete)
+                                                                             collect quad)
+                                                       :insert-quads (loop for (key . quad) in group
+                                                                           when (eq key :insert)
+                                                                             collect quad))
+                               :send-to-single nil))
+               ;; NOTE: we base `type-cache:update-known-types' on data in the SPARQL endpoint for now but it's not
+               ;; clear to me whether this should only be what we can find back in the stored data or whether it should
+               ;; be anything we have heard about (also just delta).  The latter may yield to hard to track down bugs
+               ;; during restarts.
+               (type-cache:update-known-types :deletes effective-sparql-deletes :inserts effective-sparql-inserts)
+               (delta-messenger:delta-notify
+                :sequence-id delta-sequence-id
+                :deletes delta-all-deletes
+                :inserts delta-all-inserts
+                :effective-deletes delta-effective-deletes
+                :effective-inserts delta-effective-inserts)))))
     (client:with-increased-max-query-time-for-retries
       (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
         ;; (format t "~&Treating operation ~A~%" operation)
         ;; (break "Got operation ~A" operation)
         (case (operation-type operation)
           (:insert-triples
-           (let* ((data (operation-data operation))
-                  (quads (acl:dispatch-quads data)))
+           (let* ((data (operation-data operation)))
              (assert-no-variables-in-quads data)
-             (maybe-error-on-unwritten-data :insert-quads-before-dispatch data
-                                            :insert-quads-after-dispatch quads)
-             (execute-and-dispatch-changes :insert-quads quads)))
+             (execute-and-dispatch-changes :insert-quads data)))
           (:delete-triples
-           (let* ((data (operation-data operation))
-                  (quads (acl:dispatch-quads data)))
+           (let* ((data (operation-data operation)))
              (assert-no-variables-in-quads data)
-             (maybe-error-on-unwritten-data :delete-quads-before-dispatch data
-                                            :delete-quads-after-dispatch quads)
-             (execute-and-dispatch-changes :delete-quads quads)))
+             (execute-and-dispatch-changes :delete-quads data)))
           (:modify
            ;; TODO: handle WITH iriref which should be removed for non sudo queries
            (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
@@ -750,15 +806,9 @@ Currently uses the URI of graph subject and predicate as a key because object ma
                             :for :modify :usage :read)))
              (if bindings
                  (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
-                        (filled-in-inserts (filled-in-patterns insert-patterns bindings))
-                        (deletes (acl:dispatch-quads filled-in-deletes))
-                        (inserts (acl:dispatch-quads filled-in-inserts)))
+                        (filled-in-inserts (filled-in-patterns insert-patterns bindings)))
                    ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
-                   (maybe-error-on-unwritten-data :delete-quads-before-dispatch filled-in-deletes
-                                                  :delete-quads-after-dispatch deletes
-                                                  :insert-quads-before-dispatch filled-in-inserts
-                                                  :insert-quads-after-dispatch inserts)
-                   (execute-and-dispatch-changes :delete-quads deletes :insert-quads inserts))))))))))
+                   (execute-and-dispatch-changes :delete-quads filled-in-deletes :insert-quads filled-in-inserts))))))))))
 
 (defparameter *unwritten-data-actions* '(:log :error)
   "Which actions to take on detecting unwritten data.")

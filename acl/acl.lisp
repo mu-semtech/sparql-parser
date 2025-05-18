@@ -112,6 +112,7 @@
 (defstruct graph-specification
   (name (error "Must supply name to graph name") :type symbol)
   (base-graph (error "Must supply base graph string") :type string)
+  (options (error "Must supply options list") :type cons)
   ;; NOTE: the constraints are currently a list of triple-constraints
   ;; which means there is a lot of repetition in them.  This approach is
   ;; computationally rather intensive, but it would lead to a feasible
@@ -290,7 +291,8 @@ be redistributed to that location."
         (dispatched-quads
           ;; key: (CONS TOKEN GRAPH-SPECIFICATION)
           ;; value: unmoved quad
-          (make-hash-table :test 'equal)))
+          (make-hash-table :test 'equal))
+        (treated-quads (make-hash-table :test 'equal)))
     ;; The type is either T (it has this type) NIL (it does not have
     ;; this type) or it is not set (and therefore unknown)
     (labels
@@ -347,9 +349,11 @@ be redistributed to that location."
            (not (loop for (k v) on quad by #'cddr
                       unless (eq k :graph)
                         when (not (detect-quads:quad-term-uri v))
-                          do (return t)))))
+                          do (return t))))
+         (mark-quad-as-treated (quad)
+           (setf (gethash quad treated-quads) t)))
       (if (mu-auth-sudo)
-          quads
+          quads ;; TODO: enable user quad changes for sudo queries
           (with-access-tokens (tokens)
             ;; Initialize type index with all types mentioned in this set of quads
             (loop for quad in quads
@@ -378,24 +382,34 @@ be redistributed to that location."
             ;; now we know we have all relevant types, we can go over the
             ;; computations and determine in which graphs each quad should be stored
             (dolist (token-with-graph-specification (accessible-graphs :tokens tokens :usage :write :scope (mu-call-scope)))
-              (let ((constraints (graph-specification-constraints (cdr token-with-graph-specification))))
-                (dolist (constraint-group (support:group-by
-                                           constraints #'eq
-                                           :key (lambda (constraint) (getf constraint :group))))
-                  (dolist (quad quads)
+              (let* ((constraints (graph-specification-constraints (cdr token-with-graph-specification)))
+                     (constraint-groups (support:group-by
+                                         constraints #'eq
+                                         :key (lambda (constraint) (getf constraint :group)))))
+                (dolist (quad quads)
+                  (dolist (constraint-group constraint-groups)
                     (if (getf (first constraint-group) :group)
                         ;; when a group is given all the constraints in that group must hold
                         (when (every (lambda (constraint)
                                        (quad-matches-constraint quad constraint))
                                      constraint-group)
-                          (mark-quad-to-store quad token-with-graph-specification))
+                          (mark-quad-to-store quad token-with-graph-specification)
+                          (mark-quad-as-treated quad))
                         ;; without a group, each constraint stands on its own
                         (dolist (constraint constraint-group)
                           (when (quad-matches-constraint quad constraint)
-                            (mark-quad-to-store quad token-with-graph-specification))))))))
-            (loop for key being the hash-keys of dispatched-quads
-                  for quads = (gethash key dispatched-quads)
-                  collect (cons key quads)))))))
+                            (mark-quad-to-store quad token-with-graph-specification)
+                            (mark-quad-as-treated quad))))))))
+            (let ((dispatched (loop for key being the hash-keys of dispatched-quads
+                                    for quads = (gethash key dispatched-quads)
+                                    collect (cons key quads)))
+                  (treated (loop for quad in quads
+                                 when (gethash quad treated-quads)
+                                   collect quad))
+                  (untreated (loop for quad in quads
+                                   unless (gethash quad treated-quads)
+                                     collect quad)))
+              (values dispatched treated untreated)))))))
 
 (defun dispatch-quads (quads)
   "Applies current access rights to quads and updates them to contain the
@@ -407,11 +421,13 @@ Yields a new set of quads and how they should be treated."
              (let ((new-quad (copy-seq quad)))
                (setf (getf new-quad :graph) (sparql-manipulation:iriref graph))
                new-quad)))
-      (loop for ((token . graph-specification) . quads)
-              in (dispatch-quads-to-graph-specifications quads)
-            for graph = (token-graph-specification-graph token graph-specification)
-            do
-               (dolist (quad quads)
-                 ;; TODO: check each quad so we only add it once
-                 (push (move-quad quad graph) dispatched-quads))))
-    dispatched-quads))
+      (multiple-value-bind (quads-with-graph-specifications treated-quads untreated-quads)
+          (dispatch-quads-to-graph-specifications quads)
+        (loop for ((token . graph-specification) . quads)
+                in quads-with-graph-specifications
+              for graph = (token-graph-specification-graph token graph-specification)
+              do
+                 (dolist (quad quads)
+                   ;; TODO: check each quad so we only add it once
+                   (push (move-quad quad graph) dispatched-quads)))
+        (values dispatched-quads treated-quads untreated-quads)))))
