@@ -36,6 +36,7 @@
                      <http://mu.semte.ch/graphs/personal/janeuuid1>
                      <http://mu.semte.ch/graphs/personal/adminuuid1>
                      <http://mu.semte.ch/graphs/account-info>
+                     <http://mu.semte.ch/graphs/push>
                    }
                    GRAPH ?g { ?s ?p ?o. }
                  }"
@@ -119,6 +120,7 @@
        :schema "http://schema.org/"
        :books "http://example.com/books/"
        :favorites "http://mu.semte.ch/favorites/"
+       :push "http://mu.semte.ch/vocabularies/push/"
        :geo "http://www.opengis.net/ont/geosparql#")
 
      (acl:supply-allowed-group "public")
@@ -145,6 +147,7 @@
        ("foaf:Person" acl::-> acl::_)
        ("schema:Book" acl::-> acl::_)
        ("geo:Geometry" acl::-> acl::_))
+
      (acl:define-graph acl::user-data ("http://mu.semte.ch/graphs/personal/")
        (acl::_
         acl::-> "ext:hasBook"
@@ -152,6 +155,9 @@
         acl::-> "ext:longContent")
        ("foaf:Person" acl::<- "ext:hasFavoriteAuthor")
        ("ext:NoNameOrLabel" acl::x> "ext:name" acl::x> "ext:label"))
+
+     (acl:define-graph acl::push-updates ("http://mu.semte.ch/graphs/push" :delta t :sparql nil)
+       ("push:Update" acl::-> acl::_))
 
      (acl:grant (acl::read acl::write)
                 :to acl::public-data
@@ -162,6 +168,11 @@
      (acl:grant (acl::read acl::write)
                 :to acl::user-data
                 :for "user")
+
+     ;; NOTE: in practice this would likely be scoped
+     (acl:grant (acl::read acl::write)
+                :to acl::push-updates
+                :for "public")
 
      ,@body))
 
@@ -545,3 +556,39 @@ this point and likely a redpencil image too.")
         INSERT DATA {
           ext:myDisplay ext:anotherThing \"Another thing\".
         }"))))
+
+(defun run-delta-only-assertion-tests ()
+  "Tests whether we can use graphs which only have emit data through delta-notifier but not through sparql"
+  ;; TODO: it would be good if this test would also verify data is effectively creating delta messages but that's not
+  ;; the case yet.
+  (with-acl-config
+    (client:query (coerce
+                   "DELETE {
+                   GRAPH ?g { ?s ?p ?o }
+                 } WHERE {
+                   VALUES ?g {
+                     <http://mu.semte.ch/graphs/push>
+                   }
+                   GRAPH ?g { ?s ?p ?o. }
+                 }" #-be-cautious 'base-string #+be-cautious 'string))
+    (with-impersonation-for :jack
+      ;; can insert a push update
+      (server:execute-query-for-context
+       "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+        PREFIX dct: <http://purl.org/dc/terms/>
+        INSERT DATA {
+          push:myUpdate a push:Update;
+            dct:title \"Receive delta without writing\".
+        }")
+
+      ;; can not read back the push update
+      (assert (= 0
+                 (length
+                  (jsown:filter
+                   (jsown:parse
+                    (server:execute-query-for-context
+                     "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+        SELECT * WHERE {
+          ?thing a push:Update.
+        }"))
+                   "results" "bindings")))))))

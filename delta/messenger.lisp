@@ -29,12 +29,12 @@
     (format t "~&Notify others on id ~A quads having been written from ~A:~% Deleted Quads: ~{~%  ~A~}~% Inserted Quads: ~{~%  ~A~}~% Effectively Deleted Quads: ~{~%  ~A~}~% Effectively Inserted Quads: ~{~%  ~A~}"
             sequence-id
             (connection-globals:source-ip)
-            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) deletes)
-            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) inserts)
-            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-deletes)
-            (mapcar (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding) effective-inserts)))
+            (map 'list (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding #'acl:dispatched-quad-quad) deletes)
+            (map 'list (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding #'acl:dispatched-quad-quad) inserts)
+            (map 'list (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding #'acl:dispatched-quad-quad) effective-deletes)
+            (map 'list (alexandria:compose #'jsown:to-json #'quad-to-jsown-binding #'acl:dispatched-quad-quad) effective-inserts)))
   (:method ((handler delta-remote-handler) &key sequence-id inserts deletes effective-inserts effective-deletes)
-    (when (or inserts deletes)
+    (when (or (> (length inserts) 0) (> (length deletes) 0))
       (let ((delta-message (jsown:to-json
                             (jsown:new-js
                               ("changeSets"
@@ -101,10 +101,10 @@
   "Convert delta inserts and deletes message to jsown body for inserts and deletes."
   (let ((delta
           (jsown:new-js
-            ("insert" (mapcar #'quad-to-jsown-binding inserts))
-            ("delete" (mapcar #'quad-to-jsown-binding deletes))
-            ("effectiveInsert" (mapcar #'quad-to-jsown-binding effective-inserts))
-            ("effectiveDelete" (mapcar #'quad-to-jsown-binding effective-deletes))
+            ("insert" (map 'list (alexandria:compose #'quad-to-jsown-binding #'acl:dispatched-quad-quad) inserts))
+            ("delete" (map 'list (alexandria:compose #'quad-to-jsown-binding #'acl:dispatched-quad-quad) deletes))
+            ("effectiveInsert" (map 'list (alexandria:compose #'quad-to-jsown-binding #'acl:dispatched-quad-quad) effective-inserts))
+            ("effectiveDelete" (map 'list (alexandria:compose #'quad-to-jsown-binding #'acl:dispatched-quad-quad) effective-deletes))
             ("sequenceId" sequence-id)
             ("origin" source-ip)))) ; source ip is shared in origin key
     (when allowed-groups

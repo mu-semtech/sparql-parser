@@ -30,7 +30,9 @@
            #:with-multiple-semaphores*
            #:with-multiple-semaphores
            #:*total-time-spent*
-           #:with-update-flight-check #:make-parallel-event-sequencer))
+           #:with-update-flight-check #:make-parallel-event-sequencer
+           #:filter-array
+           #:map-array-same-type))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
@@ -159,7 +161,16 @@
            #:grant
            #:supply-allowed-group
            #:*uri-protocol-check-on-prefix-expansion*
-           #:*uri-protocol-accept-list-for-prefix-expansion*))
+           #:*uri-protocol-accept-list-for-prefix-expansion*
+           #:graph-specification-generate-delta-p
+           #:graph-specification-generate-sparql-p
+           #:dispatched-quad
+           #:dispatched-quad-quad
+           #:dispatched-quad-token-graph-specifications
+           #:dispatched-quad-treated-p
+           #:dispatched-quad-sparql-p
+           #:dispatched-quad-delta-p
+           #:copy-dispatched-quad))
 
 (defpackage #:reasoner-tree-mirror
   (:use :common-lisp)

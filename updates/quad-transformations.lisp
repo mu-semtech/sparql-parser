@@ -3,27 +3,59 @@
 (defparameter *user-quad-transform-functions* nil
   "List of quad transformation functions to try in the order in which they should be applied.")
 
-(declaim (ftype (function (cons &key (:method (or (eql :insert) (eql :delete)))) cons) user-transform-delete-quads))
-(defun user-transform-quads (quads &key method)
+(declaim (ftype (function ((vector acl:dispatched-quad) &key (:method (or (eql :insert) (eql :delete)))) (vector acl:dispatched-quad)) user-transform-quads))
+(defun user-transform-quads (dispatched-quads &key method)
   "Transforms QUADS based on user rules for METHOD :insert or :delete.
    The rules may transform a single quad to no quad or to many quads."
-  (if *user-quad-transform-functions*
+  (if (and *user-quad-transform-functions* (length dispatched-quads))
       (let* ((any-quads-changed-p nil)
-             (current-quads quads))
-        (loop for function in *user-quad-transform-functions*
+             (resulting-quad-count 0)
+             (extra-quads nil)
+             ;; we assume the most common case is to have the same amount of quads
+             (result (make-array (length dispatched-quads)
+                                 :element-type (array-element-type dispatched-quads)
+                                 :initial-contents dispatched-quads)))
+        (loop for dispatched-quad across dispatched-quads
+              for add-current-quad = t
               do
-                 (setf current-quads
-                       (loop for quad in current-quads
-                             for (new-quads changedp)
-                               = (multiple-value-list (funcall function quad :method method))
-                             when changedp
-                               do (setf any-quads-changed-p t)
-                             if changedp
-                               append new-quads
-                             else
-                               append (list quad))))
-        (values current-quads any-quads-changed-p))
-      (values quads nil)))
+                 (loop for function in *user-quad-transform-functions*
+                       for (new-quads changedp)
+                         = (multiple-value-list
+                            (funcall function
+                                     (acl:dispatched-quad-quad dispatched-quad)
+                                     :method method))
+                       when changedp
+                         do (setf any-quads-changed-p t
+                                  add-current-quad nil)
+                            (loop for new-quad in new-quads
+                                  for new-dispatched-quad = (acl:copy-dispatched-quad dispatched-quad)
+                                  do
+                                     (setf (acl:dispatched-quad-quad new-dispatched-quad) new-quad)
+                                  if (< resulting-quad-count (length result))
+                                    do (setf (aref result resulting-quad-count) new-dispatched-quad)
+                                  else
+                                    do (push new-dispatched-quad extra-quads)
+                                  do
+                                     (incf resulting-quad-count)))
+              when add-current-quad
+                do (if (< resulting-quad-count (length result))
+                       (setf (aref result resulting-quad-count) dispatched-quad)
+                       (push dispatched-quad extra-quads))
+                   (incf resulting-quad-count))
+        (cond ((= resulting-quad-count (length result))
+               (values result any-quads-changed-p))
+              (extra-quads (let ((r (make-array (list resulting-quad-count)
+                                                :element-type 'acl:dispatched-quad
+                                                :initial-element (aref dispatched-quads 0))))
+                             (loop for i from 0 for x across result do (setf (aref r i) x))
+                             (loop for i from resulting-quad-count for x in extra-quads do (setf (aref r i) x))
+                             (values r t)))
+              (t (let ((r (make-array (list resulting-quad-count)
+                                      :element-type 'acl:dispatched-quad
+                                      :initial-element (aref dispatched-quads 0))))
+                   (loop for i from 0 below resulting-quad-count do (setf (aref r i) (aref result i)))
+                   (values r t)))))
+      (values dispatched-quads nil)))
 
 (defun add-quad-processor (functor)
   "Adds a quad processor to the user quad processors.

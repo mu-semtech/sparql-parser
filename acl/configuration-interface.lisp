@@ -16,6 +16,8 @@
    (make-graph-specification
     :name name
     :base-graph graph
+    :generate-sparql-p (getf options :sparql)
+    :generate-delta-p (getf options :delta)
     :options options
     :constraints (concatenate
                   'list

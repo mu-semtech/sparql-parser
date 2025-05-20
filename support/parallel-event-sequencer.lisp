@@ -36,7 +36,7 @@
   "Checks if a token in LEFT-TOKENS is also in RIGHT-TOKENS or vice-versa."
   ;; (when (< (random 10000) 10)
   ;;   (error 'simple-error :format-control "Requested failure in OVERLAPPING-TOKENS-P"))
-  (let* ((left-large-p (> (hash-table-size left-tokens) (hash-table-size right-tokens)))
+  (let* ((left-large-p (> (hash-table-count left-tokens) (hash-table-count right-tokens)))
          (a (if left-large-p right-tokens left-tokens))
          (b (if left-large-p left-tokens right-tokens)))
     (loop for k being the hash-keys of a

@@ -12,6 +12,7 @@
                (:file "support/support")
                (:file "support/tree-db")
                (:file "support/string-file")
+               (:file "support/vectors")
                (:file "support/semaphores")
                (:file "support/parallel-event-sequencer")
                (:file "support/woo-workers")
