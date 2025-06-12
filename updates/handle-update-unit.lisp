@@ -770,12 +770,12 @@ locking.
          (dispatched-delete-quads (acl:dispatch-quads delete))
          (dispatched-insert-quads (acl:dispatch-quads insert))
          ;; if we want to know which quads are untreated and treated as they arrived, this is where we need to calculate it
-         (treated-delete-quads (support:filter-array dispatched-delete-quads #'acl:dispatched-quad-token-graph-specifications))
-         (treated-insert-quads (support:filter-array dispatched-insert-quads #'acl:dispatched-quad-token-graph-specifications))
+         (treated-delete-quads (support:filter-array dispatched-delete-quads #'acl:dispatched-quad-treated-p))
+         (treated-insert-quads (support:filter-array dispatched-insert-quads #'acl:dispatched-quad-treated-p))
          (untreated-delete-quads (support:filter-array dispatched-delete-quads
-                                                       (alexandria:compose #'null #'acl:dispatched-quad-token-graph-specifications)))
+                                                       (alexandria:compose #'null #'acl:dispatched-quad-treated-p)))
          (untreated-insert-quads (support:filter-array dispatched-insert-quads
-                                                       (alexandria:compose #'null #'acl:dispatched-quad-token-graph-specifications)))
+                                                       (alexandria:compose #'null #'acl:dispatched-quad-treated-p)))
          ;; we can run user transformations on each of these individual quads
          (user-transformed-delete-quads (quad-transformations:user-transform-quads dispatched-delete-quads :method :delete))
          (user-transformed-insert-quads (quad-transformations:user-transform-quads dispatched-insert-quads :method :insert))

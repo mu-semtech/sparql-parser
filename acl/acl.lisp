@@ -290,9 +290,13 @@ treated and how it should be processed further.  This is gradually filled in suc
   (quad) ;; provided by `dispatch-quads-to-graph-specifications' and updated by `dispatch-quads' to ensure the right
          ;; graphs are known.
   (token-graph-specifications) ;; (list) provided by `dispatch-quads-to-graph-specifications'
-  (treated-p) ;; provided by `dispatch-quads-to-graph-specifications'
-  (sparql-p) ;; provided by `dispatch-quads'
-  (delta-p)) ;; provided by `dispatch-quads'
+  (treated-p) ;; provided by `dispatch-quads-to-graph-specifications' :: has this quad been treated (to warn about quads not being processed)
+  (sparql-p) ;; provided by `dispatch-quads' :: should we write this quad to the sparql endpoint
+  (delta-p) ;; provided by `dispatch-quads' :: should we emit delta messages for this quad
+  ;; provided by `dispatch-quads-to-graph-specifications' :: is this a sudo query?
+  ;; we want these to be treated as handled in any case.  we may try to match them onto graphs and treat the delta and
+  ;; sparql as if it were written to the store
+  (sudo-p))
 
 (defun dispatch-quads-to-graph-specifications (quads)
   "Dispatches quads to the corresponding graph-parameter combinations.
@@ -371,7 +375,14 @@ be redistributed to that location."
          (mark-quad-as-treated (dispatched-quad)
            (setf (dispatched-quad-treated-p dispatched-quad) t)))
       (if (mu-auth-sudo)
-          dispatched-quads-array ;; TODO: enable user quad changes for sudo queries
+          (progn
+            ;; TODO: discover applicable graphs and set optionally apply delta-p and sparql-p based on those rules
+            (loop for dispatched-quad across dispatched-quads-array
+                  do (setf (dispatched-quad-sudo-p dispatched-quad) t
+                           (dispatched-quad-delta-p dispatched-quad) t
+                           (dispatched-quad-sparql-p dispatched-quad) t
+                           (dispatched-quad-treated-p dispatched-quad) t))
+            dispatched-quads-array)
           (with-access-tokens (tokens)
             ;; Initialize type index with all types mentioned in this set of quads
             (loop for dispatched-quad across dispatched-quads-array
