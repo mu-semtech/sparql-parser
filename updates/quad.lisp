@@ -10,12 +10,12 @@
         :predicate predicate
         :object object
         :graph graph))
-(defun copy-quad (quad)
+(defun copy-quad (quad &key (subject (subject quad)) (predicate (predicate quad)) (object (object quad)) (graph (graph quad)))
   "Copies a quad."
-  (make-quad :subject (subject quad)
-             :predicate (predicate quad)
-             :object (object quad)
-             :graph (graph quad)))
+  (make-quad :subject subject
+             :predicate predicate
+             :object object
+             :graph graph))
 
 (defun quad-subject (quad)
   "Yields the subject of the quad."
