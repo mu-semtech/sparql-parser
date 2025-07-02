@@ -308,18 +308,20 @@ NOTE: this function works without interaction with the backing triplestore."
 values which will also be inserted through existing-quads-to-insert.
 This allows us to remove cases where we did not detect two values as
 being the same as per triplestore."
+  ;; TODO: are we sure we need to compare all of these?  can we already get rid of other properties we know will not
+  ;; overlap in a similar way as we do with things we know will overlap?
   (if (and quads-to-delete existing-quads-to-insert)
       (let ((possibly-overlapping-values-with-index
               (loop for delete-quad in quads-to-delete
                     for index from 0
                     append (loop for insert-quad in existing-quads-to-insert
-                                 ;; we can detect uri's perfectly, only compare with those
+                                 ;; we can detect uri's perfectly, only compare subject, predicate, graph
                                  when (every (lambda (key) (string= (quad-term-uri (getf delete-quad key))
                                                                     (quad-term-uri (getf insert-quad key))))
-                                               '(:predicate :subject :graph))
+                                             '(:predicate :subject :graph))
                                    collect (list index
-                                                 delete-quad
-                                                 insert-quad)))))
+                                                 (alter-quad-to-string-file-uris delete-quad)
+                                                 (alter-quad-to-string-file-uris insert-quad))))))
         (if possibly-overlapping-values-with-index
             (let ((possibly-overlapping-values-with-index-groups ; batch quads
                     ;; TODO: use length of only object part of match
@@ -487,11 +489,15 @@ based on the supplied arguments and the state in the triplestore.
                   (remove-database-value-overlaps quads-to-delete existing-quads-to-insert)))
             (values (make-array (length quads-to-delete-with-database-value-check)
                                 :element-type 'acl:dispatched-quad
-                                :initial-contents (mapcar (alexandria:rcurry #'gethash deletes-hash)
+                                :initial-contents (mapcar (alexandria:compose
+                                                           #'alter-dispatched-quad-to-string-file-uris
+                                                           (alexandria:rcurry #'gethash deletes-hash))
                                                           quads-to-delete-with-database-value-check))
                     (make-array (length quads-to-insert)
                                 :element-type 'acl:dispatched-quad
-                                :initial-contents (mapcar (alexandria:rcurry #'gethash inserts-hash)
+                                :initial-contents (mapcar (alexandria:compose
+                                                           #'alter-dispatched-quad-to-string-file-uris
+                                                           (alexandria:rcurry #'gethash inserts-hash))
                                                           quads-to-insert))
                     quads-to-insert)))))))
 
@@ -589,21 +595,24 @@ based on the supplied arguments and the state in the triplestore.
   "Searches the triplestore and yields the quads which exist.
 
   Return (VALUES existing-quads non-existing-quads)"
-  (let (existing-quads
-        non-existing-quads
-        (quad-groups (support:group-by-size-and-count
-                      quads
-                      :max-size *max-query-size-heuristic*
-                      :max-count *max-quads-per-query-heuristic*
-                      :item-size #'quad-as-string-size)))
+  (let* (existing-quads
+         non-existing-quads
+         (cons-quad-list (loop for quad in quads
+                               for altered-quad = (alter-quad-to-string-file-uris quad)
+                               collect (cons quad altered-quad)))
+         (quad-groups (support:group-by-size-and-count
+                       cons-quad-list
+                       :max-size *max-query-size-heuristic*
+                       :max-count *max-quads-per-query-heuristic*
+                       :item-size (alexandria:compose #'quad-as-string-size #'cdr))))
     (dolist (quad-group quad-groups)
-      (let* ((ast (sparql-parser:make-sparql-ast :top-node (query-to-detect-existing-quad-indexes quad-group)
+      (let* ((ast (sparql-parser:make-sparql-ast :top-node (query-to-detect-existing-quad-indexes (mapcar #'cdr quad-group))
                                                  :string sparql-parser:*scanning-string*))
              (query-result (client:bindings (client:query (sparql-generator:write-when-valid ast)
                                                           :send-to-single t)))
              (existing-quad-indexes (loop for binding in query-result
                                           collect (parse-integer (jsown:filter binding "index" "value")))))
-        (loop for quad in quad-group
+        (loop for (quad . altered-quad) in quad-group
               for index from 0
               if (find index existing-quad-indexes)
                 do (push quad existing-quads)
@@ -665,7 +674,7 @@ Two values are returned, the first is the updated quad and the second is truethy
             (support:maybe-string-to-uri (sparql-inspection:ebnf-string-real-string object))
           (if uri-replacement-p ; the string has been replaced by a URI
               (let ((new-quad (copy-seq quad)))
-                (setf (getf quad :object) (sparql-manipulation:iriref uri-replacement))
+                (setf (getf new-quad :object) (sparql-manipulation:iriref uri-replacement))
                 (values new-quad t))
               (values quad nil)))
         (values quad nil))))
