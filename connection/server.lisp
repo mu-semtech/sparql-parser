@@ -114,8 +114,16 @@
             (if has-result
                 (when (jsown:keyp jsown-result "results")
                   ;; expand bindings if they exist
-                  (setf (jsown:val (jsown:val jsown-result "results") "bindings")
-                        (expand-bindings (jsown:filter jsown-result "results" "bindings"))))
+                  (let ((construct-query-p
+                          (sparql-parser:match-term-p
+                           (sparql-inspection:nth-submatch
+                            (sparql-parser:sparql-ast-top-node ast)
+                            0 1)
+                           'ebnf::|ConstructQuery|)))
+                   (setf (jsown:val (jsown:val jsown-result "results") "bindings")
+                         (expand-bindings (jsown:filter jsown-result "results" "bindings")
+                                          :virtuoso-p t
+                                          :construct-p construct-query-p))))
                 (error 'simple-error :format-control "Failed to execute query"))
             (jsown:to-json jsown-result))))))
 

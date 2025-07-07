@@ -276,3 +276,15 @@ and the keys are therefore in the same order."
                             `(t ,@body))
                            (t `((funcall ,test-sym ,spec)
                                 ,@body))))))))
+
+;;;; hash table set
+(defun make-hash-table-set (list)
+  "Constructs a new hash table set.  Does not allow concurrent updates."
+  (let ((table (make-hash-table :test 'equal)))
+    (dolist (item list)
+      (setf (gethash item table) t))
+    table))
+
+(defun hash-table-set-item-p (item hash-table-set)
+  "Yields T if and only if ITEM is part of HASH-TABLE-SET."
+  (gethash item hash-table-set))

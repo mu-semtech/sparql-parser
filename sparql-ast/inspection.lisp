@@ -15,6 +15,19 @@ submatch is searched for."
       (first-submatch (first (match-submatches match))
                       (1- levels))))
 
+(defun nth-submatch (match &rest submatch-list)
+  "Yields the nth submatch of MATCH.  SUBMATCH-LIST is used on the found item.
+
+Numbers in submatch-list are zero-based.
+
+Behaviour when not enough children are available is currently unspecified."
+  (if submatch-list
+      (apply #'nth-submatch
+             (nth (first submatch-list)
+                  (match-submatches match))
+             (rest submatch-list))
+      match))
+
 (defun rdf-literal-datatype (ebnf-rdfliteral-match)
   "Yields the URI type of an ebnf::|RDFLiteral|"
   (when (= 3 (length (match-submatches ebnf-rdfliteral-match)))
@@ -22,6 +35,13 @@ submatch is searched for."
      (sparql-parser:scanned-token-effective-string
       (sparql-inspection:first-found-scanned-token
        (third (match-submatches ebnf-rdfliteral-match)))))))
+
+(defun rdf-literal-lang (ebnf-rdfliteral-match)
+  "Yields the langstring of an ebnf::|RDFLiteral|"
+  (when (= 2 (length (match-submatches ebnf-rdfliteral-match)))
+    (sparql-parser:scanned-token-effective-string
+     (sparql-inspection:first-found-scanned-token
+      (second (match-submatches ebnf-rdfliteral-match))))))
 
 (defun ebnf-simple-string-p (ebnf-match)
   "Yields truthy iff ebnf-match represents a string, thus being ebnf::|String| or ebnf::|RDFLiteral| with type xsd:string or no LANGTAG and no iri."

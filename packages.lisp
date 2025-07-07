@@ -32,7 +32,9 @@
            #:*total-time-spent*
            #:with-update-flight-check #:make-parallel-event-sequencer
            #:filter-array
-           #:map-array-same-type))
+           #:map-array-same-type
+           #:hash-table-set-item-p
+           #:make-hash-table-set))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
@@ -88,7 +90,9 @@
            #:first-found-scanned-token
            #:rdf-literal-datatype
            #:ebnf-numeric-literal-extract-info
-           #:ebnf-simple-string-p))
+           #:ebnf-simple-string-p
+           #:nth-submatch
+           #:rdf-literal-lang))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
@@ -115,7 +119,8 @@
            #:make-string-literal
            #:make-rdfliteral
            #:string-literal-string
-           #:fold-and-remove-quads-not-triples))
+           #:fold-and-remove-quads-not-triples
+           #:make-langtag))
 
 (defpackage #:type-cache
   (:use :common-lisp)

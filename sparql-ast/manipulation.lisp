@@ -61,6 +61,12 @@
                  :string name
                  :token 'ebnf::|VAR1|))))))
 
+(defun make-langtag (langtag)
+  "Constructs the match for a langtag based on the langtag.  Expects @ to be included in LANGTAG."
+  (make-match-up-to-scanned-token
+   :string langtag
+   :match-list '(ebnf::|LANGTAG|)))
+
 (defun uri-wrap-marks (uri-string)
   "Wraps a URI in < and > marks.
 
@@ -90,13 +96,17 @@ Assumes URI-STRING is wrapped."
       :string string
       :token term)))
 
-(defun make-rdfliteral (string &key datatype-match)
+(defun make-rdfliteral (string &key datatype-match langtag-match)
   "This constructs an ebnf::|RDFLiteral| from STRING.
 
-Currently supports only string, but could be extended with datatype and lang keywords when necessary."
+Currently supports only string, but could be extended with datatype and lang keywords when necessary.
+
+Behaviour when supplying both datatype-match and langtag-match is unspecified."
   (handle-update-unit::make-nested-match
    `(ebnf::|RDFLiteral|
            ,(make-string-literal string)
+           ,@(and langtag-match
+                  (list langtag-match))
            ,@(and datatype-match
                   (list "^^" datatype-match)))))
 

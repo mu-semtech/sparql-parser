@@ -158,23 +158,38 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
     (complete-query-for-max-query-time-retries)
     result))
 
-(defun expand-bindings (bindings)
-  "Expands bindings for URIs which actually represent a string.  May modify bindings in place."
+(defun expand-bindings (bindings &key virtuoso-p construct-p)
+  "Expands bindings for URIs which actually represent a string.  May modify bindings in place.
+
+VIRTUOSO-P and CONSTRUCT-P are only taken into account for cases where the a URI is expanded to its literal value.  This may change in the future.
+
+CONSTRUCT-P indicates the expansion should happen for a Virtuoso CONSTRUCT query which uses different json key for lang
+and a different value for type."
   (loop for binding in bindings
         do
            (jsown:do-json-keys (key val) binding
              (when (string= (jsown:val val "type") "uri")
-               (multiple-value-bind (string-replacement string-replacement-p)
+               (multiple-value-bind (string-replacement string-replacement-p lang datatype)
                    (support:maybe-uri-to-string (jsown:val val "value"))
                  (when string-replacement-p
-                   ;; TODO: support language typed strings and datatypes
-                   (setf (jsown:val binding key)
-                         (jsown:new-js
-                           ("value" string-replacement)
-                           ("type" "literal"))))))))
+                   (let ((new-jsown-object
+                           (jsown:new-js
+                             ("value" string-replacement)
+                             ("type" (if (and virtuoso-p (not construct-p) datatype)
+                                        "typed-literal"
+                                        "literal")))))
+                     (when lang
+                       (let ((key (if (and virtuoso-p construct-p)
+                                      "lang"
+                                      "xml:lang")))
+                         (setf (jsown:val new-jsown-object key) lang)))
+                     (when datatype
+                       (setf (jsown:val new-jsown-object "datatype") datatype))
+                     (setf (jsown:val binding key)
+                           new-jsown-object)))))))
   bindings)
 
-(defun bindings (query-result &key (convert-string-uris t))
+(defun bindings (query-result &key (convert-string-uris t) virtuoso-p construct-p)
   "Converts the string representation of the SPARQL query result into a set
 of JSOWN compatible BINDINGS.
 
@@ -185,7 +200,7 @@ comparison."
   (let ((bindings (jsown:filter (jsown:parse query-result)
                                 "results" "bindings")))
     (if convert-string-uris
-        (expand-bindings bindings)
+        (expand-bindings bindings :virtuoso-p virtuoso-p :construct-p construct-p)
         bindings)))
 
 (defparameter *log-batch-mapping* nil

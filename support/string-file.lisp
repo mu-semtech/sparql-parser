@@ -6,16 +6,24 @@
 (defparameter *file-abbreviation-uri-prefix* "http://services.redpencil.io/sparql-parser/abbreviations/"
   "Prefix for the URIs which will contain the abbreviation of a string.")
 
-(defun maybe-string-to-uri (string)
-  "Converts a string to a corresponding URI if it is too large.
+(defun maybe-string-to-uri (string &key lang datatype)
+  "Converts STRING to corresponding URI if it is too large.
+
+Optional keyword argument LANG is used to identify the language (@nl)
+Optional keyword argument DATATYPE is used to identify the datatype and should be the full URI.
+
+The result of supplying both LANG and DATATYPE is unspecified.
 
 Yields two values, the first being the resulting string or uri, the
 second being truethy iff the string was converted into a URI."
   (if (and *string-max-size*
            (> (length string) *string-max-size*))
-      (values (format nil "~A~A"
-                      *file-abbreviation-uri-prefix*
-                      (make-string-file string))
+      (values (concatenate 'string
+                           *file-abbreviation-uri-prefix*
+                           (make-string-file string)
+                           (when (or lang datatype) "?")
+                           (when lang (format nil "lang=~A" (quri:url-encode lang)))
+                           (when datatype (format nil "datatype=~A" (quri:url-encode datatype))))
               t)
       (values string nil)))
 
@@ -31,10 +39,23 @@ second being truethy iff the string was converted into a URI."
   "If URI is the representation of a string, then the string will be extracted.
 
 First value is the string representation of the uri or string, second
-value is truethy iff the URI was converted to a string."
+value is truethy iff the URI was converted to a string.
+The third value is the language tag if any, the fourth value the datatype if any."
   (if (uri-string-p uri)
-      (values (read-string-file (subseq uri (length *file-abbreviation-uri-prefix*))) t)
-      (values uri nil)))
+      (let* ((question-position (position #\? uri :start (length *file-abbreviation-uri-prefix*)))
+             (uuid (subseq uri (length *file-abbreviation-uri-prefix*) question-position))
+             (lang-p (and question-position
+                          (string= uri "?lang=" :start1 question-position :end1 (+ question-position (length "?lang=")))))
+             (lang (and lang-p
+                        (quri:url-decode (subseq uri (+ question-position (length "?lang="))))))
+             (datatype-p (and question-position (not lang-p)))
+             (datatype (and datatype-p
+                            (quri:url-decode (subseq uri (+ question-position (length "?datatype=")))))))
+        (values (read-string-file uuid)
+                t
+                lang
+                datatype))
+      (values uri nil nil nil)))
 
 (defun make-sha-file-path (sha)
   "Constructs the file path for a given SHA."

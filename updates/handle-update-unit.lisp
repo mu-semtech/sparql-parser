@@ -350,7 +350,8 @@ being the same as per triplestore."
                                                              :string
                                                              sparql-parser:*scanning-string*)
                     for query-result = (client:bindings (client:query (sparql-generator:write-when-valid ast)
-                                                                      :send-to-single t))
+                                                                      :send-to-single t)
+                                                        :convert-string-uris nil)
                     for quad-indexes-to-delete
                       = (delete-duplicates
                          (loop for binding in query-result
@@ -609,7 +610,8 @@ based on the supplied arguments and the state in the triplestore.
       (let* ((ast (sparql-parser:make-sparql-ast :top-node (query-to-detect-existing-quad-indexes (mapcar #'cdr quad-group))
                                                  :string sparql-parser:*scanning-string*))
              (query-result (client:bindings (client:query (sparql-generator:write-when-valid ast)
-                                                          :send-to-single t)))
+                                                          :send-to-single t)
+                                            :convert-string-uris nil))
              (existing-quad-indexes (loop for binding in query-result
                                           collect (parse-integer (jsown:filter binding "index" "value")))))
         (loop for (quad . altered-quad) in quad-group
@@ -634,8 +636,8 @@ variables are missing this will not lead to a pattern."
                       (progn
                         ;; TODO: this should be integrated with *error-on-unwritten-data*.  If the quad doesn't exist
                         ;; _only_ because the graph is still a variable, then we would want to error on this case.
-                        (when (eq place :graph)
-                          (format t "~&WARNING: Quad pattern contains graph variable ~A which is not supported, quad will be dropped ~A~%" match pattern))
+                        ;; (when (eq place :graph)
+                        ;;   (format t "~&WARNING: Quad pattern contains graph variable ~A which is not supported, quad will be dropped ~A~%" match pattern))
                         (return t))))
          (fill-in-pattern (pattern bindings)
            (loop for (place match) on pattern by #'cddr
@@ -661,6 +663,32 @@ variables are missing this will not lead to a pattern."
                    unless (pattern-has-variables filled-in-pattern)
                      collect filled-in-pattern))))))
 
+(defparameter *hands-off-literal-datatypes-set*
+  (support:make-hash-table-set
+   '(;; specific
+     ;; "http://www.w3.org/2001/XMLSchema#string" ;; we treat string ourselves
+     "http://www.w3.org/2001/XMLSchema#integer"
+     "http://www.w3.org/2001/XMLSchema#decimal"
+     "http://www.w3.org/2001/XMLSchema#float"
+     "http://www.w3.org/2001/XMLSchema#double"
+     "http://www.w3.org/2001/XMLSchema#boolean"
+     "http://www.w3.org/2001/XMLSchema#dateTime"
+
+     ;; allowed derivations (more derivations possible in SPARQL extensions)
+     "http://www.w3.org/2001/XMLSchema#nonPositiveInteger"
+     "http://www.w3.org/2001/XMLSchema#negativeInteger"
+     "http://www.w3.org/2001/XMLSchema#long"
+     "http://www.w3.org/2001/XMLSchema#int"
+     "http://www.w3.org/2001/XMLSchema#short"
+     "http://www.w3.org/2001/XMLSchema#byte"
+     "http://www.w3.org/2001/XMLSchema#nonNegativeInteger"
+     "http://www.w3.org/2001/XMLSchema#unsignedLong"
+     "http://www.w3.org/2001/XMLSchema#unsignedInt"
+     "http://www.w3.org/2001/XMLSchema#unsignedShort"
+     "http://www.w3.org/2001/XMLSchema#unsignedByte"
+     "http://www.w3.org/2001/XMLSchema#positiveInteger"))
+  "Hash table containing all literal datatypes we want to stay away from.  Model is subject to change.")
+
 (defun alter-quad-to-string-file-uris (quad)
   "Converts the object portion of a quad into a file uri if necessary.
 
@@ -668,15 +696,27 @@ Returns a new quad IFF the quad was updated.
 
 Two values are returned, the first is the updated quad and the second is truethy iff the quad was updated."
   (let ((object (getf quad :object)))
-    (if (and (not (consp object)) ; it's certainly a uri
-               (sparql-inspection:ebnf-simple-string-p object)) ; it's a string
-        (multiple-value-bind (uri-replacement uri-replacement-p)
-            (support:maybe-string-to-uri (sparql-inspection:ebnf-string-real-string object))
-          (if uri-replacement-p ; the string has been replaced by a URI
-              (let ((new-quad (copy-seq quad)))
-                (setf (getf new-quad :object) (sparql-manipulation:iriref uri-replacement))
-                (values new-quad t))
-              (values quad nil)))
+    (if (and (not (consp object)) ; it's not a URI
+             (sparql-parser:match-term-p object 'ebnf::|RDFLiteral|)
+             (not (support:hash-table-set-item-p (sparql-inspection:rdf-literal-datatype object)
+                                                 *hands-off-literal-datatypes-set*)))
+        ;; maybe expand to a string-file-uri
+        (let* ((object-datatype (sparql-inspection:rdf-literal-datatype object))
+               (string-datatype ; datatype for string replacement should ignore xsd:string
+                 (when (and object-datatype
+                            (not (string= object-datatype "http://www.w3.org/2001/XMLSchema#string")))
+                   object-datatype))
+               (lang (sparql-inspection:rdf-literal-lang object)))
+          (multiple-value-bind (uri-replacement uri-replacement-p)
+              (support:maybe-string-to-uri (sparql-inspection:ebnf-string-real-string
+                                            object)
+                                           :lang lang
+                                           :datatype string-datatype)
+            (if uri-replacement-p ; the string has been replaced by a URI
+                (let ((new-quad (copy-seq quad)))
+                  (setf (getf new-quad :object) (sparql-manipulation:iriref uri-replacement))
+                  (values new-quad t))
+                (values quad nil))))
         (values quad nil))))
 
 (defun alter-dispatched-quad-to-string-file-uris (dispatched-quad)
@@ -697,11 +737,21 @@ Two values are returned, the first is the updated quad and the second is truethy
                             (sparql-inspection:first-found-scanned-token)
                             (sparql-parser:scanned-token-effective-string)
                             (sparql-manipulation:uri-unwrap-marks))))
-          (multiple-value-bind (string-replacement string-replacement-p)
+          (multiple-value-bind (string-replacement string-replacement-p lang datatype)
               (support:maybe-uri-to-string uri-string)
             (if string-replacement-p
                 (let ((new-quad (copy-seq quad)))
-                  (setf (getf new-quad :object) (sparql-manipulation:make-rdfliteral string-replacement))
+                  (setf (getf new-quad :object)
+                        (cond (lang
+                               (sparql-manipulation:make-rdfliteral
+                                string-replacement
+                                :langtag-match (sparql-manipulation:make-langtag lang)))
+                              (datatype
+                               (sparql-manipulation:make-rdfliteral
+                                string-replacement
+                                :datatype-match (sparql-manipulation:make-iri datatype)))
+                              (t
+                               (sparql-manipulation:make-rdfliteral string-replacement))))
                   (values new-quad t))
                 (values quad nil))))
         (values quad nil))))
@@ -812,8 +862,6 @@ locking.
          ;;                                                                 (not (acl:dispatched-quad-sparql-p q))))))
          )
     (multiple-value-bind (effective-deletes effective-inserts)
-        ;; TODO: this only works for quads which will be written through SPARQL, hence we should split off
-        ;; quads not written to SPARQL here and join back up later.
         (detect-effective-changes :dispatched-delete-quads sparql-delete-quads-with-string-file-uris
                                   :dispatched-insert-quads sparql-insert-quads-with-string-file-uris)
       (values
