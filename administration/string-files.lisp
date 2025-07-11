@@ -139,13 +139,8 @@ LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is
         else
           do (format t "~&FILE TO DB string-file ~A is ok~%" sha)))
 
-(defun update-string-files (&key (database-p t) (files-p t))
-  "Updates the string files so they match with the current setting for `SUPPORT:*STRING-MAX-SIZE*'."
-  (when database-p (update-database-long-strings-to-string-files))
-  (when files-p (move-short-string-files-into-database)))
-
-(defun upgrade-database-string-files ()
+(defun update-database-string-files (&key (database-p t) (files-p t))
   "Upgrades the database string files to match the current `SUPPORT::*STRING-MAX-SIZE*'."
   (client:ensure-endpoints-available :verbose t)
-  (update-database-long-strings-to-string-files)
-  (move-short-string-files-into-database))
+  (when database-p (update-database-long-strings-to-string-files))
+  (when files-p (move-short-string-files-into-database)))

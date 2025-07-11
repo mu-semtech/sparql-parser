@@ -391,5 +391,4 @@
 
 (defpackage #:administration
   (:use :common-lisp)
-  (:export #:update-string-files
-           #:upgrade-database-string-files))
+  (:export #:update-database-string-files))
