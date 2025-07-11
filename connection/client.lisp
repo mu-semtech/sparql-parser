@@ -174,7 +174,7 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
 
                                           ("mu-call-id" . ,(mu-call-id))
                                           ("mu-session-id" . ,(mu-session-id)))))
-                           (send-query-to-triplestore uri string headers))
+                           (send-query-to-triplestore (sparql-endpoint-url endpoint) string headers))
                        (declare (ignore code headers))
                        (when *log-sparql-query-roundtrip*
                          (format t "~&Requested:~%~A~%and received~%~A~%"
