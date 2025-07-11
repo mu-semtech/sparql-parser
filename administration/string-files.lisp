@@ -37,13 +37,13 @@ LANG and DATETYPE may be supplied, but only one of them may be non-nil."
                ?s ?p ?o
              }
              FILTER( isLiteral(?o) && strlen(str(?o)) > ~A)
-           } LIMIT 20" support:*string-max-size*)))
+           } LIMIT ~A" support:*string-max-size* *long-db-strings-to-move-per-batch*)))
     (loop for bindings = (client:bindings (client:query select-query :send-to-single t)
                                           :convert-string-uris nil)
           while bindings
           for batch from 1
           do
-             (format t "DB TO FILE BATCH ~A has ~A bindings (max ~A)" batch (length bindings) )
+             (format t "DB TO FILE BATCH ~A has ~A bindings (max ~A)" batch (length bindings) *long-db-strings-to-move-per-batch*)
              (let
                  ((replacements
                     (loop for binding in bindings
@@ -147,7 +147,6 @@ LANG and DATETYPE may be supplied, but only one of them may be non-nil."
 
 (defun upgrade-database-string-files ()
   "Upgrades the database string files to match the current `SUPPORT::*STRING-MAX-SIZE*'."
+  (client:ensure-endpoints-available :verbose t)
   (update-database-long-strings-to-string-files)
   (move-short-string-files-into-database))
-
-(administration:move-short-string-files-into-database)

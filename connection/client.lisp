@@ -81,14 +81,71 @@ to the first queries so we consider this to be fine."
 (defparameter *log-failing-query-tries-with-condition* t
   "Whether to log the condition for queries which fail in exponential backoff retry.")
 
+(defun send-query-to-triplestore (endpoint query headers)
+  "Sends QUERY as query to the triplestore at url ENDPOINT with headers HEADERS.
+
+Yields what `DEX:REQUEST' yields, the first three being BODY CODE HEADERS."
+  (let ((endpoint-uri (quri:uri endpoint)))
+    (if (< (length query) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
+        (progn
+          (setf (quri:uri-query-params endpoint-uri)
+                `(("query" . ,query)))
+          (dex:request endpoint-uri
+                       :method :get
+                       :use-connection-pool t
+                       :keep-alive t
+                       :force-string t
+                       ;; :verbose t
+                       :headers headers))
+        (dex:request endpoint-uri
+                     :method :post
+                     :use-connection-pool nil
+                     :keep-alive nil
+                     :force-string t
+                     :headers headers
+                     :content `(("query" . ,query))))))
+
+(defun ensure-backends-variable ()
+  "Users can set the backends using the `*BACKEND*' variable in simple string form.  We now have a more complex structure
+which is stored in the `*BACKENDS*' variable.  This function handles the upgrade from one format to the other."
+  (unless *backends*
+    (if (listp *backend*)
+        (apply #'set-backend-urls *backend*)
+        (set-backend-urls *backend*))))
+
+(defun ensure-endpoints-available (&key (verbose nil))
+  "Waits for all endpoints to become available and for them to respond to at least one query.
+
+When the VERBOSE keyword is truethy, output is written to STDOUT."
+  (ensure-backends-variable)
+  (when verbose
+    (format t "~&Ensuring ~A backends are up: ~{~%- ~A~}~%"
+            (length *backends*)
+            (mapcar #'sparql-endpoint-url *backends*)))
+  (loop for backend in *backends*
+        for url = (sparql-endpoint-url backend)
+        do
+           (loop until (handler-case
+                           (progn
+                             (jsown:val
+                              (jsown:parse
+                               (send-query-to-triplestore url
+                                                          "ASK { GRAPH ?g { ?s ?p ?o. } }"
+                                                          '(("accept" . "application/sparql-results+json"))))
+                              "boolean")
+                             (when verbose
+                               (format t "~&Endpoint ~A is up~%" url))
+                             t)
+                         (error (e)
+                           (when verbose
+                             (format t "~&Could not access endpoint ~A, signaled ~A, will retry.~%" url e))
+                           (sleep 1))))))
+
 (defun query (string &key (send-to-single nil))
   "Sends a query to the backend and responds with the response body.
 
 When SEND-TO-SINGLE is truethy and multple endpoints are available, the request is sent to only one of them."
-  (unless *backends*
-    (if (listp *backend*)
-        (apply #'set-backend-urls *backend*)
-        (set-backend-urls *backend*)))
+  (ensure-backends-variable-set)
   (let* ((selected-endpoints
            (if send-to-single
                (list (alexandria:random-elt (backends)))
@@ -113,28 +170,11 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
                  ;; 2. send out queries
                  (handler-case
                      (multiple-value-bind (body code headers)
-                         (let ((uri (quri:uri (sparql-endpoint-url endpoint)))
-                               (headers `(("accept" . "application/sparql-results+json")
+                         (let ((headers `(("accept" . "application/sparql-results+json")
+
                                           ("mu-call-id" . ,(mu-call-id))
                                           ("mu-session-id" . ,(mu-session-id)))))
-                           (if (< (length string) 1000) ;; resources guesses 5k, we guess 1k for Virtuoso
-                               (progn
-                                 (setf (quri:uri-query-params uri)
-                                       `(("query" . ,string)))
-                                 (dex:request uri
-                                              :method :get
-                                              :use-connection-pool t
-                                              :keep-alive t
-                                              :force-string t
-                                              ;; :verbose t
-                                              :headers headers))
-                               (dex:request uri
-                                            :method :post
-                                            :use-connection-pool nil
-                                            :keep-alive nil
-                                            :force-string t
-                                            :headers headers
-                                            :content `(("query" . ,string)))))
+                           (send-query-to-triplestore uri string headers))
                        (declare (ignore code headers))
                        (when *log-sparql-query-roundtrip*
                          (format t "~&Requested:~%~A~%and received~%~A~%"

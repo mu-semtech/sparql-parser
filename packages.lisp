@@ -314,7 +314,8 @@
            #:batch-map-solutions-for-select-query
            #:batch-create-full-solution-for-select-query
            #:expand-bindings
-           #:with-increased-max-query-time-for-retries))
+           #:with-increased-max-query-time-for-retries
+           #:ensure-endpoints-available))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
