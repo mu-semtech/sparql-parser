@@ -63,7 +63,7 @@ LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is
                             (list binding replacement lang datatype)))))
                ;; first insert the alternatives (we may need to group these
                (client:query
-                (format nil "INSERT DATA {~{~%  GRAPH ~{~A { ~A ~A ~A }~}~} }~%}"
+                (format nil "INSERT DATA {~{~%  GRAPH ~{~A { ~A ~A ~A }~}~}~%}"
                         (loop for (binding replacement) in replacements
                               collect
                               (list
