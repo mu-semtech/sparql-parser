@@ -34,7 +34,11 @@
            #:filter-array
            #:map-array-same-type
            #:hash-table-set-item-p
-           #:make-hash-table-set))
+           #:make-hash-table-set
+           #:*sha-file-directory*
+           #:read-string-file
+           #:read-path-as-string
+           #:string-file-uri))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
@@ -383,3 +387,8 @@
            :delta-notify
            :add-delta-messenger
            :add-delta-logger))
+
+(defpackage #:administration
+  (:use :common-lisp)
+  (:export #:update-string-files
+           #:upgrade-database-string-files))

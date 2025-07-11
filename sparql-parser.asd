@@ -54,5 +54,7 @@
                (:file "connection/server")
                ;; shame
                (:file "support/monkeypatch")
+               ;; administration
+               (:file "administration/string-files")
                ;; configuration
                (:file "config/config")))
