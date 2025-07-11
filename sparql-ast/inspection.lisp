@@ -36,12 +36,18 @@ Behaviour when not enough children are available is currently unspecified."
       (sparql-inspection:first-found-scanned-token
        (third (match-submatches ebnf-rdfliteral-match)))))))
 
-(defun rdf-literal-lang (ebnf-rdfliteral-match)
-  "Yields the langstring of an ebnf::|RDFLiteral|"
+(defun rdf-literal-lang (ebnf-rdfliteral-match &key skip-@)
+  "Yields the langstring of an ebnf::|RDFLiteral|
+
+If `:SKIP-@' is supplied, the @ is cut off the langtag."
   (when (= 2 (length (match-submatches ebnf-rdfliteral-match)))
-    (sparql-parser:scanned-token-effective-string
-     (sparql-inspection:first-found-scanned-token
-      (second (match-submatches ebnf-rdfliteral-match))))))
+    (let ((raw-lang
+            (sparql-parser:scanned-token-effective-string
+             (sparql-inspection:first-found-scanned-token
+              (second (match-submatches ebnf-rdfliteral-match))))))
+      (if skip-@
+          (subseq raw-lang 1)
+          raw-lang))))
 
 (defun ebnf-simple-string-p (ebnf-match)
   "Yields truthy iff ebnf-match represents a string, thus being ebnf::|String| or ebnf::|RDFLiteral| with type xsd:string or no LANGTAG and no iri."

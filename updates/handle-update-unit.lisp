@@ -706,7 +706,7 @@ Two values are returned, the first is the updated quad and the second is truethy
                  (when (and object-datatype
                             (not (string= object-datatype "http://www.w3.org/2001/XMLSchema#string")))
                    object-datatype))
-               (lang (sparql-inspection:rdf-literal-lang object)))
+               (lang (sparql-inspection:rdf-literal-lang object :skip-@ t)))
           (multiple-value-bind (uri-replacement uri-replacement-p)
               (support:maybe-string-to-uri (sparql-inspection:ebnf-string-real-string
                                             object)

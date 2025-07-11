@@ -13,8 +13,8 @@
 
 (defun sparql-escape-string (string &key lang datatype)
   "Escapes STRING for use in a SPARQL query.
-LANG and DATETYPE may be supplied, but only one of them may be non-nil."
-  (format nil "\"\"\"~A\"\"\"~@[~A~]~@[^^~A~] "
+LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is expected to exclude the @ (eg: nl)."
+  (format nil "\"\"\"~A\"\"\"~@[@~A~]~@[^^~A~] "
           (coerce (loop for char across string
                         if (char= char #\")
                           append (list #\\ #\")
@@ -28,6 +28,7 @@ LANG and DATETYPE may be supplied, but only one of them may be non-nil."
   "How many long strings in the DB are moved to files per batch.")
 
 (defun update-database-long-strings-to-string-files ()
+  "Updates long strings in the triplestore to become string files."
   (let ((select-query
           (format
            nil
@@ -49,10 +50,8 @@ LANG and DATETYPE may be supplied, but only one of them may be non-nil."
                     (loop for binding in bindings
                           for object = (jsown:val binding "o")
                           for datatype = (jsown:val-safe object "datatype")
-                          for lang = (let ((lang (or (jsown:val-safe object "lang")
-                                                    (jsown:val-safe object "xml:lang"))))
-                                       (when lang
-                                         (concatenate 'string "@" lang)))  ; TODO: update lang assumption to not contain @
+                          for lang = (or (jsown:val-safe object "lang")
+                                         (jsown:val-safe object "xml:lang"))
                           for value = (jsown:val object "value")
                           collect
                           (multiple-value-bind (replacement replacement-p)

@@ -20,7 +20,7 @@ The result of supplying both LANG and DATATYPE is unspecified."
 (defun maybe-string-to-uri (string &rest args &key lang datatype)
   "Converts STRING to corresponding URI if it is too large.
 
-Optional keyword argument LANG is used to identify the language (@nl)
+Optional keyword argument LANG is used to identify the language (eg: nl)
 Optional keyword argument DATATYPE is used to identify the datatype and should be the full URI.
 
 The result of supplying both LANG and DATATYPE is unspecified.
