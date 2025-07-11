@@ -145,7 +145,7 @@ When the VERBOSE keyword is truethy, output is written to STDOUT."
   "Sends a query to the backend and responds with the response body.
 
 When SEND-TO-SINGLE is truethy and multple endpoints are available, the request is sent to only one of them."
-  (ensure-backends-variable-set)
+  (ensure-backends-variable)
   (let* ((selected-endpoints
            (if send-to-single
                (list (alexandria:random-elt (backends)))
