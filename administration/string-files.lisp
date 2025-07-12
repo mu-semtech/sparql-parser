@@ -44,7 +44,7 @@ LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is
           while bindings
           for batch from 1
           do
-             (format t "DB TO FILE BATCH ~A has ~A bindings (max ~A)" batch (length bindings) *long-db-strings-to-move-per-batch*)
+             (format t "~&DB TO FILE BATCH ~A has ~A bindings (max ~A)~%" batch (length bindings) *long-db-strings-to-move-per-batch*)
              (let
                  ((replacements
                     (loop for binding in bindings
