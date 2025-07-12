@@ -1,6 +1,6 @@
 (in-package :support)
 
-(defparameter *string-max-size* 256
+(defparameter *string-max-size* 4096
   "Maximum size of a string before it gets converted.")
 
 (defparameter *file-abbreviation-uri-prefix* "http://services.redpencil.io/sparql-parser/abbreviations/"
