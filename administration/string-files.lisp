@@ -16,8 +16,8 @@
 LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is expected to exclude the @ (eg: nl)."
   (format nil "\"\"\"~A\"\"\"~@[@~A~]~@[^^~A~] "
           (coerce (loop for char across string
-                        if (char= char #\")
-                          append (list #\\ #\")
+                        if (find char (list #\\ #\") :test #'char=)
+                          append (list #\\ char)
                         else
                           collect char)
                   #+be-cautious 'string #-be-cautious 'base-string)
