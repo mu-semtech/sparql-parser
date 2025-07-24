@@ -927,27 +927,11 @@ locking.
       (dolist (operation (detect-quads-processing-handlers:|UpdateUnit| update-unit))
         ;; (format t "~&Treating operation ~A~%" operation)
         ;; (break "Got operation ~A" operation)
-        (case (operation-type operation)
-          (:insert-triples
-           (let* ((data (operation-data operation)))
-             (assert-no-variables-in-quads data)
-             (execute-and-dispatch-changes :insert-quads data)))
-          (:delete-triples
-           (let* ((data (operation-data operation)))
-             (assert-no-variables-in-quads data)
-             (execute-and-dispatch-changes :delete-quads data)))
-          (:modify
-           ;; TODO: handle WITH iriref which should be removed for non sudo queries
-           (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
-                 (delete-patterns (operation-data-subfield operation :delete-patterns))
-                 (bindings (client:batch-create-full-solution-for-select-query
-                            (operation-data-subfield operation :query)
-                            :for :modify :usage :read)))
-             (if bindings
-                 (let* ((filled-in-deletes (filled-in-patterns delete-patterns bindings))
-                        (filled-in-inserts (filled-in-patterns insert-patterns bindings)))
-                   ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
-                   (execute-and-dispatch-changes :delete-quads filled-in-deletes :insert-quads filled-in-inserts))))))))))
+        (destructuring-bind (&key insert-quads delete-quads)
+            (quad-operation-to-quads operation)
+          (assert-no-variables-in-quads insert-quads)
+          (assert-no-variables-in-quads delete-quads)
+          (execute-and-dispatch-changes :insert-quads insert-quads :delete-quads delete-quads))))))
 
 (defparameter *unwritten-data-actions* '(:log :error)
   "Which actions to take on detecting unwritten data.")

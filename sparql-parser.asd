@@ -44,6 +44,7 @@
                (:file "updates/quad")
                (:file "updates/quad-transformations")
                (:file "updates/detect-quads")
+               (:file "updates/quad-operations-to-quads")
                (:file "updates/handle-update-unit")
                ;; messenger
                (:file "delta/message-bus")
