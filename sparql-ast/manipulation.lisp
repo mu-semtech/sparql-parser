@@ -4,6 +4,39 @@
 ;;;;
 ;;;; Easier ways to manipulate matches
 
+(defun make-nested-match (specification)
+  "Constructs a nested match through an abbreviated interface.
+
+SPECIFICATION is either (TERM &REST CHILDREN) or TERM.
+
+- When term is a symbol, a match is constructed with the same symbol.
+- When term is a string, a word match is constructed.
+- Any nil children are ignored
+- Any other resource is consumed verbatim.
+
+Children is a list that will be mapped through nested match under the
+same logic to construct the submatches."
+  ;; TODO: move this to supporting code and update detect-quads.lisp for it
+  (flet ((easy-make-match (term)
+           (cond
+             ((symbolp term)
+              (make-match :term term
+                          :rule nil
+                          :submatches nil))
+             ((stringp term)
+              (sparql-manipulation:make-word-match term))
+             (t term))))
+    (if (listp specification)
+        (destructuring-bind (term &rest children)
+            specification
+          (let ((match (easy-make-match term)))
+            (when children
+              (setf (sparql-parser:match-submatches match)
+                    (mapcar #'make-nested-match
+                            (remove-if-not #'identity children))))
+            match))
+        (easy-make-match specification))))
+
 (defun mk-match (content)
   "Constructs a match object from the abbreviated match specification."
   (destructuring-bind (term &rest submatches)
@@ -11,7 +44,7 @@
     (flet ((transform-submatch (submatch)
              (typecase submatch
                (sparql-parser:match submatch)
-               (string (sparql-parser::make-match
+               (string (make-match
                         :term submatch
                         :submatches (list (sparql-parser::make-scanned-token :start 0 :end 0 :token submatch))))
                (list (mk-match submatch)))))
@@ -20,12 +53,12 @@
 
 (defun make-match-up-to-scanned-token (&key string match-list)
   (if (rest match-list)
-      (sparql-parser:make-match
+      (make-match
        :term (first match-list)
        :submatches (list (make-match-up-to-scanned-token
                           :string string
                           :match-list (rest match-list))))
-      (sparql-parser:make-match
+      (make-match
        :term (first match-list)
        :submatches (list (sparql-parser:make-scanned-token
                           :start 0 :end 0
@@ -34,13 +67,13 @@
 
 (defun make-iri (uri)
   "Constructs an IRI with IRIREF in it."
-  (sparql-parser:make-match
+  (make-match
    :term 'ebnf::|iri|
    :submatches (list (iriref uri))))
 
 (defun iriref (uri)
   "Constructs an IRIREF for GRAPH-STRING."
-  (sparql-parser:make-match
+  (make-match
    :term 'ebnf::|IRIREF|
    :submatches
    (list (sparql-parser:make-scanned-token
@@ -50,10 +83,10 @@
 
 (defun make-var (name)
   "Constructs a variable, supply varname including ? or $."
-  (sparql-parser:make-match
+  (make-match
    :term 'ebnf::|Var|
    :submatches
-   (list (sparql-parser:make-match
+   (list (make-match
           :term 'ebnf::|VAR1|
           :submatches
           (list (sparql-parser:make-scanned-token
@@ -102,7 +135,7 @@ Assumes URI-STRING is wrapped."
 Currently supports only string, but could be extended with datatype and lang keywords when necessary.
 
 Behaviour when supplying both datatype-match and langtag-match is unspecified."
-  (handle-update-unit::make-nested-match
+  (make-nested-match
    `(ebnf::|RDFLiteral|
            ,(make-string-literal string)
            ,@(and langtag-match
@@ -112,7 +145,7 @@ Behaviour when supplying both datatype-match and langtag-match is unspecified."
 
 (defun make-string-literal (string)
   "Constructs a string literal for string, escaping as necessary."
-  (handle-update-unit::make-nested-match
+  (make-nested-match
    `(ebnf::|String|
            ,(make-token-match 'ebnf::|STRING_LITERAL_LONG2|
                               (sparql-escape-string string)))))
@@ -146,7 +179,7 @@ Behaviour when supplying both datatype-match and langtag-match is unspecified."
   "Constructs a match for fixed content in the EBNF.
 
   Eg: the string \"GRAPH\" or \"INSERT DATA\"."
-  (sparql-parser:make-match
+  (make-match
    :term string :rule nil
    :submatches (list (sparql-parser::make-scanned-token
                       :start 0 :end 0

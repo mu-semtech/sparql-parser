@@ -101,6 +101,7 @@
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
   (:import-from #:sparql-parser
+                #:make-match
                 #:match-submatches
                 #:match-term
                 #:match-p)
@@ -124,7 +125,8 @@
            #:make-rdfliteral
            #:string-literal-string
            #:fold-and-remove-quads-not-triples
-           #:make-langtag))
+           #:make-langtag
+           #:make-nested-match))
 
 (defpackage #:type-cache
   (:use :common-lisp)

@@ -7,141 +7,6 @@ Current implementation will try to query even if over this size.")
 (defparameter *max-quads-per-query-heuristic* 100
   "Heuristing indicating roughly how many quads could be in a single query for insert or query.")
 
-(defun make-nested-match (specification)
-  "Constructs a nested match through an abbreviated interface.
-
-SPECIFICATION is either (TERM &REST CHILDREN) or TERM.
-
-- When term is a symbol, a match is constructed with the same symbol.
-- When term is a string, a word match is constructed.
-- Any nil children are ignored
-- Any other resource is consumed verbatim.
-
-Children is a list that will be mapped through nested match under the
-same logic to construct the submatches."
-  ;; TODO: move this to supporting code and update detect-quads.lisp for it
-  (flet ((make-match (term)
-           (cond 
-             ((symbolp term)
-              (make-match :term term
-                          :rule nil
-                          :submatches nil))
-             ((stringp term)
-              (sparql-manipulation:make-word-match term))
-             (t term))))
-   (if (listp specification)
-       (destructuring-bind (term &rest children)
-           specification
-         (let ((match (make-match term)))
-           (when children
-             (setf (sparql-parser:match-submatches match)
-                   (mapcar #'make-nested-match
-                           (remove-if-not #'identity children))))
-           match))
-       (make-match specification))))
-
-(defun binding-as-match (solution)
-  "Constructs a match statement which corresponds to SOLUTION binding."
-  (let ((type (jsown:val solution "type"))
-        (value (jsown:val solution "value")))
-    (flet ((make-string-literal ()
-             (sparql-manipulation:make-string-literal value)))
-      (cond ((string= type "uri")
-             ;; uri
-             (sparql-manipulation:iriref value))
-            ((and (jsown:val-safe solution "xml:lang")
-                  (string= type "literal"))
-             ;; language typed strings
-             (make-nested-match
-              `(ebnf::|RDFLiteral|
-                      ,(make-string-literal)
-                      ,(sparql-manipulation:make-token-match
-                        'ebnf::|LANGTAG|
-                        (concatenate 'string "@" (jsown:val solution "xml:lang"))))))
-            ((and (jsown:val-safe solution "datatype")
-                  (or (string= type "literal")
-                      ;; virtuoso seems to emit typed-literal in some (all?) cases,
-                      ;; sparql1.1 indicates to use literal
-                      (string= type "typed-literal")))
-             ;; datatype based strings
-             (make-nested-match
-              `(ebnf::|RDFLiteral|
-                      ,(make-string-literal) ;; TODO: if Virtuoso yields booleans as numbers, this would be one of the places to convert it
-                      "^^"
-                      ,(sparql-manipulation:make-iri (jsown:val solution "datatype")))))
-            ((and (string= type "literal"))
-             ;; handle string
-             (make-nested-match
-              `(ebnf::|RDFLiteral| ,(make-string-literal))))
-            ((and (string= type "bnode"))
-             ;; support blank node
-             (make-nested-match
-              `(ebnf::|BlankNode|
-                      ,(sparql-manipulation:make-token-match
-                        'ebnf::|BLANK_NODE_LABEL|
-                        (concatenate 'string "_:" value)))))
-            (t (error "Unknown solution to turn into match statement ~A" solution))))))
-
-(defun match-as-binding (match)
-  "Converts a MATCH statement to a binding.
-
-This is the inverse of binding-as-match and can be used to create delta messages."
-;;;; The supported match elements may have any of the following, plus
-;;;; whatever binding-as-match may return.  At the point of writing
-;;;; 20230323153815 this means we have the following options:
-;;;;
-;;;; ebnf::|VAR1| , ebnf::|VAR2|
-;;;; , ebnf::|IRIREF| (CONS ebnf::|PNAME_LN| URI-STRING) , (CONS
-;;;; ebnf::|PNAME_NS| URI-STRING) , ebnf::|RDFLiteral| ,
-;;;; ebnf::|BooleanLiteral| , ebnf::|NumericLiteral|
-  (if (consp match)
-      ;; it must be something url-like, and the cdr is the uri
-      (jsown:new-js ("type" "uri") ("value" (cdr match)))
-      (case (sparql-parser:match-term match)
-        (ebnf::|IRIREF| (jsown:new-js
-                          ("type" "uri")
-                          ("value" (sparql-manipulation:uri-unwrap-marks (terminal-match-string match)))))
-        (ebnf::|RDFLiteral|
-         ;; we can extract all cases by destructuring
-         (destructuring-bind (ebnf-value-string &optional langtag-or-hathat hathat-iri)
-             (sparql-parser:match-submatches match)
-           ;; TODO: ensure hathatiri has an expandad iri in its primitive string when expanding if it is a prefixed name
-           (let ((value-string (sparql-inspection:ebnf-string-real-string ebnf-value-string))
-                 (langtag-or-hathat-string (and langtag-or-hathat
-                                                (not hathat-iri)
-                                                (terminal-match-string langtag-or-hathat)))
-                 (hathat-iri-string (and hathat-iri
-                                         (sparql-inspection:rdf-literal-datatype match))))
-             (cond (hathat-iri (jsown:new-js
-                                ("value" value-string)
-                                ("datatype" hathat-iri-string)
-                                ("type" "literal")))
-                   (langtag-or-hathat ; must be langtag
-                    (jsown:new-js
-                      ("value" value-string)
-                      ("xml:lang" (subseq langtag-or-hathat-string 1)) ; cut off @
-                      ("type" "literal")))
-                   (t (jsown:new-js
-                        ("value" value-string)
-                        ("type" "literal")))))))
-        (ebnf::|BooleanLiteral| (jsown:new-js
-                                  ("value" (sparql-parser:scanned-token-effective-string (sparql-inspection:first-found-scanned-token match))) ; TODO: convert to current interpretation of boolean, a limited set of values are realstic here and this is a good place to convert.
-                                  ("datatype" "http://www.w3.org/2001/XMLSchema#boolean")
-                                  ("type" "literal")))
-        (ebnf::|NumericLiteral| (destructuring-bind (number-type . number-string)
-                                    (sparql-inspection:ebnf-numeric-literal-extract-info match)
-                                  (jsown:new-js
-                                    ("value" number-string)
-                                    ("datatype"
-                                     (ecase number-type
-                                       (:integer "http://www.w3.org/2001/XMLSchema#integer")
-                                       (:decimal "http://www.w3.org/2001/XMLSchema#decimal")
-                                       (:double "http://www.w3.org/2001/XMLSchema#double")))
-                                    ("type" "literal"))))
-        (ebnf::|VAR1| (error "Cannot make binding for variable"))
-        (ebnf::|VAR2| (error "Cannot make binding for variable"))
-        (otherwise (error "Unknown match ~A encountered to convert to binding." match)))))
-
 ;;;; This is the entrypoint for executing update queries
 ;;;;
 ;;;; This file coordinates the detection of changed quads, informing any
@@ -170,7 +35,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
   (if (consp quad-object)
       (sparql-manipulation:make-iri (quad-term-uri quad-object)) ; in case of a prefixed uri
       (case (sparql-parser:match-term quad-object)
-        (ebnf::|IRIREF| (make-nested-match `(ebnf::|iri| ,quad-object)))
+        (ebnf::|IRIREF| (sparql-manipulation:make-nested-match `(ebnf::|iri| ,quad-object)))
         (otherwise quad-object))))
 
 (defun make-quads-not-triples (quads)
@@ -181,7 +46,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
                       (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
                       (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
                       (object-match (quad-object-as-match-term (getf quad :object))))
-                 (make-nested-match
+                 (sparql-manipulation:make-nested-match
                   `(ebnf::|TriplesTemplate|
                           (ebnf::|TriplesSameSubject|
                                  (ebnf::|VarOrTerm| (ebnf::|GraphTerm| ,subject-iri))
@@ -202,7 +67,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
                                         (quad-term-uri (getf quad :graph))))
           for graph = (quad-term-uri (getf (first graphed-group) :graph))
           collect
-          (make-nested-match
+          (sparql-manipulation:make-nested-match
            `(ebnf::|QuadsNotTriples|
                    "GRAPH"
                    (ebnf::|VarOrIri| ,(sparql-manipulation:make-iri graph))
@@ -212,7 +77,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
 
 (defun insert-data-query-from-quads-not-triples (quads-not-triples) 
  "Constructs an ebnf:|InsertData| query to store the list of quads-not-triples."
-  (let ((match (make-nested-match
+  (let ((match (sparql-manipulation:make-nested-match
                 `(ebnf::|UpdateUnit|
                         (ebnf::|Update|
                                ebnf::|Prologue|
@@ -227,7 +92,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
 
 (defun delete-data-query-from-quads-not-triples (quads-not-triples)
   "Constructs an ebnf:|InsertData| query to store the list of quads-not-triples."
-  (let ((match (make-nested-match
+  (let ((match (sparql-manipulation:make-nested-match
                 `(ebnf::|UpdateUnit|
                         (ebnf::|Update|
                                ebnf::|Prologue|
@@ -256,7 +121,7 @@ This is the inverse of binding-as-match and can be used to create delta messages
   "Constructs a SPARQL query for the combination of QUADS-TO-DELETE and QUADS-TO-INSERT."
   (let ((delete-quads-not-triples (make-quads-not-triples quads-to-delete))
         (insert-quads-not-triples (make-quads-not-triples quads-to-insert)))
-    (let ((match (make-nested-match
+    (let ((match (sparql-manipulation:make-nested-match
                   `(ebnf::|UpdateUnit|
                           (ebnf::|Update|
                                  ebnf::|Prologue|
@@ -389,7 +254,7 @@ same value."
                    (ebnf::|DataBlockValue| ,(quad-object-as-match-term a))
                    (ebnf::|DataBlockValue| ,(quad-object-as-match-term b))
                    ")"))))
-    (make-nested-match
+    (sparql-manipulation:make-nested-match
      `(ebnf::|QueryUnit|
              (ebnf::|Query|
                     ebnf::|Prologue|
@@ -528,7 +393,7 @@ based on the supplied arguments and the state in the triplestore.
                    (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
                    (ebnf::|DataBlockValue| ,(quad-object-as-match-term (getf quad :object)))
                    ")"))))
-    (make-nested-match
+    (sparql-manipulation:make-nested-match
      `(ebnf::|QueryUnit|
              (ebnf::|Query|
                     ebnf::|Prologue|
@@ -622,46 +487,7 @@ based on the supplied arguments and the state in the triplestore.
                 do (push quad non-existing-quads))))
     (values existing-quads non-existing-quads)))
 
-(defun filled-in-patterns (patterns bindings)
-  "Creates a set of QUADS for the given patterns and bindings.
 
-Any pattern which has no variables will be returned as is.  Any pattern
-with bindings will be filled in for each discovered binding.  If any
-variables are missing this will not lead to a pattern."
-  (flet ((pattern-has-variables (pattern)
-           (loop for (place match) on pattern by #'cddr
-                 when (and (sparql-parser:match-p match)
-                           (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|))
-                   do
-                      (progn
-                        ;; TODO: this should be integrated with *error-on-unwritten-data*.  If the quad doesn't exist
-                        ;; _only_ because the graph is still a variable, then we would want to error on this case.
-                        ;; (when (eq place :graph)
-                        ;;   (format t "~&WARNING: Quad pattern contains graph variable ~A which is not supported, quad will be dropped ~A~%" match pattern))
-                        (return t))))
-         (fill-in-pattern (pattern bindings)
-           (loop for (place match) on pattern by #'cddr
-                 if (and (sparql-parser:match-p match)
-                         (sparql-parser:match-term-p match 'ebnf::|VAR1| 'ebnf::|VAR2|)
-                         (jsown:keyp bindings (subseq (terminal-match-string match) 1))) ; binding contains key (OPTIONAL in queries)
-                   append (list place
-                                (let ((solution (jsown:val bindings (subseq (terminal-match-string match) 1))))
-                                  (if solution
-                                      (binding-as-match solution)
-                                      match)))
-                 else
-                   append (list place match))))
-    (let* ((patterns-without-bindings (remove-if #'pattern-has-variables patterns))
-           (patterns-with-bindings (set-difference patterns patterns-without-bindings :test #'eq)))
-      (concatenate
-       'list
-       patterns-without-bindings        ; pattern without binding is quad
-       (loop for binding in bindings
-             append
-             (loop for pattern in patterns-with-bindings
-                   for filled-in-pattern = (fill-in-pattern pattern binding)
-                   unless (pattern-has-variables filled-in-pattern)
-                     collect filled-in-pattern))))))
 
 (defparameter *hands-off-literal-datatypes-set*
   (support:make-hash-table-set

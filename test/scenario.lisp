@@ -65,7 +65,7 @@
             (= (length (sparql-parser:match-submatches (quad:object quad))) 3))
            (let ((new-quad (quad:copy quad))) ; make new quad
              (setf (quad:object new-quad)
-                   (handle-update-unit::make-nested-match
+                   (sparql-manipulation:make-nested-match
                     `(ebnf::|RDFLiteral| ,(first (sparql-parser:match-submatches (quad:object quad))))))
              ;; use the new quad
              (quad-transformations:update new-quad))
@@ -98,7 +98,7 @@
      ;;                           3))
      ;;                         (let ((new-quad (quad:copy quad)))
      ;;                           (setf (quad:object new-quad)
-     ;;                                 (handle-update-unit::make-nested-match
+     ;;                                 (sparql-manipulation:make-nested-match
      ;;                                  `(ebnf::|RDFLiteral|
      ;;                                          ,(first
      ;;                                            (sparql-parser:match-submatches

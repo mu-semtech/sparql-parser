@@ -238,7 +238,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
                       (insert-patterns (info-insert-quad-patterns *info*))
                       (expanded-group-graph-pattern
                         (if (info-graph *info*)
-                            (handle-update-unit::make-nested-match
+                            (sparql-manipulation:make-nested-match
                              `(ebnf::|GroupGraphPattern|
                                      "{"
                                      (ebnf::|GroupGraphPatternSub|
@@ -294,7 +294,7 @@ detect-quads-processing-handlers::|VarOrTerm|."
         )
     (sparql-parser:make-sparql-ast
      :string sparql-parser:*scanning-string*
-     :top-node (handle-update-unit::make-nested-match
+     :top-node (sparql-manipulation:make-nested-match
                 `(ebnf::|QueryUnit|
                         (ebnf::|Query|
                                (ebnf::|Prologue|
