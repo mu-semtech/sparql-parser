@@ -1,6 +1,6 @@
 (in-package :quad)
 
-(deftype quad (cons))
+(deftype quad () '(cons))
 
 ;;;; Helper functions for processing quads
 
@@ -10,7 +10,7 @@
         :predicate predicate
         :object object
         :graph graph))
-(defun copy-quad (quad &key (subject (subject quad)) (predicate (predicate quad)) (object (object quad)) (graph (graph quad)))
+(defun copy-quad (quad &key (subject (quad-subject quad)) (predicate (quad-predicate quad)) (object (quad-object quad)) (graph (quad-graph quad)))
   "Copies a quad."
   (make-quad :subject subject
              :predicate predicate
@@ -53,14 +53,14 @@
   "Gets string representation for one of `QUAD-GRAPH' `QUAD-SUBJECT' `QUAD-PREDICATE' or `QUAD-OBJECT'."
   (typecase quad-part
     (cons (sparql-manipulation:uri-wrap-marks (cdr quad-part)))
-    (nil "UNDEF")
+    (null "UNDEF")
     (sparql-parser:match (sparql-generator:write-valid-match quad-part))
     ;; NOTE: following case should not happen but we don't want to throw real errors for a log.
     (t "ERROR")))
 
 ;; We can bind a bunch of functions automatically so we drop "-?quad-?"
 ;; from the symbol for nicer `quad:predicate` usage externally
-(loop for key in '(make-quad copy-quad quad-subject quad-predicate quad-object quad-graph)
+(loop for key in '(make-quad copy-quad quad-subject quad-predicate quad-object quad-graph quad-part-as-string)
       for name = (symbol-name key)
       for short-name = (cl-ppcre:regex-replace (format nil "-?~A-?" (package-name *package*)) name "")
       for short-symbol = (intern short-name *package*)
