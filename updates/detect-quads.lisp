@@ -313,16 +313,6 @@ detect-quads-processing-handlers::|VarOrTerm|."
                                       (ebnf::|SolutionModifier|))
                                (ebnf::|ValuesClause|)))))))
 
-(defun quad-term-uri (quad-term)
-  "Yields the quad-term's URI representation if that exists."
-  ;; TODO: move all use of quad-term-uri to quad-term:uri
-  (quad-term:uri quad-term))
-
-(defun quad-term-uri= (quad-term uri-string)
-  "Checks whether uri-string is the same as the quad-term."
-  ;; TODO: move all use of quad-term-uri= to quad-term:uri=
-  (quad-term:uri= quad-term uri-string))
-
 ;;;;;;;;;;;
 ;;; helpers
 ;;;

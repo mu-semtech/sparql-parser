@@ -336,9 +336,7 @@
   (:export
    #:operation-type
    #:operation-data
-   #:operation-data-subfield
-   #:quad-term-uri=
-   #:quad-term-uri))
+   #:operation-data-subfield))
 
 (defpackage #:quad-term
   (:use :common-lisp)
@@ -358,7 +356,8 @@
    #:quad-predicate
    #:quad-object
    #:quad-graph
-   #:make #:copy #:subject #:predicate #:object #:graph
+   #:quad-part-as-string
+   #:make #:copy #:subject #:predicate #:object #:graph #:part-as-string
    #:quad
    #:to-human-string))
 
@@ -375,7 +374,6 @@
   (:use :common-lisp)
   (:import-from #:detect-quads
                 #:operation-data-subfield
-                #:quad-term-uri
                 #:operation-type
                 #:operation-data)
   (:import-from #:sparql-parser 

@@ -28,6 +28,10 @@
                (:file "connection/client")
                ;; caching
                (:file "cache/types")
+               ;; support quads
+               (:file "updates/quad-term")
+               (:file "updates/quad")
+               (:file "updates/quad-transformations")
                ;; access control definitions
                (:file "acl/prefix")
                (:file "acl/acl")
@@ -41,9 +45,6 @@
                ;; (:file "reasoner/reasoner")
                ;; updates
                (:file "updates/framework")
-               (:file "updates/quad-term")
-               (:file "updates/quad")
-               (:file "updates/quad-transformations")
                (:file "updates/detect-quads")
                (:file "updates/quad-operations-to-quads")
                (:file "updates/binding-match-transformation")

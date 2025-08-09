@@ -21,8 +21,8 @@ Current implementation will try to query even if over this size.")
   (labels ((make-triples-template-match (graphed-group)
              (when graphed-group
                (let* ((quad (first graphed-group))
-                      (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
-                      (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
+                      (subject-iri (sparql-manipulation:make-iri (quad-term:uri (getf quad :subject))))
+                      (predicate-iri (sparql-manipulation:make-iri (quad-term:uri (getf quad :predicate))))
                       (object-match (quad-term:object-as-match (getf quad :object))))
                  (sparql-manipulation:make-nested-match
                   `(ebnf::|TriplesTemplate|
@@ -42,8 +42,8 @@ Current implementation will try to query even if over this size.")
     (loop for graphed-group
             in (support:group-by quads #'string=
                                  :key (lambda (quad)
-                                        (quad-term-uri (getf quad :graph))))
-          for graph = (quad-term-uri (getf (first graphed-group) :graph))
+                                        (quad-term:uri (getf quad :graph))))
+          for graph = (quad-term:uri (getf (first graphed-group) :graph))
           collect
           (sparql-manipulation:make-nested-match
            `(ebnf::|QuadsNotTriples|
@@ -142,8 +142,8 @@ NOTE: this function works without interaction with the backing triplestore."
             (if (eq key :object)
                 (sparql-inspection:match-equal-p (quad-term:object-as-match (getf a :object))
                                                  (quad-term:object-as-match (getf b :object)))
-                (string= (quad-term-uri (getf a key))
-                         (quad-term-uri (getf b key)))))
+                (string= (quad-term:uri (getf a key))
+                         (quad-term:uri (getf b key)))))
          keys))
 
 (defun remove-database-value-overlaps (quads-to-delete existing-quads-to-insert)
@@ -159,8 +159,8 @@ being the same as per triplestore."
                     for index from 0
                     append (loop for insert-quad in existing-quads-to-insert
                                  ;; we can detect uri's perfectly, only compare subject, predicate, graph
-                                 when (every (lambda (key) (string= (quad-term-uri (getf delete-quad key))
-                                                                    (quad-term-uri (getf insert-quad key))))
+                                 when (every (lambda (key) (string= (quad-term:uri (getf delete-quad key))
+                                                                    (quad-term:uri (getf insert-quad key))))
                                              '(:predicate :subject :graph))
                                    collect (list index
                                                  (alter-quad-to-string-file-uris delete-quad)
@@ -366,9 +366,9 @@ based on the supplied arguments and the state in the triplestore.
                    ,(sparql-manipulation:make-match-up-to-scanned-token
                      :string (format nil "~A" index)
                      :match-list '(ebnf::|DataBlockValue| ebnf::|NumericLiteral| ebnf::|NumericLiteralUnsigned| ebnf::|INTEGER|))
-                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :graph))))
-                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
-                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term:uri (getf quad :graph))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term:uri (getf quad :subject))))
+                   (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term:uri (getf quad :predicate))))
                    (ebnf::|DataBlockValue| ,(quad-term:object-as-match (getf quad :object)))
                    ")"))))
     (sparql-manipulation:make-nested-match
@@ -579,9 +579,9 @@ Two values are returned, the first is the updated quad and the second is truethy
 Currently uses the URI of graph subject and predicate as a key because object may incorrectly overlap."
   (flet ((quad-hash-key (quad)
            (format nil "~A ~A ~A"
-                   (quad-term-uri (quad:graph quad))
-                   (quad-term-uri (quad:subject quad))
-                   (quad-term-uri (quad:predicate quad)))))
+                   (quad-term:uri (quad:graph quad))
+                   (quad-term:uri (quad:subject quad))
+                   (quad-term:uri (quad:predicate quad)))))
     (let ((hash (make-hash-table :test 'equal)))
       (dolist (quad-array quad-arrays)
         (loop for quad across quad-array
