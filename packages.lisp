@@ -96,7 +96,8 @@
            #:ebnf-numeric-literal-extract-info
            #:ebnf-simple-string-p
            #:nth-submatch
-           #:rdf-literal-lang))
+           #:rdf-literal-lang
+           #:map-matches))
 
 (defpackage #:sparql-manipulation
   (:use :common-lisp)
@@ -105,6 +106,8 @@
                 #:match-submatches
                 #:match-term
                 #:match-p)
+  (:import-from #:sparql-inspection
+                #:map-matches)
   (:export #:remove-dataset-clauses #:remove-graph-graph-patterns #:add-from-graphs #:replace-iriref
            #:add-default-base-decl-to-prologue
            #:loop-matches

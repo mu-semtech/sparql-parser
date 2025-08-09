@@ -112,7 +112,7 @@ Assumes URI is not wrapped."
   "Unwraps a URI's < and > marks.
 
 Assumes URI-STRING is wrapped."
-  (subseq uri-string 1 (1- (length uri-string))))
+  (sparql-inspection::uri-unwrap-marks uri-string))
 
 (defun sparql-escape-string (string)
   "Generate an escaped SPARQL string for triple double quotes."
@@ -193,26 +193,6 @@ Behaviour when supplying both datatype-match and langtag-match is unspecified."
          (setf (sparql-parser:match-submatches ,match-var)
                (let ((,submatches-var (sparql-parser:match-submatches ,match-var)))
                  ,@body))))))
-
-(defun map-matches* (match functor)
-  "Maps over each submatch of MATCH with FUNCTOR, replacing it with the
-list of matches yielded by the function."
-  (setf (sparql-parser:match-submatches match)
-        (loop for submatch in (sparql-parser:match-submatches match)
-              if (match-p submatch)
-                append (prog1 (let ((result (funcall functor submatch)))
-                                (if (listp result)
-                                    result
-                                    (list result)))
-                         (map-matches* submatch functor))
-              else
-                collect submatch))
-  match)
-
-(defmacro map-matches ((var) match &body body)
-  "Macro variant of MAP-MATCHES*."
-  ;; This variant may allow for further optimizations down the line.
-  `(map-matches* ,match (lambda (,var) ,@body)))
 
 (defun remove-clause (sparql-ast term)
   "Removes any match with MATCH-TERM TERM from MATCH."

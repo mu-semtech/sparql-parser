@@ -1,5 +1,30 @@
 (in-package :sparql-inspection)
 
+(defun uri-unwrap-marks (uri-string)
+  ;; NOTE: this should belong in sparql-manipulation but that is loaded just after this file is.  We need this function
+  ;; here and we don't want it to warn.  We don't export it from this package so we don't confuse.
+  (subseq uri-string 1 (1- (length uri-string))))
+
+(defun map-matches* (match functor)
+  "Maps over each submatch of MATCH with FUNCTOR, replacing it with the
+list of matches yielded by the function."
+  (setf (sparql-parser:match-submatches match)
+        (loop for submatch in (sparql-parser:match-submatches match)
+              if (sparql-parser:match-p submatch)
+                append (prog1 (let ((result (funcall functor submatch)))
+                                (if (listp result)
+                                    result
+                                    (list result)))
+                         (map-matches* submatch functor))
+              else
+                collect submatch))
+  match)
+
+(defmacro map-matches ((var) match &body body)
+  "Macro variant of MAP-MATCHES*."
+  ;; This variant may allow for further optimizations down the line.
+  `(map-matches* ,match (lambda (,var) ,@body)))
+
 (defun first-found-scanned-token (match)
   "Optimistic search for a scanned token in submatches."
   (support:depth-first-search
@@ -31,7 +56,7 @@ Behaviour when not enough children are available is currently unspecified."
 (defun rdf-literal-datatype (ebnf-rdfliteral-match)
   "Yields the URI type of an ebnf::|RDFLiteral|"
   (when (= 3 (length (match-submatches ebnf-rdfliteral-match)))
-    (sparql-manipulation:uri-unwrap-marks
+    (uri-unwrap-marks
      (sparql-parser:scanned-token-effective-string
       (sparql-inspection:first-found-scanned-token
        (third (match-submatches ebnf-rdfliteral-match)))))))

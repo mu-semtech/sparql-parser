@@ -21,8 +21,8 @@
                (:file "sparql-ast/terminals")
                (:file "sparql-ast/parser")
                (:file "sparql-ast/generator") ; output manipulated AST
-               (:file "sparql-ast/manipulation")
                (:file "sparql-ast/inspection") ; TODO: refactor so inspection contains everything manipulation needs and move it earlier
+               (:file "sparql-ast/manipulation")
                ;; sparql http - part 1
                (:file "connection/globals")
                (:file "connection/client")
