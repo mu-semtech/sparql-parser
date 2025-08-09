@@ -41,6 +41,7 @@
                ;; (:file "reasoner/reasoner")
                ;; updates
                (:file "updates/framework")
+               (:file "updates/quad-term")
                (:file "updates/quad")
                (:file "updates/quad-transformations")
                (:file "updates/detect-quads")

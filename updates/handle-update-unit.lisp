@@ -14,29 +14,7 @@ Current implementation will try to query even if over this size.")
 ;;;; as well as informing other units that an update has occurred
 ;;;; (namely the delta notifier and anything to clear caches).
 
-(defun quad-object-as-match-term (quad-object)
-  ;; NOTE: this was the original implementation TODO: Verify a
-  ;; quad-object will always yield a iri or one of the following terms
-  ;; and remove this old commented code or support other forms.
-  ;; 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|
-  ;; 'ebnf::|iri|
 
-  ;; (if (and (sparql-parser:match-p quad-object)
-  ;;          (sparql-parser:match-term-p quad-object 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|
-  ;;                                      ;; 'ebnf::string_literal1 'ebnf::string_literal2 'ebnf::string_literal_long1 'ebnf::string_literal_long2
-  ;;                                      ))
-  ;;     quad-object
-  ;;     (if nil
-  ;;         ;; (and (listp quad-object)
-  ;;         ;;      (find (car quad-object)
-  ;;         ;;            (list 'ebnf::|RDFLiteral| 'ebnf::|BooleanLiteral| 'ebnf::|NumericLiteral| 'ebnf::|String|)))
-  ;;         quad-object
-  ;;         (sparql-manipulation:make-iri (quad-term-uri quad-object))))
-  (if (consp quad-object)
-      (sparql-manipulation:make-iri (quad-term-uri quad-object)) ; in case of a prefixed uri
-      (case (sparql-parser:match-term quad-object)
-        (ebnf::|IRIREF| (sparql-manipulation:make-nested-match `(ebnf::|iri| ,quad-object)))
-        (otherwise quad-object))))
 
 (defun make-quads-not-triples (quads)
   "Constructs a list of ebnf:|QuadsNotTriples| statements for the given set of quads."
@@ -45,7 +23,7 @@ Current implementation will try to query even if over this size.")
                (let* ((quad (first graphed-group))
                       (subject-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
                       (predicate-iri (sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
-                      (object-match (quad-object-as-match-term (getf quad :object))))
+                      (object-match (quad-term:object-as-match (getf quad :object))))
                  (sparql-manipulation:make-nested-match
                   `(ebnf::|TriplesTemplate|
                           (ebnf::|TriplesSameSubject|
@@ -162,8 +140,8 @@ NOTE: this function works without interaction with the backing triplestore."
   ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
   (every (lambda (key)
             (if (eq key :object)
-                (sparql-inspection:match-equal-p (quad-object-as-match-term (getf a :object))
-                                                 (quad-object-as-match-term (getf b :object)))
+                (sparql-inspection:match-equal-p (quad-term:object-as-match (getf a :object))
+                                                 (quad-term:object-as-match (getf b :object)))
                 (string= (quad-term-uri (getf a key))
                          (quad-term-uri (getf b key)))))
          keys))
@@ -251,8 +229,8 @@ same value."
                    ,(sparql-manipulation:make-match-up-to-scanned-token
                      :string (format nil "~A" index)
                      :match-list '(ebnf::|DataBlockValue| ebnf::|NumericLiteral| ebnf::|NumericLiteralUnsigned| ebnf::|INTEGER|))
-                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term a))
-                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term b))
+                   (ebnf::|DataBlockValue| ,(quad-term:object-as-match a))
+                   (ebnf::|DataBlockValue| ,(quad-term:object-as-match b))
                    ")"))))
     (sparql-manipulation:make-nested-match
      `(ebnf::|QueryUnit|
@@ -391,7 +369,7 @@ based on the supplied arguments and the state in the triplestore.
                    (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :graph))))
                    (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :subject))))
                    (ebnf::|DataBlockValue| ,(sparql-manipulation:make-iri (quad-term-uri (getf quad :predicate))))
-                   (ebnf::|DataBlockValue| ,(quad-object-as-match-term (getf quad :object)))
+                   (ebnf::|DataBlockValue| ,(quad-term:object-as-match (getf quad :object)))
                    ")"))))
     (sparql-manipulation:make-nested-match
      `(ebnf::|QueryUnit|

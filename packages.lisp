@@ -340,6 +340,16 @@
    #:quad-term-uri=
    #:quad-term-uri))
 
+(defpackage #:quad-term
+  (:use :common-lisp)
+  (:export
+   #:quad-term-uri
+   #:quad-term-uri=
+   #:quad-term-object-as-match
+   #:uri
+   #:uri=
+   #:object-as-match))
+
 (defpackage #:quad
   (:use :common-lisp)
   (:export

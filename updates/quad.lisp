@@ -71,3 +71,4 @@
         do
            (setf (fdefinition `(setf ,short-symbol))
                  (fdefinition `(setf ,key))))
+

@@ -315,19 +315,13 @@ detect-quads-processing-handlers::|VarOrTerm|."
 
 (defun quad-term-uri (quad-term)
   "Yields the quad-term's URI representation if that exists."
-  (cond ((consp quad-term)
-         (cdr quad-term))
-        ((sparql-parser:match-term-p quad-term 'ebnf::|IRIREF|)
-         (let ((str (terminal-match-string quad-term)))
-           (subseq str 1 (1- (length str)))))))
+  ;; TODO: move all use of quad-term-uri to quad-term:uri
+  (quad-term:uri quad-term))
 
 (defun quad-term-uri= (quad-term uri-string)
   "Checks whether uri-string is the same as the quad-term."
-  ;; The quad-uri-string is wrapped in < and > but the uri-string is
-  ;; not, so we need to unwrap.
-  (let* ((quad-uri-string (quad-term-uri quad-term)))
-    (if quad-uri-string
-        (string= uri-string quad-uri-string))))
+  ;; TODO: move all use of quad-term-uri= to quad-term:uri=
+  (quad-term:uri= quad-term uri-string))
 
 ;;;;;;;;;;;
 ;;; helpers
