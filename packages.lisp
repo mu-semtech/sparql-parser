@@ -320,7 +320,9 @@
            #:batch-create-full-solution-for-select-query
            #:expand-bindings
            #:with-increased-max-query-time-for-retries
-           #:ensure-endpoints-available))
+           #:ensure-endpoints-available
+           #:batch-create-full-solution-for-construct-query
+           #:standardize-construct-bindings))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)
@@ -379,6 +381,10 @@
   (:import-from #:sparql-parser 
                 #:make-match
                 #:terminal-match-string)
+  (:import-from #:sparql-manipulation
+                #:make-iri
+                #:iriref
+                #:make-nested-match)
   (:export
    #:unwritten-data-error))
 

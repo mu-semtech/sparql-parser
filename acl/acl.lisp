@@ -348,16 +348,16 @@ be redistributed to that location."
            ;; search for failing constraints and invert result
            (not
             (do-graph-constraint (constraint) (position :value value)
-              (unless (detect-quads:quad-term-uri= (getf quad position) value)
+              (unless (quad-term:uri= (getf quad position) value)
                 (return t)))))
          (quad-matches-constraint (quad constraint)
            (not (do-graph-constraint (constraint) (position type value)
                   (case type
-                    (:value (unless (detect-quads:quad-term-uri= (getf quad position) value)
+                    (:value (unless (quad-term:uri= (getf quad position) value)
                               (return t)))
-                    (:not-value (when (detect-quads:quad-term-uri= (getf quad position) value)
+                    (:not-value (when (quad-term:uri= (getf quad position) value)
                                   (return t)))
-                    (:type (unless (uri-has-type (detect-quads:quad-term-uri (getf quad position))
+                    (:type (unless (uri-has-type (quad-term:uri (getf quad position))
                                                  value)
                              (return t)))
                     (otherwise
@@ -370,7 +370,7 @@ be redistributed to that location."
            ;; inverse logic for fast exiting
            (not (loop for (k v) on quad by #'cddr
                       unless (eq k :graph)
-                        when (not (detect-quads:quad-term-uri v))
+                        when (not (quad-term:uri v))
                           do (return t))))
          (mark-quad-as-treated (dispatched-quad)
            (setf (dispatched-quad-treated-p dispatched-quad) t)))
@@ -387,12 +387,12 @@ be redistributed to that location."
             ;; Initialize type index with all types mentioned in this set of quads
             (loop for dispatched-quad across dispatched-quads-array
                   for quad = (dispatched-quad-quad dispatched-quad)
-                  for pred-string = (detect-quads:quad-term-uri (getf quad :predicate))
+                  for pred-string = (quad-term:uri (getf quad :predicate))
                   when (and pred-string
                             (s-p-o-is-uri-p quad)
-                            (detect-quads:quad-term-uri= (getf quad :predicate) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
-                    do (set-known-type (detect-quads:quad-term-uri (getf quad :subject))
-                                       (detect-quads:quad-term-uri (getf quad :object))
+                            (quad-term:uri= (getf quad :predicate) "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
+                    do (set-known-type (quad-term:uri (getf quad :subject))
+                                       (quad-term:uri (getf quad :object))
                                        t))
             ;; Find all extra knowledge we need to have on the quad's types
 
@@ -405,7 +405,7 @@ be redistributed to that location."
                       for quad = (dispatched-quad-quad dispatched-quad)
                       when (all-value-constraints-hold-p quad constraint)
                         do (do-graph-constraint (constraint) (position :type value)
-                             (alexandria:when-let ((uri (detect-quads:quad-term-uri (getf quad position))))
+                             (alexandria:when-let ((uri (quad-term:uri (getf quad position))))
                                ;; ask for information on the types
                                (ensure-future-type-known uri value))))))
             (fetch-types-to-fetch)

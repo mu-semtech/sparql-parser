@@ -229,6 +229,35 @@ and a different value for type."
                            new-jsown-object)))))))
   bindings)
 
+(defun standardize-construct-bindings (bindings)
+  "Destructively converts bindings into a more standardized form.
+
+Could be integrated into expand-bindings but this could just provide a standard form.
+
+Virtuoso yields various forms depending on how you ask it something and it's not always the same as the SPARQL
+standard (which may not exist).  This function converts the forms we know of today to forms which closely match the
+SPARQL SELECT standard.  Rules may be extended as we encounter more forms."
+  ;; We only care about the object portion because the select part seems to be right at all times.
+
+  ;; We may expand into multiple forms even when it's not intended.
+  (dolist (binding bindings)
+    ;; cases
+    ;; 1. key xml:lang vs lang (cast to "xml:lang")
+    ;; 2. type typed-literal vs literal (cast to "uri" or "literal")
+    ;; 3. number value being a raw value instead of a string
+    (let ((object (jsown:val binding "o")))
+      (when (jsown:keyp object "lang")
+        (setf (jsown:val object "xml:lang")
+                    (jsown:val object "lang"))
+        (jsown:remkey object "lang"))
+      (when (string= (jsown:val object "type")
+                     "typed-literal")
+        (setf (jsown:val object "type") "literal"))
+      (unless (stringp (jsown:val object "value"))
+        (setf (jsown:val object "value")
+              (format nil "~A" (jsown:val object "value"))))))
+  bindings)
+
 (defun bindings (query-result &key (convert-string-uris t) virtuoso-p construct-p)
   "Converts the string representation of the SPARQL query result into a set
 of JSOWN compatible BINDINGS.
@@ -273,6 +302,11 @@ them into a set of JSOWN compatible BINDINGS."
            ;; verify further.
            (query-string (sparql-generator:write-valid altered-query)))
       (client:bindings (client:query query-string :send-to-single t)))))
+
+(defun batch-create-full-solution-for-construct-query (query &rest args &key (for :read) batch-size usage)
+  "Executes a SPARQL CONSTRUCT query, like `BATCH-CREATE-FULL-SOLUTION-FOR-SELECT-QUERY'."
+  (declare (ignore for batch-size usage))
+  (apply #'batch-create-full-solution-for-select-query query args))
 
 (defmacro batch-map-solutions-for-select-query ((query &rest args &key for batch-size usage) (bindings) &body body)
   "Executes the given operation in batches.

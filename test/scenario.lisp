@@ -59,7 +59,7 @@
        ;; make quad objects which have datatype in uuid specification just strings
        (if (and
             ;; predicate is uuid
-            (string= (detect-quads::quad-term-uri (quad:predicate quad))
+            (string= (quad-term:uri (quad:predicate quad))
                      "http://mu.semte.ch/vocabularies/core/uuid")
             ;; object has datatype
             (= (length (sparql-parser:match-submatches (quad:object quad))) 3))
@@ -390,7 +390,7 @@ this point and likely a redpencil image too.")
                                 (= 3 (length (sparql-parser:match-submatches object)))
                                 (third (sparql-parser:match-submatches object))))
                (datatype-uri (and datatype-match
-                                  (detect-quads::quad-term-uri
+                                  (quad-term:uri
                                    (first
                                     (sparql-parser:match-submatches datatype-match)))))
                (string-value (and (sparql-parser:match-p object)
@@ -555,6 +555,18 @@ this point and likely a redpencil image too.")
        "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay ext:anotherThing \"Another thing\".
+        }"))
+
+    ;; jack can delete (which should use CONSTRUCT)
+    (with-impersonation-for :jack
+      (server:execute-query-for-context
+       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        DELETE {
+          ext:myDisplay ext:score ?score; ext:level ?level.
+        } WHERE {
+          ext:myDisplay a ext:NoNameOrLabel;
+            ext:score ?score;
+            ext:level ?level.
         }"))))
 
 (defun run-delta-only-assertion-tests ()
