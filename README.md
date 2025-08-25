@@ -66,7 +66,7 @@ It basically configures read/write access for everyone for all data on the `http
 ## Tutorials
 ### Specifying groups of users
 sparql-parser does authentication based on user groups. We will later define which groups are allowed to perform which operations on which data. So first we need to define some user groups.
-User groups are defined based on the result of a query involving the users session id. This can look as follows:
+User groups are defined based on the result of a query involving the user's session id. This can look as follows:
 ```lisp
 (supply-allowed-group "super-mega-admins"
   :parameters ("session_group_id" "session_role")
@@ -90,7 +90,11 @@ For this we need a `define-graph` block. This will create a *graph spec* and loo
 ```
 **NOTE**: Any prefixes such as `foaf` and `ext` need to be defined, see [Defining prefixes](#defining-prefixes)
 
-The `define-graph` macro takes a unique identifier, the URI of the graph where the triples are stored, and one or more triple shapes.
+The `define-graph` macro takes:
+- A unique identifier (*here `organization`*)
+- The URI of the graph where the triples are stored (*here `http://mu.semte.ch/graphs/organizations/`*)
+- One or more triple shapes (*here `("foaf:Person" -> _)` and `("foaf:OnlineAccount" x> "ext:password")`*).
+
 The triple shapes have this form: `(<someResourceType> <operator> <somePredicate>)`. `<someResourceType>` and `<somePredicate>` must be a URI string (e.g. `"foaf:Person"`) or a `_` (indicating a wildcard). Triples that match these shapes will go to (or retrieved from) the specified graph (in the above example this is `http://mu.semte.ch/graphs/organizations/`). 
 **Note**: different *graph specs* can specify the same graph URI.
 
@@ -105,15 +109,18 @@ In the above example this means the following:
 - Matches all triples where the subject is of type `foaf:OnlineAccount` and where the predicate is not `ext:password`.
 
 ### Specifying which user groups have access to which graphs
-Finally we need to specify which users are allowed to access which *graph spec*. This is done using the `grant` macro.
+Finally we need to specify which *user groups* are allowed to access which *graph spec*. This is done using the `grant` macro.
 ```lisp
 (grant (read write)
   :to-graph (organization)
   :for-allowed-group "super-mega-admins")
 ```
 This indicates that we allow the users in the `super-mega-admins` group to read and write tripes from and to the `http://mu.semte.ch/graphs/organizations/` graph, according to the triple restrictions in the `organization` *graph spec*.
+
 The only allowed operation values are `read` and `write`.
+
 `:to-graph` allows specifying multiple *graph specs*.
+
 `:for-allowed-group` specifies which user group is allowed to execute the specified operations.
 
 
