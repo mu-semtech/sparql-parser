@@ -63,6 +63,38 @@ Next, add the following contents to the config file mounted in `./config/authori
 
 It basically configures read/write access for everyone for all data on the `http://mu.semte.ch/graphs/public` graph.
 
+## Tutorials
+### Defining prefixes
+In order to use the CURIE (Compact URI) form (e.g. `foaf:name`) we need to define the prefixes first. This is done as follows:
+```lisp
+(define-prefixes
+  :adms "http://www.w3.org/ns/adms#"
+  :cal "http://www.w3.org/2002/12/cal/ical#"
+  :cogs "http://vocab.deri.ie/cogs#"
+  :dcat "http://www.w3.org/ns/dcat#"
+  :ext "http://mu.semte.ch/vocabularies/ext/"
+  :eli "http://data.europa.eu/eli/ontology#")
+```
+### Specifying which triples are accessible from which graphs
+For this we need a `define-graph` block. This looks as follows:
+```lisp
+(define-graph organization ("http://mu.semte.ch/graphs/organizations/")
+  ("foaf:Person" -> _)
+  ("foaf:OnlineAccount" x> "ext:password")
+```
+The `define-graph` macro takes a unique identifier, the URI of the graph where the triples are stored and one or more triple shapes.
+The triple shapes have this form: `(<someResourceType> <operator> <somePredicate>)`. `<someResourceType>` and `<somePredicate>` must be a URI string (e.g. `"foaf:Person"`) or a `_` (indicating a wildcard). Triples that match these shapes will go to (or retrieved from) the specified graph (in the above example this is `http://mu.semte.ch/graphs/organizations/`).
+These are all the possible operators:
+- `T -> p`: Triples where the subject is of type `T` and the predicate is `p`.
+- `T <- p`: Triples where the object is of type `T` and the predicate is `p`.
+- `T x> p`: For triples where the subject is of type `T`, allow every predicate except for `p`.
+- `T <x p`: For triples where the object is of type `T`, allow every predicate except for `p`.
+
+In the above example this means the following:
+- All triples where the subject is of type `foaf:Person` will be written to `http://mu.semte.ch/graphs/organizations/`.
+- All triples where the subject is of type `foaf:OnlineAccount` and where the predicate is not `ext:password` will be written to `http://mu.semte.ch/graphs/organizations/`.
+### Specifying which users have access to which graphs
+
 ## Reference
 ### Existing configurations
 
