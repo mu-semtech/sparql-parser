@@ -508,6 +508,7 @@ The first matching start symbol is returned and no further parsing
 occurs.  If no matches could be found, the ebnf-parse-error with the
 longest match is thrown."
   (declare (ignore max-steps print-intermediate-states print-solution as-ebnf))
+  (setf string (support:inline-unicode-escape-sequences string))
   (setf *scanning-string* string) ; initialize the scanning string early
                                   ; on because it will be shadowed by
                                   ; with-reset-parser-setup-state

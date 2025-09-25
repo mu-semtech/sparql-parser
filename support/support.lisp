@@ -23,22 +23,6 @@
          ;; (break "Results from ~A: ~A~& ran ~A" ',name ,result ',body)
          (apply #'values ,result)))))
 
-(defun embed-unicode-characters (string)
-  "Embeds the unicode characters expressed as #xABCD by their unicode counterpart."
-  (flet ((unicode-to-string (unicode-hex-string)
-           (string
-            (code-char 
-             (parse-integer unicode-hex-string
-                            :radix 16)))))
-    (cl-ppcre:regex-replace-all
-     "#x[0-9A-F]{1,5}"
-     string
-     (lambda (target-string start end match-start match-end reg-starts reg-ends) 
-       (declare (ignore start end reg-starts reg-ends))
-       (let ((start (+ 2 match-start)) ; skip #x
-             (end match-end))
-         (unicode-to-string (subseq target-string start end)))))))
-
 (defmacro match-tree-search ((var) &body ranges)
   "Constructs a tree search for the given set of non-overlapping ranges, with optional breakpoints."
   (let* ((char-ranges
@@ -62,12 +46,23 @@
                    (multiple-value-bind (left right)
                        (split-ranges focussed-ranges)
                      (let ((bound (cdar (last left))))
-                      `(if (char<= ,var ,bound)
-                           ;; we are in left
-                           ,(emit left known-lower-bounds (cons bound known-upper-bounds))
-                           ;; we are in right
-                           ,(emit right (cons bound known-lower-bounds) known-upper-bounds)))))))
+                       `(if (char<= ,var ,bound)
+                            ;; we are in left
+                            ,(emit left known-lower-bounds (cons bound known-upper-bounds))
+                            ;; we are in right
+                            ,(emit right (cons bound known-lower-bounds) known-upper-bounds)))))))
       (emit sorted-ranges nil nil))))
+
+(defun hex-char-p (char)
+  "Truthy iff the given character is a hexadecimal char.
+
+This is between 0-9 or a-f or A-F.
+
+TODO: remove duplication from sparql-ast/terminals.lisp and allow to inline."
+  (match-tree-search (char)
+    (#\0 . #\9)
+    (#\a . #\f)
+    (#\A . #\F)))
 
 (defun group-by (list cmp &key (key #'identity))
   "Groups elements in LIST by CMP returning a new nested list."
@@ -288,3 +283,78 @@ and the keys are therefore in the same order."
 (defun hash-table-set-item-p (item hash-table-set)
   "Yields T if and only if ITEM is part of HASH-TABLE-SET."
   (gethash item hash-table-set))
+
+;;;; unicode
+
+(defun embed-unicode-characters (string)
+  "Embeds the unicode characters expressed as #xABCD by their unicode counterpart."
+  (flet ((unicode-to-string (unicode-hex-string)
+           (string
+             (code-char
+             (parse-integer unicode-hex-string
+                            :radix 16)))))
+    (cl-ppcre:regex-replace-all
+     "#x[0-9A-F]{1,5}"
+     string
+     (lambda (target-string start end match-start match-end reg-starts reg-ends)
+       (declare (ignore start end reg-starts reg-ends))
+       (let ((start (+ 2 match-start)) ; skip #x
+             (end match-end))
+         (unicode-to-string (subseq target-string start end)))))))
+
+(defun inline-unicode-escape-sequences (string)
+  "Inlines unicode \\u and \\U escape sequences.
+
+SPARQL 1.1 19.2 Codepoint Escape Sequences [1] describes \uXXXX and
+\UXXXXXXXX to be used as unicode escape sequence before processing the query.
+This function aims to efficiently execute that replacement.
+
+The range U+0 to U+FFFF is accepted for \\u and U+0 to U+10FFFF for \\U.
+
+[1] https://www.w3.org/TR/sparql11-query/#codepointEscape"
+  (if (or (search "\\u" string :test #'char=)
+          (search "\\U" string :test #'char=))
+      (let (replacements)
+        ;; create a new string with the replaced codepoints
+        (loop for x from 0
+                below (- (length string) 6) ; at least \uXXXX
+              for char across string
+              when (char= char #\\)
+                do
+                   (case+ ((elt string (1+ x)) :test #'char=)
+                     (#\u ;; short form between 0 and FFFF
+                      (when (every (lambda (offset) (hex-char-p (elt string (+ x offset))))
+                                   '(2 3 4 5))
+                        (push (list x
+                                    (+ x 6)
+                                    (parse-integer string
+                                                   :start (+ x 2)
+                                                   :end (+ x 5)
+                                                   :radix 16))
+                              replacements)))
+                     (#\U ;; long form between 0 and 10FFFF
+                      (when (and (every (lambda (offset) (hex-char-p (elt string (+ x offset))))
+                                        '(2 3 4 5 6 7 8 9))
+                                 (char= (elt string (+ x 2)) #\0)
+                                 (char= (elt string (+ x 3)) #\0)
+                                 (or (char= (elt string (+ x 4)) #\0)
+                                     (and (char= (elt string (+ x 4)) #\1)
+                                          (char= (elt string (+ x 5)) #\0))))
+                        (push (list x
+                                    (+ x 10)
+                                    (parse-integer string
+                                                   :start (+ x 2)
+                                                   :end (+ x 10)
+                                                   :radix 16))
+                              replacements)))))
+        (let ((strings nil)
+              (last-end 0))
+          (loop for (start end replacement-char-code) in (reverse replacements)
+                do
+                   (push (subseq string last-end start) strings)
+                   (push (string (code-char replacement-char-code)) strings)
+                   (setf last-end end))
+          (push (subseq string last-end) strings)
+          (apply #'concatenate 'string (reverse strings))))
+      string))
+
