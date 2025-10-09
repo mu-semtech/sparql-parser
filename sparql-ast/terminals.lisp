@@ -1000,10 +1000,10 @@ failure."
                            (symbol (get-symbol-scanner token))
                            (t (error "Could not find scanners for type ~A of token ~A" (type-of token) token)))))
              (lambda (string start)
-               (multiple-value-bind (start end)
+               (multiple-value-bind (match-start match-end)
                    (cl-ppcre:scan scanner string :start start)
-                 (declare (ignore start))
-                 end))
+                 (when (and match-start (= start match-start)) ; matches may match on another newline
+                   match-end)))
              (error "Could not find token scanner for ~A" token)))))
 
 (declaim (ftype (function ((or #-be-cautious base-string #+be-cautious string symbol) fixnum #-be-cautious base-string #+be-cautious string) (or null fixnum)) scan))
