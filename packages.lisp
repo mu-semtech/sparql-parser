@@ -38,7 +38,8 @@
            #:*sha-file-directory*
            #:read-string-file
            #:read-path-as-string
-           #:string-file-uri))
+           #:string-file-uri
+           #:inline-unicode-escape-sequences))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
