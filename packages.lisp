@@ -323,7 +323,8 @@
            #:with-increased-max-query-time-for-retries
            #:ensure-endpoints-available
            #:batch-create-full-solution-for-construct-query
-           #:standardize-construct-bindings))
+           #:standardize-construct-bindings
+           #:clean-up-sparql-results))
 
 (defpackage #:server
   (:use :common-lisp #:connection-globals #:sparql-parser #:support #:client)

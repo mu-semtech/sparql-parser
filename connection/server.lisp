@@ -110,7 +110,8 @@
                  (has-result (not (null raw-result)))
                  (jsown-result (when has-result
                                  (jsown:with-injective-reader
-                                     (jsown:parse raw-result)))))
+                                     (client:clean-up-sparql-results
+                                      (jsown:parse raw-result))))))
             (if has-result
                 (when (jsown:keyp jsown-result "results")
                   ;; expand bindings if they exist
