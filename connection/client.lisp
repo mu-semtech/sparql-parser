@@ -202,15 +202,17 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
   "Cleans sparql results based on parsing or triplestore issues.
 
 Currently translates jsown's ratio's to floats."
-  (dolist (variable-bindings (jsown:filter sparql-results "results" "bindings"))
-    (jsown:do-json-keys (binding-key variable-binding) variable-bindings
-      (let ((value (jsown:val variable-binding "value")))
-        (when (typep value 'number)
-          (setf (jsown:val variable-binding "value")
-                (typecase value
-                  (ratio (format nil "~G"  (coerce value 'float)))
-                  (float (format nil "~G"  (coerce value 'float)))
-                  (otherwise (write-to-string value :readably nil))))))))
+  (let ((bindings (jsown:val-safe (jsown:val-safe sparql-results "results")
+                                  "bindings")))
+    (dolist (variable-bindings bindings)
+      (jsown:do-json-keys (binding-key variable-binding) variable-bindings
+        (let ((value (jsown:val variable-binding "value")))
+          (when (typep value 'number)
+            (setf (jsown:val variable-binding "value")
+                  (typecase value
+                    (ratio (format nil "~G"  (coerce value 'float)))
+                    (float (format nil "~G"  (coerce value 'float)))
+                    (otherwise (write-to-string value :readably nil)))))))))
   sparql-results)
 
 (defun expand-bindings (bindings &key virtuoso-p construct-p)
