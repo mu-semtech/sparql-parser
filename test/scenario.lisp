@@ -48,6 +48,7 @@
          (acl::*access-specifications* nil)
          (acl::*graphs* nil)
          (acl::*rights* nil)
+         (delta-messenger::*delta-handlers* nil)
          (client::*backend* "http://localhost:8891/sparql")
          (client::*log-sparql-query-roundtrip* t)
          (type-cache::*uri-graph-user-type-providers* nil)
