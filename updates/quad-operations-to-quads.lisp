@@ -243,12 +243,16 @@ variables are missing this will not lead to a pattern."
         ;; TODO: Optionally error when INSERT or DELETE template does not contain variables AND no solution in WHERE
         (list :delete-quads filled-in-deletes :insert-quads filled-in-inserts)))))
 
+(defparameter *allow-construct-query-p* t
+  "Can we use a CONSTRUCT query for detecting changes or not.")
+
 (defun modify-operation-to-quads (operation)
   "For any modify operation, we will need to query the triplestore to know what needs to be done.  Some of these may be
 handled through CONSTRUCT queries, some may only be handled through SELECT queries."
   (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
         (delete-patterns (operation-data-subfield operation :delete-patterns)))
-    (if (and (not (connection-globals:mu-auth-sudo))
+    (if (and *allow-construct-query-p*
+             (not (connection-globals:mu-auth-sudo))
              (or (null insert-patterns)
                  (null delete-patterns)))
         ;; handle through CONSTRUCT
