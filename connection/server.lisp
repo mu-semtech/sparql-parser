@@ -61,7 +61,7 @@
                       (setf (jsown:val obj (string key)) value))
              obj)))
     `(200
-      (:content-type "application/sparql-results+json")
+      (:content-type "application/json")
       (,(jsown:to-json
          (jsown:new-js
            ;; how many workers to do we have?
