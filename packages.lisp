@@ -131,7 +131,8 @@
            #:string-literal-string
            #:fold-and-remove-quads-not-triples
            #:make-langtag
-           #:make-nested-match))
+           #:make-nested-match
+           #:deep-replace-optional-with-union))
 
 (defpackage #:type-cache
   (:use :common-lisp)
@@ -385,6 +386,7 @@
                 #:make-match
                 #:terminal-match-string)
   (:import-from #:sparql-manipulation
+                #:deep-replace-optional-with-union
                 #:make-iri
                 #:iriref
                 #:make-nested-match)
