@@ -39,7 +39,8 @@
            #:read-string-file
            #:read-path-as-string
            #:string-file-uri
-           #:inline-unicode-escape-sequences))
+           #:inline-unicode-escape-sequences
+           #:garbage-collection-thread))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
