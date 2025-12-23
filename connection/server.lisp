@@ -200,7 +200,7 @@
                            (,response)))
                      (error (e)
                        (format t "~&Failed to process query, yielding 500.~%") ; more info from inside let
-                       ;; (trivial-backtrace:print-backtrace e)
+                        (trivial-backtrace:print-backtrace e :output *standard-output*)
                        (let ((jsown (jsown:new-js ("status" 500)
                                       ("message" "Failed to process query.")
                                       ("mu-call-id" (mu-call-id))
@@ -218,8 +218,8 @@
                                 :final-worker-id ,(woo.worker::worker-id woo.worker::*worker*))
                                (,(jsown:to-json jsown)))))))))))
       (error (e)
+        (trivial-backtrace:print-backtrace e :output *standard-output*)
         (format t "Could not process query, yielding 500.  ~%~A~%" e)
-        (trivial-backtrace:print-backtrace e)
         `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e)))))))
 
 (defun boot (&key (port 8890) (worker-count 64))
