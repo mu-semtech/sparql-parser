@@ -30,11 +30,11 @@ Next, add the following contents to the config file mounted in `./config/authori
 ;;;;;;;;;;;;;;;;;
 ;;; configuration
 (in-package :client)
-(setf *log-sparql-query-roundtrip* t)
-(setf *backend* "http://triplestore:8890/sparql")
+(setf *log-sparql-query-roundtrip* t) ; change nil to t for logging requests to virtuoso (and the response)
+(setf *backend* "http://triplestore:8890/sparql") ; set this to the correct service name and port (as defined in docker-compose file)
 
 (in-package :server)
-(setf *log-incoming-requests-p* nil)
+(setf *log-incoming-requests-p* nil) ; change nil to t for logging all incoming requests
 
 ;;;;;;;;;;;;;;;;;
 ;;; access rights
