@@ -14,7 +14,7 @@
 If FILENAME is nil, fall back to the \"config\" as default name for the policy file."
   (if (find :docker *features*)
       (concatenate 'string "../config/" (or filename "config") ".nt")
-      "odrl/config.nt"))
+      "test/example-config.nt"))
 
 (defun read-ntriples-file (path)
   "Read the n-triples file `policy-file' and return its contents as a single string."

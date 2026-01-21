@@ -177,6 +177,45 @@
 
      ,@body))
 
+;; TODO: Copied and modified from `with-acl-config', could probably reduce the code duplication
+(defmacro with-odrl-config (&body body)
+  "Executes body with the access rights specification required for these tests."
+  `(let ((prefix::*prefixes* nil)
+         (acl::*access-specifications* nil)
+         (acl::*graphs* nil)
+         (acl::*rights* nil)
+         (delta-messenger::*delta-handlers* nil)
+         (client::*backend* "http://localhost:8891/sparql")
+         (client::*log-sparql-query-roundtrip* t)
+         (type-cache::*uri-graph-user-type-providers* nil)
+         (quad-transformations::*user-quad-transform-functions* nil))
+
+     (type-cache::add-type-for-prefix "http://book-store.example.com/books/" "http://schema.org/Book")
+
+     (quad-transformations:define-quad-transformation (quad method)
+       ;; make quad objects which have datatype in uuid specification just strings
+       (if (and
+            ;; predicate is uuid
+            (string= (quad-term:uri (quad:predicate quad))
+                     "http://mu.semte.ch/vocabularies/core/uuid")
+            ;; object has datatype
+            (= (length (sparql-parser:match-submatches (quad:object quad))) 3))
+           (let ((new-quad (quad:copy quad))) ; make new quad
+             (setf (quad:object new-quad)
+                   (sparql-manipulation:make-nested-match
+                    `(ebnf::|RDFLiteral| ,(first (sparql-parser:match-submatches (quad:object quad))))))
+             ;; use the new quad
+             (quad-transformations:update new-quad))
+           ;; otherwise keep it
+           (quad-transformations:keep)))
+
+     ;; Read and load configuration from example file containing ODRL policy
+     (odrl-config::odrl-to-acl
+      (odrl-config::make-rule-set
+       (odrl-config::load-policy-file)))
+
+     ,@body))
+
 (defmacro with-impersonation-for (user &body body)
   "Impersonates USER."
   `(server::with-call-context
@@ -212,17 +251,14 @@ this point and likely a redpencil image too.")
 ;;;; Scenario
 ;;;; Boot up a container using:
 ;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.2.0-rc.1; dr rm virtuoso
-(defun run-assertion-tests ()
-  (clean-up-graphs)
-  (store-initial-session-data)
+(defun assertion-tests ()
+  "Set of assertions tests for this service."
+  (format t "~&Joll is an administrator.~%")
+  (with-impersonation-for :joll
+    (format t "~&Can add authors.~%")
 
-  (with-acl-config
-    (format t "~&Joll is an administrator.~%")
-    (with-impersonation-for :joll
-      (format t "~&Can add authors.~%")
-
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
 
@@ -235,9 +271,9 @@ this point and likely a redpencil image too.")
             foaf:name \"Daniel Kahneman\".
         }")
 
-      (format t "~&Can add authors. (2)~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (format t "~&Can add authors. (2)~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -254,10 +290,10 @@ this point and likely a redpencil image too.")
             schema:creator authors:daniel.
         }")
 
-      (format t "~&Can add extra book for author.~%")
+    (format t "~&Can add extra book for author.~%")
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -268,10 +304,10 @@ this point and likely a redpencil image too.")
             schema:creator authors:david .
         }")
 
-      (format t "~&Can add extra author to book.~%")
+    (format t "~&Can add extra author to book.~%")
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -282,12 +318,12 @@ this point and likely a redpencil image too.")
           books:abundance schema:creator authors:steven, authors:peter.
         }"))
 
-    (with-impersonation-for :jack
-      (format t "~&Jack is a user.~%")
+  (with-impersonation-for :jack
+    (format t "~&Jack is a user.~%")
 
-      (format t "~&Jack can add a favorite.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (format t "~&Jack can add a favorite.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -298,10 +334,10 @@ this point and likely a redpencil image too.")
           favorites:me ext:hasBook books:gtd, books:fastAndSlow.
         }")
 
-      ;; jack likes all authors of the book Abundance
-      (format t "~&Jack can add conditional favorite authors.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    ;; jack likes all authors of the book Abundance
+    (format t "~&Jack can add conditional favorite authors.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -313,12 +349,12 @@ this point and likely a redpencil image too.")
         } WHERE {
           books:abundance schema:creator ?author.
         }")
-      ;; this data has no place to live, the target must be a foaf:Person and it is a book.
-      (format t "~&Jack can't add books as favorite author.~%")
-      (handler-case
-          (progn
-           (server:execute-query-for-context
-            "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    ;; this data has no place to live, the target must be a foaf:Person and it is a book.
+    (format t "~&Jack can't add books as favorite author.~%")
+    (handler-case
+        (progn
+          (server:execute-query-for-context
+           "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
             PREFIX schema: <http://schema.org/>
             PREFIX authors: <http://example.com/authors/>
             PREFIX books: <http://example.com/books/>
@@ -330,12 +366,12 @@ this point and likely a redpencil image too.")
             } WHERE {
               books:abundance schema:creator/^schema:creator ?book.
             }")
-           (format t "~&ERROR: Oh noes, Jack shouldn't be allowed to do add a book as an author!~%"))
-        (error (e) (declare (ignore e)) t))
-      ;; let's check if jack has favorite authors
-      (format t "~&Jack can ask for favorite authors.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+          (format t "~&ERROR: Oh noes, Jack shouldn't be allowed to do add a book as an author!~%"))
+      (error (e) (declare (ignore e)) t))
+    ;; let's check if jack has favorite authors
+    (format t "~&Jack can ask for favorite authors.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -345,10 +381,10 @@ this point and likely a redpencil image too.")
         ASK {
           favorites:me ext:hasFavoriteAuthor ?author.
         }")      
-      ;; then let's describe the values
-      (format t "~&Jack can describe favorite authors.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    ;; then let's describe the values
+    (format t "~&Jack can describe favorite authors.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -359,11 +395,11 @@ this point and likely a redpencil image too.")
           favorites:me ext:hasFavoriteAuthor ?author.
         }")
 
-      ;; now let's replace the favorite author in two queries rather
-      ;; than in one
-      (format t "~&Jack can execute delete where and insert data in one query.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    ;; now let's replace the favorite author in two queries rather
+    ;; than in one
+    (format t "~&Jack can execute delete where and insert data in one query.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -381,37 +417,37 @@ this point and likely a redpencil image too.")
           }
         }"))
 
-    (with-impersonation-for :joll
-      (quad-transformations:define-quad-transformation (quad method)
-        ;; fix wktLiteral string representation
-        (let* ((object (quad:object quad))
-               (datatype-match (and
-                                (sparql-parser:match-p object)
+  (with-impersonation-for :joll
+    (quad-transformations:define-quad-transformation (quad method)
+      ;; fix wktLiteral string representation
+      (let* ((object (quad:object quad))
+             (datatype-match (and
+                              (sparql-parser:match-p object)
+                              (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                              (= 3 (length (sparql-parser:match-submatches object)))
+                              (third (sparql-parser:match-submatches object))))
+             (datatype-uri (and datatype-match
+                                (quad-term:uri
+                                 (first
+                                  (sparql-parser:match-submatches datatype-match)))))
+             (string-value (and (sparql-parser:match-p object)
                                 (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                                (= 3 (length (sparql-parser:match-submatches object)))
-                                (third (sparql-parser:match-submatches object))))
-               (datatype-uri (and datatype-match
-                                  (quad-term:uri
-                                   (first
-                                    (sparql-parser:match-submatches datatype-match)))))
-               (string-value (and (sparql-parser:match-p object)
-                                  (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                                  (sparql-manipulation:string-literal-string
-                                   (first (sparql-parser:match-submatches object))))))
-          (if (and datatype-uri
-                   (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
-                   (search "https://www.opengis.net/" string-value))
-              (let ((new-quad (quad:copy quad))
-                    (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
-                (setf (quad:object new-quad)
-                      (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
-                (quad-transformations:update new-quad))
-              (quad-transformations:keep))))
+                                (sparql-manipulation:string-literal-string
+                                 (first (sparql-parser:match-submatches object))))))
+        (if (and datatype-uri
+                 (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
+                 (search "https://www.opengis.net/" string-value))
+            (let ((new-quad (quad:copy quad))
+                  (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
+              (setf (quad:object new-quad)
+                    (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
+              (quad-transformations:update new-quad))
+            (quad-transformations:keep))))
 
-      (format t "~&Joll can write a book title with the right URI and no type.~%")
+    (format t "~&Joll can write a book title with the right URI and no type.~%")
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -422,10 +458,10 @@ this point and likely a redpencil image too.")
          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
        }")
 
-      (format t "~&Effective changes contain only the data that was actually changed, which is:~%- insert \"On types too.\"~%- delete \"On types too.\"~%")
+    (format t "~&Effective changes contain only the data that was actually changed, which is:~%- insert \"On types too.\"~%- delete \"On types too.\"~%")
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -436,9 +472,9 @@ this point and likely a redpencil image too.")
          <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
        }")
 
-      (let ((support:*string-max-size* 50))
-        (server:execute-query-for-context
-         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (let ((support:*string-max-size* 50))
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
           PREFIX schema: <http://schema.org/>
           PREFIX authors: <http://example.com/authors/>
           PREFIX books: <http://example.com/books/>
@@ -449,13 +485,13 @@ this point and likely a redpencil image too.")
            <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
          }")
 
-        (format t "~&Matches yield following content for long content: ~%~A"
-                (server:execute-query-for-context
-                 "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+      (format t "~&Matches yield following content for long content: ~%~A"
+              (server:execute-query-for-context
+               "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
                   SELECT ?content WHERE { <http://book-store.example.com/books/my-book> ext:longContent ?content }"))
-        (server:execute-query-for-context
-         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
           PREFIX schema: <http://schema.org/>
           PREFIX authors: <http://example.com/authors/>
           PREFIX books: <http://example.com/books/>
@@ -466,8 +502,8 @@ this point and likely a redpencil image too.")
            <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
          }"))
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -482,10 +518,10 @@ this point and likely a redpencil image too.")
          <http://book-store.example.com/books/my-book> schema:name ?title.
         }")
 
-      ;; we can delete the types
+    ;; we can delete the types
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -496,21 +532,21 @@ this point and likely a redpencil image too.")
          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
         }")
 
-      ;; we can have an empty construct where
+    ;; we can have an empty construct where
 
-      (server:execute-query-for-context
-       "CONSTRUCT { } WHERE { }")
+    (server:execute-query-for-context
+     "CONSTRUCT { } WHERE { }")
 
-      ;; inserting the UUID with xsd:string will just insert the UUID (configured above)
+    ;; inserting the UUID with xsd:string will just insert the UUID (configured above)
 
-      (server:execute-query-for-context
-       "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+    (server:execute-query-for-context
+     "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
         PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
         INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }")
 
-      (when *run-geosparql-tests*
-        (server:execute-query-for-context
-         "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+    (when *run-geosparql-tests*
+      (server:execute-query-for-context
+       "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
           PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
           PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
           PREFIX geo: <http://www.opengis.net/ont/geosparql#>
@@ -520,62 +556,58 @@ this point and likely a redpencil image too.")
                geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
            }")))
 
-    (with-impersonation-for :jack
-      ;; can insert some random content
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+  (with-impersonation-for :jack
+    ;; can insert some random content
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay a ext:NoNameOrLabel;
             ext:score 9001;
             ext:level 12.
         }")
-      ;; can't insert name or label
-      (block :no-error
-        (handler-case
-            (server:execute-query-for-context
-             "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+    ;; can't insert name or label
+    (block :no-error
+      (handler-case
+          (server:execute-query-for-context
+           "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
               INSERT DATA {
                 ext:myDisplay ext:name \"Failing name\".
               }")
-          (handle-update-unit:unwritten-data-error (e)
-            (format t "Received expected error ~A" e)
-            (return-from :no-error t)))
-        (error 'simple-error :format-control "Expected triples not being written, but received no error."))
-      (block :no-error
-        (handler-case
-            (server:execute-query-for-context
-             "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        (handle-update-unit:unwritten-data-error (e)
+          (format t "Received expected error ~A" e)
+          (return-from :no-error t)))
+      (error 'simple-error :format-control "Expected triples not being written, but received no error."))
+    (block :no-error
+      (handler-case
+          (server:execute-query-for-context
+           "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
               INSERT DATA {
                 ext:myDisplay ext:label \"Failing label\".
               }")
-          (handle-update-unit:unwritten-data-error (e)
-            (format t "Received expected error ~A" e)
-            (return-from :no-error t)))
-        (error 'simple-error :format-control "Expected triples not being written, but received no error."))
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        (handle-update-unit:unwritten-data-error (e)
+          (format t "Received expected error ~A" e)
+          (return-from :no-error t)))
+      (error 'simple-error :format-control "Expected triples not being written, but received no error."))
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay ext:anotherThing \"Another thing\".
         }"))
 
-    ;; jack can delete (which should use CONSTRUCT)
-    (with-impersonation-for :jack
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+  ;; jack can delete (which should use CONSTRUCT)
+  (with-impersonation-for :jack
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         DELETE {
           ext:myDisplay ext:score ?score; ext:level ?level.
         } WHERE {
           ext:myDisplay a ext:NoNameOrLabel;
             ext:score ?score;
             ext:level ?level.
-        }"))))
+        }")))
 
-(defun run-delta-only-assertion-tests ()
-  "Tests whether we can use graphs which only have emit data through delta-notifier but not through sparql"
-  ;; TODO: it would be good if this test would also verify data is effectively creating delta messages but that's not
-  ;; the case yet.
-  (with-acl-config
-    (client:query (coerce
+(defun delta-only-assertion-tests ()
+  (client:query (coerce
                    "DELETE {
                    GRAPH ?g { ?s ?p ?o }
                  } WHERE {
@@ -604,4 +636,41 @@ this point and likely a redpencil image too.")
         SELECT * WHERE {
           ?thing a push:Update.
         }"))
-                   "results" "bindings")))))))
+                   "results" "bindings"))))))
+
+(defun run-assertion-tests-with-acl ()
+  "Run the `assertion-tests' with an ACL configuration."
+  (format t "~%~% Running assertion tests with ACL config")
+  (clean-up-graphs)
+  (store-initial-session-data)
+
+  (with-acl-config (assertion-tests)))
+
+(defun run-assertion-tests-with-odrl ()
+  "Run the `assertion-tests' with an ODRL configuration."
+  (format t "~%~% Running assertion tests with ODRL config")
+  (clean-up-graphs)
+  (store-initial-session-data)
+
+  (with-odrl-config (assertion-tests)))
+
+(defun run-assertion-tests ()
+  (run-assertion-tests-with-acl)
+  (run-assertion-tests-with-odrl))
+
+(defun run-delta-only-assertion-tests-acl ()
+  (format t "~%~% Running delta only assertion tests with ACL config")
+  (with-acl-config (delta-only-assertion-tests)))
+
+;; TODO: This test currently fails since ODRL policies do not yet support the extra options that can
+;; be passed to graph specifications.
+(defun run-delta-only-assertion-tests-odrl ()
+  (format t "~%~% Running delta only assertion tests with ODRL config")
+  (with-odrl-config (delta-only-assertion-tests)))
+
+(defun run-delta-only-assertion-tests ()
+  "Tests whether we can use graphs which only have emit data through delta-notifier but not through sparql"
+  ;; TODO: it would be good if this test would also verify data is effectively creating delta messages but that's not
+  ;; the case yet.
+  (run-delta-only-assertion-tests-acl)
+  (run-delta-only-assertion-tests-odrl))
