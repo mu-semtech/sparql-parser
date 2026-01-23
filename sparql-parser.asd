@@ -37,6 +37,9 @@
                (:file "acl/acl")
                (:file "acl/configuration-interface")
                (:file "acl/config")
+               ;; ODRL configuration
+               (:file "odrl/odrl")
+               (:file "odrl/shacl")
                ;; ;; reasoning to determine graphs
                ;; (:file "reasoner/tree-mirror")
                ;; (:file "reasoner/prefixes")

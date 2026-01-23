@@ -151,6 +151,9 @@
 (defpackage #:acl-config
   (:use :common-lisp))
 
+(defpackage #:odrl-config
+  (:use :common-lisp))
+
 (defpackage #:prefix
   (:use :common-lisp)
   (:export #:expand
