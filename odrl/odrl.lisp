@@ -1,5 +1,8 @@
 (in-package :odrl-config)
 
+(defparameter *use-odrl-config-p* nil
+  "Non-nil means the service should load its policy from a file containing an ODRL policy.")
+
 ;; ODRL information model
 ;;
 ;; An implementation of a simplified version of the ODRL information model.  This implementation is
