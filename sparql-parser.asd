@@ -65,4 +65,5 @@
                ;; administration
                (:file "administration/string-files")
                ;; configuration
-               (:file "config/config")))
+               (:file "config/config")
+               (:file "odrl/load-config")))
