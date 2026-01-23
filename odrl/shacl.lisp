@@ -37,6 +37,58 @@
    (object :initarg :object
            :reader object))
   (:documentation "A SHACL property path."))
+
+
+;;
+;; Conversion to sparql-parser's ACL
+;;
+(defgeneric shacl-to-acl (shape &optional notp)
+  (:documentation "Convert a SHACL shape to its corresponding sparql-parser entity."))
+
+(defmethod shacl-to-acl ((shape node-shape) &optional notp)
+  (declare (ignore notp))
+  (with-slots (target-class properties notp) shape
+    (alexandria:flatten
+     (append
+      (list (if (is-empty-node-p target-class) 'acl:_ target-class))
+      (if properties
+          (mapcar (lambda (prop) (shacl-to-acl prop notp)) properties)
+          '(acl::-> acl:_))))))
+
+(defun is-empty-node-p (path)
+  "Check whether PATH is the special uri for an empty node.
+
+The special uri was introduced to allow users to specify \"all predicates\" in a policy, as one
+would use `_' in a lisp configuration.  This special uri was needed because in SHACL property paths
+must have a value for their object and otherwise we could not express type specifications of the of
+the form `TYPE <- _' or `TYPE <x _'."
+  (member path '("ext:all" "http://mu.semte.ch/vocabularies/ext/all") :test #'string=))
+
+(defun direction-string (inversep notp)
+  "Determine the correct direction symbol for a predicate specification."
+  (cond
+    ((and inversep notp) 'acl::<x)
+    ((and inversep (not notp)) 'acl::<-)
+    ((and (not inversep) notp) 'acl::x>)
+    (t 'acl::->)))
+
+(defmethod shacl-to-acl ((shape property-shape) &optional notp)
+  ;; If value of `path' is
+  ;; - a URI: (make-... :direction "->" :predicate path)
+  ;; - a `property-path':
+  ;;   + parse its `predicate-path' to determine value for :direction
+  ;;   + use its `object' as value for :predicate
+  (with-slots (path) shape
+    (list
+     ;; NOTE (13/09/2025): The simplification of using the mere existence of a property path to mean
+     ;; invert the direction depends on the fact that we use no other property paths than
+     ;; `sh:inversePath'.  This should be generalised to actually check which `predicate-path' is
+     ;; used.
+     (direction-string (typep path 'property-path) notp)
+     (if (typep path 'property-path)
+         (if (is-empty-node-p (object path)) 'acl:_ (object path))
+         (if (is-empty-node-p path) 'acl:_ path)))))
+
 ;;
 ;; Varia
 ;;
