@@ -396,6 +396,76 @@ Using the `:scopes` parameter notation it is possible to provide multiple scope 
        :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
 ```
 
+
+### Defining an authorization policy in ODRL
+
+> [!WARNING]
+> Support for ODRL policies is under development and some functionality, such as using scopes, is not yet (fully) supported.
+
+This service also supports defining policies using [ODRL](https://www.w3.org/TR/odrl-model/), as an alternative to the lisp-style configuration illustrated above. To enable ODRL policies, set `*use-odrl-config-p*` to non-nil in the config file mounted in `./config/authorization/config.lisp` as shown below. Note, other service configuration settings, such as `*backend*`, should still be set in the same file.
+
+```lisp
+;;;;;;;;;;;;;;;;;;;
+;;; delta messenger
+(in-package :delta-messenger)
+
+(add-delta-logger)
+(add-delta-messenger "http://delta-notifier/")
+
+;;;;;;;;;;;;;;;;;
+;;; configuration
+(in-package :client)
+(setf *log-sparql-query-roundtrip* t)
+(setf *backend* "http://triplestore:8890/sparql")
+
+(in-package :server)
+(setf *log-incoming-requests-p* nil)
+
+(in-package :odrl-config)
+(setf *use-odrl-config-p* t)
+```
+
+The actual policy should be defined in [n-triples](https://www.w3.org/TR/n-triples/) format in a config file mounted in `./config/authorization/config.nt`. The following snippet contains the ODRL equivalent, encoded in ttl format, for the lisp access rights shown in the previous section. Note, to use this policy it should be converted from ttl to n-triples. A more comprehensive policy example can be found in the [test config]('./test/exmaple-config.ttl').
+
+```ttl
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+ext:examplePolicy a odrl:Set ;
+  odrl:permission ext:publicRead ,
+      ext:publicWrite.
+
+ext:publicGraph a odrl:AssetCollection ;
+  vcard:fn "public" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/public> .
+
+ext:genericAsset a odrl:Asset , sh:NodeShape ;
+  odrl:partOf ext:publicGraph ;
+  sh:targetClass ext:all .
+
+ext:publicParty a odrl:PartyCollection ;
+  vcard:fn "public" .
+
+ext:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target ext:publicGraph ;
+  odrl:assignee ext:publicParty .
+
+ext:publicWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target ext:publicGraph ;
+  odrl:assignee ext:publicParty .
+```
+
+
+The following functionality is *not* yet supported when using an ODRL policy:
+- Read policy from a ttl file instead of an n-triples file. Support ttl files is planned, the use of n-triples files is a temporary workaround due to lack of ttl parser in common lisp.
+- Specifying `scopes` for a permission.
+- Specifying an explicit `constraint` for an `allowed-group`, currently this is implicitly set based on whether a query is provided or not.
+- Specifying options, such as whether to generate deltas, per graph definition.
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`
