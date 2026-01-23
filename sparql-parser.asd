@@ -6,7 +6,7 @@
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."
   :serial t
-  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams)
+  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams cl-ntriples)
   :components ((:file "packages")
                ;; supporting code
                (:file "support/support")
@@ -38,6 +38,7 @@
                (:file "acl/configuration-interface")
                (:file "acl/config")
                ;; ODRL configuration
+               (:file "odrl/parse-ntriples")
                (:file "odrl/odrl")
                (:file "odrl/shacl")
                ;; ;; reasoning to determine graphs
