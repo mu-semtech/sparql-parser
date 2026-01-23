@@ -97,6 +97,89 @@ simply be down cased."
 
 
 ;;
+;; Conversion to sparql-parser's ACL
+;;
+(defgeneric odrl-to-acl (concept)
+  (:documentation "Convert an ODRL concept to its corresponding sparql-parser configuration macro."))
+
+(defun rules-match-p (left right)
+  "Return t if the rules LEFT and RIGHT have the same target and assignee, nil otherwise."
+  (and (eq (slot-value left 'assignee) (slot-value right 'assignee))
+       (eq (slot-value left 'target) (slot-value right 'target))))
+
+(defun find-matching-rule (rule rules)
+  "Find a rule in RULES that `rules-match-p' RULE."
+  (find-if (lambda (r) (rules-match-p r rule)) rules))
+
+(defun reduce-rules (rules)
+  "Reduce RULES by merging together rules that have the same assignee and target."
+  (let ((reduced-rules '()))
+    (mapcar
+     (lambda (rule)
+       (let ((matching-rule (find-matching-rule rule reduced-rules)))
+         (if matching-rule
+             (setf (slot-value matching-rule 'actions)
+                   (union (slot-value matching-rule 'actions)
+                          (slot-value rule 'actions)))
+             (push rule reduced-rules))))
+     rules)
+    reduced-rules))
+
+(defmethod odrl-to-acl ((concept rule-set))
+  (with-slots (rules) concept
+    (let ((party-collections (mapcar (lambda (r) (slot-value r 'assignee)) rules))
+          (asset-collections (mapcar (lambda (r) (slot-value r 'target)) rules)))
+      ;; NOTE (20/01/2026): Party and Asset Collections that are not referenced by a rule are not
+      ;; converted to their respective access specifications or graph specifications. Consequently,
+      ;; no specifications for such collections are added the service's internal state. This differs
+      ;; from the situation with a Lisp configuration where all defined specifications are
+      ;; evaluated, irrelevant whether they are used in a grant.
+      (handler-case
+          (progn
+            (mapcar #'odrl-to-acl (remove-duplicates party-collections))
+            (mapcar #'odrl-to-acl (remove-duplicates asset-collections))
+            ;; NOTE (24/01/2026): The `reduce-rules' merges rules that have the same assignee and
+            ;; target. These mergers allow to convert each rule to a single access-grant.
+            (mapcar #'odrl-to-acl (reduce-rules rules)))
+        (error (e)
+          (format t "~%Error: Could not parse the loaded ODRL policy: ~A~%" e))))))
+
+(defmethod odrl-to-acl ((concept asset-collection))
+  (with-slots (name graph assets) concept
+    (acl::define-graph*
+        :name (read-from-string name)
+      :graph graph
+      ;; TODO: set actual values, cf. `define-graph' macro, requires actually getting this as input
+      :options '(:delta t :sparql t)
+      :type-specifications (mapcar #'shacl-to-acl assets))))
+
+(defmethod odrl-to-acl ((concept party-collection))
+  (with-slots (name description parameters query) concept
+    (acl:supply-allowed-group name :query query :parameters parameters)))
+
+;; TODO: This partially replicates the logic in the `acl:grant' macro
+(defmethod odrl-to-acl ((concept permission))
+  (with-slots (actions target assignee) concept
+    (acl:grant*
+     :scopes (list 'acl:_) ;; TODO: support scopes
+     :rights (mapcar
+              (lambda (action)
+                (intern (symbol-name (odrl-to-acl action)) :keyword))
+              actions)
+     :graph-specs (list (read-from-string (slot-value target 'name)))
+     :allowed-groups (list (slot-value assignee 'name)))))
+
+(defmethod odrl-to-acl ((concept action))
+  (with-slots (uri) concept
+    (cond
+      ((cl-ppcre:scan ".*read>?$" uri) 'acl::read)
+      ((cl-ppcre:scan ".*modify>?$" uri) 'acl::write)
+      ;; NOTE (23/01/2026): The odrl:write action was deprecated by odrl:modify. We will support it
+      ;; anyway for convenience.
+      ((cl-ppcre:scan ".*write>?$" uri) 'acl::write)
+      (t (error "No matching right found for \"~a\"" uri)))))
+
+;;
 ;; Varia
 ;;
 (defmethod print-object ((object rule-set) stream)
