@@ -300,6 +300,23 @@ The `define-graph` macro supports more fine-grained control for which graph-spec
 
 Any other value than `nil` will be interpreted as `t`, which is the default value, and will enable delta messages for the graph specification.
 
+### Enable additional logging
+By default sparql-parser only logs to its standard output when requests fail to execute. To log more information different variables can be set to non-nil values.
+
+The following snippet enables logging the queries sent to the SPARQL endpoint as well as the responses received from it.
+
+```lisp
+(in-package :client)
+(setf *log-sparql-query-roundtrip* t)
+```
+
+If you want to log the requests and associated access rights that arrive at sparql-sparser add the following snippet to your configurations:
+
+```lisp
+(in-package :server)
+(setf *log-incoming-requests-p* t)
+```
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`

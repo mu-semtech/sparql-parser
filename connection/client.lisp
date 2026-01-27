@@ -13,7 +13,8 @@
 (defparameter *max-concurrent-connections* 8
   "The maximum amount of concurrent queries sent to a sparql endpoint.")
 
-(defparameter *log-sparql-query-roundtrip* nil)
+(defparameter *log-sparql-query-roundtrip* nil
+  "When set to non-nil, we log both the outgoing query sent to and response received from the sparql endpoint.")
 
 (defparameter *aquire-db-semaphore-timeout* 55
   "Amount of time (in seconds) to wait to aquire the semaphore (default is now 55).
