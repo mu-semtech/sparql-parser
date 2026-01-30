@@ -317,6 +317,26 @@ If you want to log the requests and associated access rights that arrive at spar
 (setf *log-incoming-requests-p* t)
 ```
 
+### Handle resources without an explicit type
+Possibly your application's data contains resources that do not have an explicit resource type. Consequently, such resources cannot be directly used in type-specifications in the body of graph-specifications. To work around this sparql-parser supports assuming certain types for resources based on their URI.
+
+For example, say you have a graph `http://mu.semte.ch/graphs/sessions` which contains session resources whose URIs start with `http://mu.semte.ch/sessions/`. The following snippet essentially tells sparql-parser to assume such resources have as type `http://mu.semte.ch/vocabularies/session/Session`.
+
+```lisp
+(in-package :type-cache)
+(add-type-for-prefix "http://mu.semte.ch/sessions/" "http://mu.semte.ch/vocabularies/session/Session")
+```
+
+This allows using that type in graph-specifications the same as other resources:
+
+```lisp
+(in-package :acl)
+(define-graph sessions ("http://mu.semte.ch/graphs/sessions")
+  ("http://mu.semte.ch/vocabularies/session/Session" -> _))
+```
+
+**NOTE**: this is not strictly limited to resources without a type. But can also be used to assume additional types for resources next to those types  explicitly specified in the data.
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`
