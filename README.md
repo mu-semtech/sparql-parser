@@ -96,32 +96,58 @@ For users with a certain role, say `SuperMegaAdmin`, a similar query can be used
 
 While it is rather common to define group membership based on roles, sparql-parser is not limited to this and allows arbitrary queries to be specified. It depends on your application's data model which queries make sense. Note, in the above examples the actual matches returned by the queries are not used, [TODO: link to guide] shows how you can use these matches to simplify access control policies in some situations.
 
-### Specifying which triples are accessible from which graphs
-For this we need a `define-graph` block. This will create a *graph spec* and looks as follows:
+### Define which triples are accessible for a graph
+Typically you want to explicitly specify which (kind of) triples within a graph an access control rule can be applied to. In sparql-parser such information is captured by *graph-specifications* which you create using the `define-graph` macro. For readability the code snippets use CURIEs as explained in the guide on TODO: link to prefix guide
+
+For instance, say you have a graph `http://mu.semte.ch/graphs/people` containing triples for resources of types `foaf:Person` and `foaf:OnlineAccount`. The following snippet creates a graph-specification for that graph which covers all triples for resources of these two types. Here `people` is a unique identifier by which this graph-specification can be referred to later on. The URI of the target graph, `http://mu.semte.ch/graphs/people`, is specified as a string between brackets and double quotes.
+
 ```lisp
-(define-graph organization ("http://mu.semte.ch/graphs/organizations/")
+(in-package :acl)
+(define-graph people ("http://mu.semte.ch/graphs/people")
   ("foaf:Person" -> _)
-  ("foaf:OnlineAccount" x> "ext:password"))
+  ("foaf:OnlineAccount" -> _))
 ```
-**NOTE**: Any prefixes such as `foaf` and `ext` need to be defined, see [Defining prefixes](#defining-prefixes)
 
-The `define-graph` macro takes:
-- A unique identifier (*here `organization`*)
-- The URI of the graph where the triples are stored (*here `http://mu.semte.ch/graphs/organizations/`*)
-- One or more triple shapes (*here `("foaf:Person" -> _)` and `("foaf:OnlineAccount" x> "ext:password")`*).
+The remaining elements, `("foaf:Person" -> _)` and `("foaf:OnlineAccount" -> _)`, are so-called *type-specifications*. A type-specification specifies which triples are considered relevant for a certain resource type. More specifically, `("foaf:Person" -> _)` means that triples with a subject of type `foaf:Person` and any predicate are relevant for this graph-specification. The `_` character is thus a wildcard that matches everything.
 
-The triple shapes have this form: `(<someResourceType> <operator> <somePredicate>)`. `<someResourceType>` and `<somePredicate>` must be a URI string (e.g. `"foaf:Person"`) or a `_` (indicating a wildcard). Triples that match these shapes will go to (or retrieved from) the specified graph (in the above example this is `http://mu.semte.ch/graphs/organizations/`). 
-**Note**: different *graph specs* can specify the same graph URI.
+If you are interested in a more limited set of triples, you can explicitly specify one or more predicates instead of the the wildcard. For example, if you only want triples for `foaf:Person` that have as predicate `foaf:firstName` or `foaf:familyName` that can be written as shown below. Note, that the operator `->` is repeated for each individual predicate.
 
-These are all the possible operators:
-- `T -> p`: Triples where the subject is of type `T` and the predicate is `p`.
-- `T <- p`: Triples where the object is of type `T` and the predicate is `p`.
-- `T x> p`: For triples where the subject is of type `T`, allow every predicate except for `p`.
-- `T <x p`: For triples where the object is of type `T`, allow every predicate except for `p`.
+```lisp
+(in-package :acl)
+(define-graph people ("http://mu.semte.ch/graphs/people")
+  ("foaf:Person" -> "foaf:firstName"
+                 -> "foaf:familyName")
+  ("foaf:OnlineAccount" -> _))
+```
 
-In the above example this means the following:
-- Matches all triples where the subject is of type `foaf:Person`.
-- Matches all triples where the subject is of type `foaf:OnlineAccount` and where the predicate is not `ext:password`.
+Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser provides another operator `x>` to describe such situations his more concisely. For example, if you are interested in all triples with a `foaf:OnlineAccount` resource as subject except those that have as predicate `ext:password` or `account:accountName`. This can be written as follows:
+
+```lisp
+(in-package :acl)
+(define-graph people ("http://mu.semte.ch/graphs/people")
+  ("foaf:Person" -> "foaf:firstName"
+                 -> "foaf:familyName")
+  ("foaf:OnlineAccount" x> "ext:password"
+                        x> "account:accountName"))
+```
+
+So far the type-specifications only concerned triples with a *subject* of a specific resource type. To specify triples where the *object* is of a given resource type you can use the inverse operators `<-` and `<x`. For example, `("foaf:Person" <- "schema:employee")` means all triples that link an object of resource type `foaf:Person` to some subject resource via the predicate `schema:employee`. This can be added to the `define-graph` snippet as follows:
+
+```lisp
+(in-package :acl)
+(define-graph people ("http://mu.semte.ch/graphs/people")
+  ("foaf:Person" -> "foaf:firstName"
+                 -> "foaf:familyName"
+                 <- "schema:employee")
+  ("foaf:OnlineAccount" x> "ext:password"
+                        x> "account:accountName"))
+```
+
+In summary this graph-specification contains all triples in `http://mu.semte.ch/graphs/people` that have
+
+- as *subject* a resource of type `foaf:Person` AND as *predicate* `foaf:firstName` or `foaf:familyName`; OR
+- has as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`; OR
+- as *subject* a resource of type `foaf:OnlineAccount` AND **not** as *predicate* `ext:password` or `account:accountName`.
 
 ### Specifying which user groups have access to which graphs
 Finally we need to specify which *user groups* are allowed to access which *graph spec*. This is done using the `grant` macro.
