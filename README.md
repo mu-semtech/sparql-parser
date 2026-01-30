@@ -64,22 +64,37 @@ Next, add the following contents to the config file mounted in `./config/authori
 It basically configures read/write access for everyone for all data on the `http://mu.semte.ch/graphs/public` graph.
 
 ## How-to guides
-### Specifying groups of users
-sparql-parser does authentication based on user groups. We will later define which groups are allowed to perform which operations on which data. So first we need to define some user groups.
-User groups are defined based on the result of a query involving the user's session id. This can look as follows:
+### Define a group for users with a certain role
+An access control policy typically grants different rights to users based on some criteria. For example, an authenticated user may read and edit certain data, whereas other users are only allowed to read data. This requires that we can determine to which group(s) the user performing a request belongs to. In a sparql-parser configuration is done using the `supply-allowed-group` macro. This macro supports defining SPARQL queries to determine whether a user belongs to a group. More specifically, the provided query should return a match when a user belongs to the defined group.
+
+Say you want to define a group that contains all authenticated users. In a semantic.works application this usually means that there exists a session associated with an account, indicating that the user previously logged in. The following snippet defines a group named `authenticated` where membership is determined by the existence of a session associated with an account:
+
+```lisp
+(in-package :acl)
+
+(supply-allowed-group "authenticated"
+  :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+
+          SELECT DISTINCT ?account WHERE {
+            <SESSION_ID> session:account ?account.
+          }")
+```
+
+Note that the constant `SESSION_ID` is a placeholder and will be automatically replaced by the actual session identifier found in the request when the query is executed.
+
+For users with a certain role, say `SuperMegaAdmin`, a similar query can be used which filters based on the role associated with a session:
+
 ```lisp
 (supply-allowed-group "super-mega-admins"
-  :parameters ("session_group_id" "session_role")
   :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-    PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 
-    SELECT ?session_group ?session_role WHERE {
-      <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group_id;
-                   ext:sessionRole ?session_role.
-      FILTER( ?session_role = \"SuperMegaAdmin\" )
-    }")
+          SELECT DISTINCT ?session_role WHERE {
+            <SESSION_ID> ext:sessionRole ?session_role .
+            FILTER( ?session_role = \"SuperMegaAdmin\" )
+          }")
 ```
-If this query returns a result, the user will belong to the `super-mega-admins` group. The value for `<SESSION_ID>` will be filled in automatically at runtime. The value of the variables listed in the `:parameters` argument will be joined using `/` and appended to the graph URI when it is accessed. This allows us to have a separate graph per user group.
+
+While it is rather common to define group membership based on roles, sparql-parser is not limited to this and allows arbitrary queries to be specified. It depends on your application's data model which queries make sense. Note, in the above examples the actual matches returned by the queries are not used, [TODO: link to guide] shows how you can use these matches to simplify access control policies in some situations.
 
 ### Specifying which triples are accessible from which graphs
 For this we need a `define-graph` block. This will create a *graph spec* and looks as follows:
