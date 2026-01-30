@@ -7,61 +7,58 @@ A rewritten implementation of [`mu-authorization`](https://github.com/mu-semtech
 > We're working on writing a full configuration guide.
 
 ## Tutorials
-### How to add the sparql-server to your application
-Add the service to your `docker-compose.yml`:
+### How to add the sparql-parser service to your application
+Start by adding the service to your application's `docker-compose.yml`:
+
 ```yaml
 services:
   database:
-    image: semtech/sparql-parser:0.0.8
+    image: semtech/sparql-parser:0.0.15
     volumes:
       - ./config/authorization:/config
       - ./data/authorization:/data
 ```
 
-Next, add the following contents to the config file mounted in `./config/authorization/config.lisp`.
+**NOTE:** If necessary, change the name of your triplestore service to something other than `database`.
+
+Next, create a configuration file `./config/authorization/config.lisp`. In this file you can configure the sparql-parser service by setting variables to appropriate values and defining the access control policy for your application. For example, the following snippet first configures a SPARQL endpoint service as the `*backend*` to which sparql-parser will talk. Note that `triplestore` here is the name of the endpoint service as set in your application's `docker-compose.yml`. Next it enables logging some extra information to the standard output by setting two variables to `t`. Finally, it enables the generation of delta messages for data changes caused by insert or delete queries.
+
 ```lisp
+;;;;;;;;;;;;;;;;;
+;;; configuration
+(in-package :client)
+(setf *backend* "http://triplestore:8890/sparql")
+
+(setf *log-sparql-query-roundtrip* t)
+(in-package :server)
+(setf *log-incoming-requests-p* t)
+
 ;;;;;;;;;;;;;;;;;;;
 ;;; delta messenger
 (in-package :delta-messenger)
 
 (add-delta-logger)
 (add-delta-messenger "http://delta-notifier/")
+```
 
-;;;;;;;;;;;;;;;;;
-;;; configuration
-(in-package :client)
-(setf *log-sparql-query-roundtrip* t)
-(setf *backend* "http://triplestore:8890/sparql")
+Now you can start your stack using `docker compose up -d`. At this point you will likely not see any data in your application as you have not yet configured any access rights. Adding the following snippet to the `config.lisp` configures read access for everyone for all data in the `http://mu.semte.ch/graphs/public` graph.
 
-(in-package :server)
-(setf *log-incoming-requests-p* nil)
-
+```lisp
 ;;;;;;;;;;;;;;;;;
 ;;; access rights
 (in-package :acl)
-
-(defparameter *access-specifications* nil
-  "All known ACCESS specifications.")
-
-(defparameter *graphs* nil
-  "All known GRAPH-SPECIFICATION instances.")
-
-(defparameter *rights* nil
-  "All known GRANT instances connecting ACCESS-SPECIFICATION to GRAPH.")
-
-(type-cache::add-type-for-prefix "http://mu.semte.ch/sessions/" "http://mu.semte.ch/vocabularies/session/Session")
 
 (define-graph public ("http://mu.semte.ch/graphs/public")
   (_ -> _))
 
 (supply-allowed-group "public")
 
-(grant (read write)
-  :to-graph (public)
+(grant (read)
+  :to-graph public
   :for-allowed-group "public")
 ```
 
-It basically configures read/write access for everyone for all data on the `http://mu.semte.ch/graphs/public` graph.
+To load the added the access policy, restart your service using `docker compose restart database`. After restarting, data should show up when in your application. Consult the how-to guides in the following section for more information in defining more meaningful access control policies.
 
 ## How-to guides
 ### Define a group for users with a certain role
