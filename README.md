@@ -94,7 +94,7 @@ For users with a certain role, say `SuperMegaAdmin`, a similar query can be used
           }")
 ```
 
-While it is rather common to define group membership based on roles, sparql-parser is not limited to this and allows arbitrary queries to be specified. It depends on your application's data model which queries make sense. Note, in the above examples the actual matches returned by the queries are not used, [TODO: link to guide] shows how you can use these matches to simplify access control policies in some situations.
+While it is rather common to define group membership based on roles, sparql-parser is not limited to this and allows arbitrary queries to be specified. It depends on your application's data model which queries make sense. Note, in the above examples the actual matches returned by the queries are not used, [another guide](#define-access-rights-for-a-set-of-similar-graphs) shows how you can use these matches to simplify access control policies in some situations.
 
 ### Use compact URIs by defining prefixes
 You will often need to write URIs for resources, predicates, etc. while specifying access control policies for sparql-parser. As it is cumbersome to always write full URIs, and this also negatively impacts the readability of a configuration, sparql-parser supports using Compact URIs or [CURIEs](https://www.w3.org/TR/curie/). For this you need to define the prefixes you want to use along with their corresponding expansions.
@@ -207,6 +207,71 @@ It is supported to provide multiple target graph-specifications and/or access-gr
   :to-graph (people organization)
   :for-allowed-group "super-mega-admins")
 ```
+
+### Define access rights for a set of similar graphs
+Your application may have multiple graphs whose contents are structurally similar in that they overlap in terms of resource types and predicates. For example, your application might have a single graph per organization where each graph contains similar triples such as the organization's name, address and employees.
+
+For such situations sparql-parser supports defining the access rights only once for all graphs together, instead of having to define them individually for each graph and group separately. First, this requires specifying a `:parameters` argument for the relevant access-groups as shown in the snippet below. This argument expects list of strings that is a subset of the variables specified in the `SELECT` clause of the corresponding query.
+
+```lisp
+(in-package :acl)
+(supply-allowed-group "organization-member"
+  :parameters ("session_group")
+  :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          SELECT DISTINCT ?session_group ?session_role WHERE {
+            <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group.
+          }")
+```
+
+Let's assume that the graphs for the different organizations have URIs for the form `http://mu.semte.ch/graphs/organizations/UUID`, where UUID identifies the specific organization this graph pertains to. The following graph-specification would cover all such graphs. Note that the provided graph URI argument does **not** contain the UUID part.
+
+```lisp
+(in-package :acl)
+(define-graph organization ("http://mu.semte.ch/graphs/organizations/")
+  ("org:Organization" -> _)
+  ("foaf:Person" -> "foaf:firstName"
+                 -> "foaf:familyName"))
+```
+
+To grant read access to members of the `organization-member` group to the `organization` graph-specification the following `grant` can be defined.
+
+```lisp
+(in-package :acl)
+(grant (read)
+       :to-graph organization
+       :for-allowed-group "organization-member")
+```
+
+The "magic" here happens when sparql-parser processes an appropriate request, i.e. a request from a member of `organization-member` group for triples in the `organization` graph-specification. In such cases sparql-parser determines the target graphs by appending the match(es) for the `session_group` parameter to the graph URI in the `organization` graph-specification. For example, say the query in `organization-member` returns two matches for `session_group`: `someOrganization` and `aCompletelyDifferentOrganization`.  The incoming request will then be forward to two graphs with as URIs:
+
+- `http://mu.semte.ch/graphs/organizations/someOrganization`
+- `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization`
+
+If you specify multiple values in a group's `:parameters` argument, their matches will be appended to graph URIs in the given order. For example, you can add `session_role` as a second `:parameters` argument to the above `organization-member` access-group as follows:
+
+```lisp
+(in-package :acl)
+(supply-allowed-group "organization-member"
+  :parameters ("session_group" "session_role")
+  :query "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          SELECT DISTINCT ?session_group ?session_role WHERE {
+            <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group.
+          }")
+```
+
+Let's say that the group's query returns the following matches for your application:
+
+| session_group                    | session_role              |
+|----------------------------------|---------------------------|
+| someOrganization                 | someRole                  |
+| aCompletelyDifferentOrganization | aCompletetlyDifferentRole |
+
+In this case sparql-sparser will use the following graph URIs to forward requests for the `organization` graph-specification:
+
+- `http://mu.semte.ch/graphs/organizations/someOrganization/someRole`
+- `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization/aCompletetlyDifferentRole`
 
 ## Reference
 ### ACL configuration interface
