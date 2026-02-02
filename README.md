@@ -2,10 +2,6 @@
 
 A rewritten implementation of [`mu-authorization`](https://github.com/mu-semtech/mu-authorization) in Common Lisp.
 
-> [!WARNING]
-> This README is currently incomplete and configuring this service requires diving into the code and comparing with other existing configurations.
-> We're working on writing a full configuration guide.
-
 ## Tutorials
 ### How to add the sparql-parser service to your application
 Start by adding the service to your application's `docker-compose.yml`:
