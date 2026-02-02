@@ -229,6 +229,63 @@ The following concrete example snippet defines three prefixes.
   :dcat "http://www.w3.org/ns/dcat#")
 ```
 
+### Configurable variables
+The following sections list, per package, the available variables that can be (indirectly) configured.
+
+#### acl
+- *`*access-specifications*`* List of all known access groups. Do **not** edit directly but use the `acl:supply-allowed-group` macro to define groups. (default: `nil`)
+- *`*graphs*`* List all all known graph-specification instances. Do **not** edit directly but use the `acl:define-graph` macro to add graph-specifications. (default: `nil`)
+- *`*rights*`* List of all known grant instances connecting access-specification to graph. Do **not** edit directly but use the `acl:grant` macro to define grants. (default: `nil`)
+
+#### client
+- *`*backend*`* The SPARQL endpoint(s) to talk to, allowed values are either a single string or a list of strings. Over time this variable will be deprecated in favor of using `*backends*`. (default: `"http://triplestore:8890/sparql"`)
+- *`*backends*`* A list of objects representing SPARQL endpoint(s) to talk to. The contained objects should be created using the `acl::make-sparql-endpoint` function with a URL string as argument. If not explicitly set, this variable is populated based on the value of `*backend*`. (default: `nil`)
+- *`*max-concurrent-connections*`* The maximum amount of concurrent queries sent to an individual backend. (default: `8`)
+
+- *`*log-sparql-query-roundtrip*`* If set to non-nil, log both the outgoing query sent to and response received from the backend to the standard output. (default: `nil`)
+- *`*log-failing-query-tries*`* If set to non-nil, log queries which fail in exponential backoff retry to the standard output. (default: `t`)
+- *`*log-failing-query-tries-with-condition*`* If set to non-nil, log the condition for queries which fail in exponential backoff retry to the standard output. (default: `t`)
+- *`*log-batch-mapping*`* If set to non-nil, warn on processes which want to execute batch mapping. Note, batch mapping is **not yet implemented** and will process as one big query. (default: `nil`)
+
+- *`*max-query-time-for-retries*`* This is the maximum amount of time (in seconds) to wait until retrying to send a query. (default: `10`)
+- *`*max-query-time-for-retries-in-followup-queries*`* This is the maximum amount of time (in seconds) to wait until retrying to send the query once we've already sent the first query. (default: `50`)
+- *`*acquire-db-semaphore-timeout*`* Amount of time (in seconds) to wait to acquire a semaphore for a SPARQL endpoint. If set to `nil`, wait forever. (default: `55`)
+
+#### server
+- *`*log-incoming-requests-p*`* If set to non-nil, log incoming requests and access rights for them to the standard output. (default: `nil`)
+
+#### prefix
+- *`*prefixes*`* List of known prefixes with their expansions. Do **not** edit directly, but use the `prefix:define-prefixes` macro to add entries. (default: `'(:skos "http://www.w3.org/2004/02/skos/core#" :schema "http://schema.org/" :rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#)`)
+
+- *`*uri-protocol-check-on-prefix-expansion*`* If set to non-nil, only expand CURIEs whose prefix expands to a URI for a protocol in `*uri-protocol-accept-list-for-prefix-expansion*` and signal an error upon encountering URIs with other protocols. If `nil`, expand any CURIE irrelevant of the protocol. (default: `t`)
+- *`*uri-protocol-accept-list-for-prefix-expansion*`* A list of protocols that is accepted during the prefix expansion. (default: `'("http:" "https:" "mailto:" "ftp:" "ftps:" "share:)"`)
+
+#### delta-messenger
+- *`*delta-handlers*`* List of handlers for the delta messages. Do **not** edit directly but use the `delta-messenger:add-delta-messenger` function to add delta handlers. (default: `nil`)
+- *`*log-delta-messenger-message-bus-processing*`* If set to non-nil, log when the delta messenger runs and for what to the standard output. (default `nil`)
+
+- *`*max-sleep-on-idle-bus*`* The maximum amount of seconds to sleep until the bus is considered idle. This is a safety setting that would cover an erroneous semaphore implementation and can be disable by setting it to `nil`. (default: `60`)
+- *`*message-bus-consumer*`* Consumer function to be called for each message on the message bus. (default: `delta-messenger::execute-scheduled-remote-delta-message`)
+
+#### type-cache
+- *`*uri-graph-user-type-providers*`* A list of functions that can calculate the types for a list of combined graph and URI. Do **not** set directly, but use the `type-cache::add-type-for-prefix` function to add types, this constructs the appropriate functions automatically. (default: `nil`)
+- *`*debug-prefix-functions*`* If set to non-nil, emit debugging information for prefix type functions to the standard output. (default: `nil`)
+
+#### support
+- *`*string-max-size*`* Maximum size of a string before it gets converted to a file. (default: `4096`)
+- *`*file-abbreviation-uri-prefix*`* Prefix for the URIs which will contain the abbreviation of a string. (default `http://services.redpencil.io/sparql-parser/abbreviations/`)
+- *`*sha-file-directory*`* The directory where string-files will be stored, should be a mounted volume. (default `/data/strings/`)
+
+#### administration
+- *`*long-db-strings-to-move-per-batch*`* How many long strings in the DB are moved to files per batch. Used to batch the operations in `administration:update-database-long-strings-to-string-files`. (default: `10`)
+
+#### quad-transformations
+- *`*user-quad-transform-functions*`* List of quad transformation functions to try in the order in which they should be applied. These functions can be used to transform quads in insert or delete queries, for example to transform a single quad to multiple ones or vice versa. (default: `nil`)
+
+#### handle-update-unit
+- *`*max-query-size-heuristic*`* Heuristic indicating roughly how many characters the body of quads may be in a single query. Note, current implementation will try to query even if over this size. (default: `8000`)
+- *`*max-quads-per-query-heuristic*`* Heuristic indicating roughly how many quads could be in a single query for insert or query. (default: `100`)
+
 ## Existing configurations
 The following projects are currently using this service as a replacement of
 `mu-authorization`, either fully or in a limited capacity (e.g. only on the
