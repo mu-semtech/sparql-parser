@@ -149,20 +149,33 @@ In summary this graph-specification contains all triples in `http://mu.semte.ch/
 - has as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`; OR
 - as *subject* a resource of type `foaf:OnlineAccount` AND **not** as *predicate* `ext:password` or `account:accountName`.
 
-### Specifying which user groups have access to which graphs
-Finally we need to specify which *user groups* are allowed to access which *graph spec*. This is done using the `grant` macro.
+### Granting a group rights to a graph
+Once you have defined the necessary [access-groups](#define-a-group-for-users-with-a-certain-role) and [graph-specifications](#define-which-triples-are-accessible-for-a-graph) you can grant rights using the `grant` macro. This macro expects as input a list of granted rights, the target graph-specification(s), and access-group(s). For example, the following snippets grants users that are members of the `authenticated` group read rights to the triples in the `people` graph-specification.
+
 ```lisp
+(in-package :acl)
+(grant (read)
+  :to-graph people
+  :for-allowed-group "authenticated")
+```
+
+To grant multiple rights you can simply list them in the first argument. For instance, the following snippet grants users in the `super-mega-admin` group read and write rights to triples in the `people` graph-specification. Note, that `read` and `write` are currently the only supported rights.
+
+```lisp
+(in-package :acl)
 (grant (read write)
-  :to-graph (organization)
+  :to-graph people
   :for-allowed-group "super-mega-admins")
 ```
-This indicates that we allow the users in the `super-mega-admins` group to read and write tripes from and to the `http://mu.semte.ch/graphs/organizations/` graph, according to the triple restrictions in the `organization` *graph spec*.
 
-The only allowed operation values are `read` and `write`.
+It is supported to provide multiple target graph-specifications and/or access-groups by surrounding the corresponding argument with brackets and listing multiple values. For example, users in the `super-mega-admins` access-group can be granted rights to the graph-specifications `people` and `organization` as follows:
 
-`:to-graph` allows specifying multiple *graph specs*.
-
-`:for-allowed-group` specifies which user group is allowed to execute the specified operations.
+```lisp
+(in-package :acl)
+(grant (read write)
+  :to-graph (people organization)
+  :for-allowed-group "super-mega-admins")
+```
 
 ### Defining prefixes
 In order to use the CURIE (Compact URI) form (e.g. `foaf:name`) we need to define the prefixes first. This is done as follows:
