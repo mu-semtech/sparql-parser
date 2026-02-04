@@ -6,7 +6,7 @@ A rewritten implementation of [`mu-authorization`](https://github.com/mu-semtech
 > This README is currently incomplete and configuring this service requires diving into the code and comparing with other existing configurations.
 > We're working on writing a full configuration guide.
 
-## Getting started
+## Tutorials
 ### How to add the sparql-server to your application
 Add the service to your `docker-compose.yml`:
 ```yaml
@@ -63,7 +63,7 @@ Next, add the following contents to the config file mounted in `./config/authori
 
 It basically configures read/write access for everyone for all data on the `http://mu.semte.ch/graphs/public` graph.
 
-## Tutorials
+## How-to guides
 ### Specifying groups of users
 sparql-parser does authentication based on user groups. We will later define which groups are allowed to perform which operations on which data. So first we need to define some user groups.
 User groups are defined based on the result of a query involving the user's session id. This can look as follows:
@@ -123,8 +123,6 @@ The only allowed operation values are `read` and `write`.
 
 `:for-allowed-group` specifies which user group is allowed to execute the specified operations.
 
-
-## Reference
 ### Defining prefixes
 In order to use the CURIE (Compact URI) form (e.g. `foaf:name`) we need to define the prefixes first. This is done as follows:
 ```lisp
@@ -137,8 +135,11 @@ In order to use the CURIE (Compact URI) form (e.g. `foaf:name`) we need to defin
   :eli "http://data.europa.eu/eli/ontology#")
 ```
 **NOTE**: This does not affect prefixes that can be used in sparql query strings used in this config. They still need to be specified using the `PREFIX` keyword.
-### Existing configurations
 
+## Reference
+TODO
+
+## Existing configurations
 The following projects are currently using this service as a replacement of
 `mu-authorization`, either fully or in a limited capacity (e.g. only on the
 development or testing server). We link their configuration files to provide
