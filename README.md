@@ -1,6 +1,9 @@
 # SPARQL Parser
+The SPARQL endpoint authorization service (SEAS) is a layer that is placed in front of a SPARQL endpoint and that rewrites queries on this endpoint based on the session information of the user and the access rights on the data.
 
-A rewritten implementation of [`mu-authorization`](https://github.com/mu-semtech/mu-authorization) in Common Lisp.
+The idea is that data is organized into graphs and the access to these graphs is restricted to a certain group of users. When a query request is sent to the SPARQL endpoint it is intercepted by SEAS. The SEAS then calculates the appropriate access tokens based on the information, such as the session, in the intercepted request. It then iterates over the calculated tokens to determine the accessible graphs per token. Finally, the intercepted query is performed on the of accessible graphs.
+
+This is a rewritten implementation of [`mu-authorization`](https://github.com/mu-semtech/mu-authorization) in Common Lisp.
 
 ## Tutorials
 ### How to add the sparql-parser service to your application
