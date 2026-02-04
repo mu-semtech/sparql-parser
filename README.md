@@ -202,6 +202,33 @@ Keyword parameters:
 
 **NOTE**: if values for both keyword parameters `:to-graph` and `:to` are provided these values are merged into a single list. Same for `:for-allowed-group` and `:for`.
 
+#### `define-prefixes`
+The `define-prefixes` macro allows to map prefixes to their corresponding expansion, allowing to use CURIEs in the configuration.
+
+```lisp
+define-prefixes (&body body)
+```
+
+The *`body`* has to be a sequence of keyword/value pairs, each pair of the form`:LABEL "EXPANSION"` where:
+
+- Each keyword `:LABEL` MUST be preceded by a colon ':' and MAY NOT include a trailing colon.
+- Each value `"EXPANSION"` MUST be a string and be surrounded by double quotes.
+- Each prefix MUST be defined **before** its first use in the configuration file.
+- It is allowed to have multiple `define-prefixes` in a single configuration file.
+
+
+- **NOTE**: These prefixes **cannot** be used in SPARQL query strings such as those provided in `supply-allowed-group`. Such queries prefixes still need to specify their own prefixes using the `PREFIX` keyword.
+
+The following concrete example snippet defines three prefixes.
+
+```lisp
+(in-package :acl)
+(define-prefixes
+  :foaf "http://xmlns.com/foaf/0.1/"
+  :adms "http://www.w3.org/ns/adms#"
+  :dcat "http://www.w3.org/ns/dcat#")
+```
+
 ## Existing configurations
 The following projects are currently using this service as a replacement of
 `mu-authorization`, either fully or in a limited capacity (e.g. only on the
