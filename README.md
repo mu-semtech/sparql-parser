@@ -164,6 +164,25 @@ There are four supported operations that can be used in a type-specification
 - `T x> p`: For triples where the **subject** is of type `T`, allow every predicate **except** for `p`.
 - `T <x p`: For triples where the **object** is of type `T`, allow every predicate **except** for `p`.
 
+#### `supply-allowed-group`
+Groups to which access rights can be granted are defined using the `supply-allowed-group` macro.
+
+```lisp
+supply-allowed-group (group &body args &key constraint parameters query &allow-other-keys)
+```
+
+Parameters:
+- *`group`* the name of the group as a string enclosed in double quotes, e.g. `"group-name"`
+
+Keyword parameters:
+- *`:query`* A string containing a SPARQL query that returns a result if a user belongs to the group at hand. Typically, a query will determine a user's group membership starting from their `<SESSION_ID>`. At runtime, `<SESSION_ID>` will be replaced by the value for `mu-session-id` in incoming requests.
+- *`:parameters`* a list of strings that is a subset of the variable names used for matches returned by the query. Has no effect if no value is provided for `:query`.
+- *`:constraint`* A symbol to specify how group membership should be determined. The supported values are:
+  + `always`: All users belong to this group. Any specified `:query` (and `:parameters`) will be ignored.
+  + `never`: No user can belong to this group, and it cannot be used in any access-grants. Any valued for `:query` and/or `:parameters` will be ignored.
+  + `query`: Whether a user belongs to this group is determined by the query provided in the `:query"` parameter.
+  + `nil` or no value provided: Same as `query` if a value is provided for the `:query` keyword parameter, otherwise same as `always`.
+
 ## Existing configurations
 The following projects are currently using this service as a replacement of
 `mu-authorization`, either fully or in a limited capacity (e.g. only on the
