@@ -137,7 +137,32 @@ In order to use the CURIE (Compact URI) form (e.g. `foaf:name`) we need to defin
 **NOTE**: This does not affect prefixes that can be used in sparql query strings used in this config. They still need to be specified using the `PREFIX` keyword.
 
 ## Reference
-TODO
+### ACL configuration interface
+#### `define-graph`
+A graph-specification essentially describes the set of triples in a graph to which rights can be assigned. It does this using one or more type-specifications. A type-specification in turn specifies a resource type and predicates that capture the relevant triples. A graph-specification is created using the `define-graph` macro:
+
+```lisp
+define-graph (name (graph &rest args &key (sparql t sparql-p) (delta t delta-p) (file nil file-p) (operations #'identity operations-p))
+  &body type-specifications)
+```
+
+Parameters:
+- *`name`* A symbol with which the created `graph-specification` can be referenced in the remainder of the configuration. The name should **not** blank spaces and should **not** be surrounded with (double) quotes.
+- *`graph`* A string that is (the prefix for) a URI of a graph in which the triples are stored.
+
+Keyword parameters:
+- *`sparql`* If set to `nil` do **not** send SPARQL queries for this `graph-specification` to the backend. (default: `t`)
+- *`delta`* If set to `nil` do **not** generate delta messages for changes for this `graph-specification`. (default: `t`)
+- *`file`* Currently not used, intended for future functionality.
+- *`operations`* Currently not used, intended for future functionality.
+
+The *`body`* of a `define-graph` call contains one or more type-specifications. A `type-specification` has the form: `(<someResourceType> [<operator> <somePredicate>]+)`. `<someResourceType>` and `<somePredicate>` must be a URI string (e.g. `"http://xmlns.com/foaf/0.1/Person"` or `"foaf:Person"` if you have defined `foaf:` as a [prefix](#defining-prefixes)) or a `_` to indicate a wildcard.
+
+There are four supported operations that can be used in a type-specification
+- `T -> p`: Triples where the **subject** is of type `T` and the predicate is `p`.
+- `T <- p`: Triples where the **object** is of type `T` and the predicate is `p`.
+- `T x> p`: For triples where the **subject** is of type `T`, allow every predicate **except** for `p`.
+- `T <x p`: For triples where the **object** is of type `T`, allow every predicate **except** for `p`.
 
 ## Existing configurations
 The following projects are currently using this service as a replacement of
