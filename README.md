@@ -183,6 +183,25 @@ Keyword parameters:
   + `query`: Whether a user belongs to this group is determined by the query provided in the `:query"` parameter.
   + `nil` or no value provided: Same as `query` if a value is provided for the `:query` keyword parameter, otherwise same as `always`.
 
+#### `define-grant`
+An access-grant gives usage rights for a `graph-specification` to an `allowed-group` and can be created using the `define-grant` macro.
+
+```lisp
+grant (right &key to-graph for-allowed-group to for scopes)
+```
+
+Parameters:
+- *`right`* A list of rights that is to be granted, currently only `read` and `write` are supported.
+
+Keyword parameters:
+- *`:to-graph`* The names of one or more a previously defined graph-specifications. If multiple names are provided they must be surrounded by brackets: `(someName anotherName)`.
+- *`:for-allowed-group`* The names of one or more previously defined groups, each name quoted as a string. If multiple names are provided they must be surrounded by brackets: `("someGroup" "anotherGroup")`.
+- *`:to`* Alias for `:to-graph`.
+- *`:for`* Alias for `:for-allowed-group`.
+- *`:scopes`* TODO
+
+**NOTE**: if values for both keyword parameters `:to-graph` and `:to` are provided these values are merged into a single list. Same for `:for-allowed-group` and `:for`.
+
 ## Existing configurations
 The following projects are currently using this service as a replacement of
 `mu-authorization`, either fully or in a limited capacity (e.g. only on the
