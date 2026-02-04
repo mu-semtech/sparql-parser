@@ -96,8 +96,39 @@ For users with a certain role, say `SuperMegaAdmin`, a similar query can be used
 
 While it is rather common to define group membership based on roles, sparql-parser is not limited to this and allows arbitrary queries to be specified. It depends on your application's data model which queries make sense. Note, in the above examples the actual matches returned by the queries are not used, [TODO: link to guide] shows how you can use these matches to simplify access control policies in some situations.
 
+### Use compact URIs by defining prefixes
+You will often need to write URIs for resources, predicates, etc. while specifying access control policies for sparql-parser. As it is cumbersome to always write full URIs, and this also negatively impacts the readability of a configuration, sparql-parser supports using Compact URIs or [CURIEs](https://www.w3.org/TR/curie/). For this you need to define the prefixes you want to use along with their corresponding expansions.
+
+Prefixes are defined using the `define-prefixes` macro whose body is a sequence of keyword/value pairs of the form `:PREFIX "EXPANSION"`. For example, to be able to write `foaf:name` instead of `http://xmlns.com/foaf/0.1/name` you can define the `foaf:` prefix as follows:
+
+```lisp
+(in-package :acl)
+(define-prefixes
+  :foaf "http://xmlns.com/foaf/0.1/")
+```
+
+Note that the keyword `:foaf` does **not** contain a trailing colon ':' as would be the case in other languages such as [SPARQL](https://www.w3.org/TR/sparql11-query/#prefNames) or [TTL](https://www.w3.org/TR/turtle/#sec-iri). The colon preceding a keyword is required for it to be considered a keyword in the underlying data structure in which the pair is inserted.
+
+Be sure to define prefixes **before** their first use in some other part of your configuration. Otherwise, you will encounter errors when starting sparql-parser.
+
+You can define multiple prefixes in one go by simply putting multiple keyword/value pairs in the body of `define-prefixes`:
+
+```lisp
+(in-package :acl)
+(define-prefixes
+  :foaf "http://xmlns.com/foaf/0.1/"
+  :adms "http://www.w3.org/ns/adms#"
+  :cal "http://www.w3.org/2002/12/cal/ical#"
+  :cogs "http://vocab.deri.ie/cogs#"
+  :dcat "http://www.w3.org/ns/dcat#"
+  :ext "http://mu.semte.ch/vocabularies/ext/"
+  :eli "http://data.europa.eu/eli/ontology#")
+```
+
+**NOTE**: Be aware that the defined prefixes do **not** affect prefixes that can be used in SPARQL query strings such as those defined in the [previous section](#define-a-group-for-users-with-a-certain-role). In such queries prefixes still need to be specified using the `PREFIX` keyword.
+
 ### Define which triples are accessible for a graph
-Typically you want to explicitly specify which (kind of) triples within a graph an access control rule can be applied to. In sparql-parser such information is captured by *graph-specifications* which you create using the `define-graph` macro. For readability the code snippets use CURIEs as explained in the guide on TODO: link to prefix guide
+Typically you want to explicitly specify which (kind of) triples within a graph an access control rule can be applied to. In sparql-parser such information is captured by *graph-specifications* which you create using the `define-graph` macro. For readability the code snippets use CURIEs as explained in the guide on [defining prefixes](#use-compact-uris-by-defining-prefixes).
 
 For instance, say you have a graph `http://mu.semte.ch/graphs/people` containing triples for resources of types `foaf:Person` and `foaf:OnlineAccount`. The following snippet creates a graph-specification for that graph which covers all triples for resources of these two types. Here `people` is a unique identifier by which this graph-specification can be referred to later on. The URI of the target graph, `http://mu.semte.ch/graphs/people`, is specified as a string between brackets and double quotes.
 
@@ -176,19 +207,6 @@ It is supported to provide multiple target graph-specifications and/or access-gr
   :to-graph (people organization)
   :for-allowed-group "super-mega-admins")
 ```
-
-### Defining prefixes
-In order to use the CURIE (Compact URI) form (e.g. `foaf:name`) we need to define the prefixes first. This is done as follows:
-```lisp
-(define-prefixes
-  :adms "http://www.w3.org/ns/adms#"
-  :cal "http://www.w3.org/2002/12/cal/ical#"
-  :cogs "http://vocab.deri.ie/cogs#"
-  :dcat "http://www.w3.org/ns/dcat#"
-  :ext "http://mu.semte.ch/vocabularies/ext/"
-  :eli "http://data.europa.eu/eli/ontology#")
-```
-**NOTE**: This does not affect prefixes that can be used in sparql query strings used in this config. They still need to be specified using the `PREFIX` keyword.
 
 ## Reference
 ### ACL configuration interface
