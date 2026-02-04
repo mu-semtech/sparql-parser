@@ -3,7 +3,7 @@
 ;;;; Prefixes extraction
 ;;;;
 ;;;; Many URIs are expressed using prefixes.  This module extracts
-;;;; perfixes from a query and provides a cache-based variant to use
+;;;; prefixes from a query and provides a cache-based variant to use
 ;;;; them.
 ;;;;
 ;;;; This module is not thread-safe and assumes prefixes are constructed

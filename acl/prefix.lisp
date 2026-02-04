@@ -14,7 +14,7 @@
 (defmacro define-prefixes (&body body)
   "Defines a series of prefixes by reading the list as a plist.
 
-The car is assumed to be a keyward and the cadr is assumed to be the expanded string."
+The car is assumed to be a keyword and the cadr is assumed to be the expanded string."
   `(progn ,@(loop for (prefix expansion) on body
                   by #'cddr
                   collect `(define-prefix ,prefix ,expansion))))

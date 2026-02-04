@@ -16,10 +16,10 @@
 (defparameter *log-sparql-query-roundtrip* nil
   "When set to non-nil, we log both the outgoing query sent to and response received from the sparql endpoint.")
 
-(defparameter *aquire-db-semaphore-timeout* 55
-  "Amount of time (in seconds) to wait to aquire the semaphore (default is now 55).
+(defparameter *acquire-db-semaphore-timeout* 55
+  "Amount of time (in seconds) to wait to acquire the semaphore (default is now 55).
 
-NIL symolizes to wait forever.")
+NIL symbolizes to wait forever.")
 
 ;; Overriding the default values here for now.  Ideally these get calculated based on how much time we have left.
 (setf dexador.util:*default-connect-timeout* 60)
@@ -145,7 +145,7 @@ When the VERBOSE keyword is truethy, output is written to STDOUT."
 (defun query (string &key (send-to-single nil))
   "Sends a query to the backend and responds with the response body.
 
-When SEND-TO-SINGLE is truethy and multple endpoints are available, the request is sent to only one of them."
+When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request is sent to only one of them."
   (ensure-backends-variable)
   (let* ((selected-endpoints
            (if send-to-single
@@ -158,7 +158,7 @@ When SEND-TO-SINGLE is truethy and multple endpoints are available, the request 
     ;; - a single failing endpoint will bring the whole setup down in this implementation
     ;; - the implementation does not fire off the queries in parallel, we may want a thread per semaphore for that
     ;; - a full-fledged and parallel implementation likely means rewriting this whole logic and the construction of the sparql-endpoint struct
-    (support:with-multiple-semaphores ((mapcar #'sparql-endpoint-semaphore selected-endpoints) :timeout *aquire-db-semaphore-timeout*)
+    (support:with-multiple-semaphores ((mapcar #'sparql-endpoint-semaphore selected-endpoints) :timeout *acquire-db-semaphore-timeout*)
       (let ((post-handler (lambda () nil))) ; overwritten with handler on error
         (unwind-protect
              (support:with-exponential-backoff-retry

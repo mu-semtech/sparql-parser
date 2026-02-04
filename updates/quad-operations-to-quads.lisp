@@ -148,7 +148,7 @@ variables are missing this will not lead to a pattern."
                                 (ebnf::|ValuesClause|))))))))
 
 (defun quads-for-construct-bindings (bindings)
-  "Ceates a series of quads fo the constructed bindings."
+  "Creates a series of quads fo the constructed bindings."
   (loop for binding in bindings
         for subject = (jsown:val binding "s")
         for predicate = (jsown:val binding "p")
