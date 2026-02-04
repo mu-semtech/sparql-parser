@@ -273,6 +273,33 @@ In this case sparql-sparser will use the following graph URIs to forward request
 - `http://mu.semte.ch/graphs/organizations/someOrganization/someRole`
 - `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization/aCompletetlyDifferentRole`
 
+### Generating delta messages for data changes
+Sparql-parser can be configured to generate delta messages when quads are inserted or deleted. Such delta messages can be further distributed to interested parties using a [delta-notifier](https://github.com/mu-semtech/delta-notifier) service. To enable generating delta messages add the following to your configuration for sparql-parser.
+
+```lisp
+(in-package :delta-messenger)
+(add-delta-messenger "http://delta-notifier/")
+```
+
+Here `delta-notifier` is the name of the delta-notifier service in your application as defined in `docker-compose.yml`. If this service is called differently in your case, modify the string accordingly.
+
+If you also want to log delta messages to the standard output add the following to your configuration as well well.
+
+```lisp
+(in-package :delta-messenger)
+(add-delta-logger)
+```
+
+The `define-graph` macro supports more fine-grained control for which graph-specifications delta messages should be generated. The `:delta` keyword parameter allows to disable delta messages for a specific graph-specification:
+
+```lisp
+(define-graph organization ("http://mu.semte.ch/graphs/organizations/" :delta nil)
+  ("foaf:Person" -> _)
+  ("foaf:OnlineAccount" x> "ext:password"))
+```
+
+Any other value than `nil` will be interpreted as `t`, which is the default value, and will enable delta messages for the graph specification.
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`
