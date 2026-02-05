@@ -333,6 +333,69 @@ This allows using that type in graph-specifications the same as other resources:
 
 **NOTE**: this is not strictly limited to resources without a type. But can also be used to assume additional types for resources next to those types  explicitly specified in the data.
 
+### Define access rights for specific services
+It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes** which facilitate defining access control rules for such scenarios.
+
+**NOTE**: This requires the service to which rights are granted is created with [mu-javascript-template](https://github.com/mu-semtech/mu-javascript-template) v1.9.0 or newer. Services based on older templates should first be upgraded or can use [mu-auth-sudo](https://github.com/lblod/mu-auth-sudo) as alternative solution.
+
+For instance, let's assume your application has the following access control policy:
+
+```lisp
+(in-package :acl)
+
+(supply-allowed-group "authenticated"
+  :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+
+          SELECT DISTINCT ?account WHERE {
+            <SESSION_ID> session:account ?account.
+          }")
+
+(define-graph people ("http://mu.semte.ch/graphs/people")
+  ("foaf:Person" -> _)
+  ("foaf:OnlineAccount" -> _))
+
+(grant (read write)
+       :to people
+       :for "authenticated")
+```
+
+Now say you have a service `peopleservice` in your application which requires periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `peopleservice` will supply this value in the header of each outgoing request.
+
+```yaml
+services:
+  peopleservice:
+    image: example/peopleservice:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
+```
+
+In your sparql-parser configuration you can use the `with-scope` macro to grant rights within a scope. For instance, the following snippet essentially states that the grant is also applicable for requests with the scope `"http://services.semantic.works/people-service"`.
+
+```lisp
+(with-scope "http://services.semantic.works/people-service"
+  (grant (read write)
+         :to people
+         :for "authenticated"))
+```
+
+As an alternative notation you can use the `:scopes` keyword parameter for the `grant` macro as shown below. Note, that the argument value is surrounded by brackets and preceded by a quote `'`.
+
+```lisp
+(grant (read write)
+       :to people
+       :for "authenticated"
+       :scopes '("http://services.semantic.works/example-service"))
+```
+
+Using the `:scopes` parameter notation it is possible to provide multiple scope URIs:
+
+```lisp
+(grant (read write)
+       :to people
+       :for "authenticated"
+       :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
+```
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`
@@ -395,7 +458,7 @@ Keyword parameters:
 - *`:for-allowed-group`* The names of one or more previously defined groups, each name quoted as a string. If multiple names are provided they must be surrounded by brackets: `("someGroup" "anotherGroup")`.
 - *`:to`* Alias for `:to-graph`.
 - *`:for`* Alias for `:for-allowed-group`.
-- *`:scopes`* TODO
+- *`:scopes`* A list of URIs identifying the scopes in which this grant can be used. (default: `'(_)`)
 
 **NOTE**: if values for both keyword parameters `:to-graph` and `:to` are provided these values are merged into a single list. Same for `:for-allowed-group` and `:for`.
 
