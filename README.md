@@ -489,6 +489,9 @@ The following concrete example snippet defines three prefixes.
   :dcat "http://www.w3.org/ns/dcat#")
 ```
 
+### Environment variables
+- *`LISP_DYNAMIC_SPACE_SIZE`* Set the size (in megabytes) of the dynamic space reserved on startup by [sbcl](https://www.sbcl.org/manual/#Runtime-Options-1). (Default: `4096`)
+
 ### Configurable variables
 The following sections list, per package, the available variables that can be (indirectly) configured.
 
