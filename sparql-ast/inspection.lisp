@@ -201,26 +201,55 @@ sensible equality, assuming both represent a numeric literal."
            (equalp left-number-string right-number-string)))))
 
 (defun match-equal-p (a b)
-  "Yields truthy if match a and match b are equal.  May provide false
-negatives but not false positives."
-  (and (eq (type-of a) (type-of b))
-       (typecase a
-         (match
-             (cond ((and (ebnf-simple-string-p a)
-                         (ebnf-simple-string-p b))
-                    (string= (ebnf-string-real-string a) (ebnf-string-real-string b)))
-                   ((and (ebnf-boolean-p a)
-                         (ebnf-boolean-p b))
+  "Compares match a to match b and returns (VALUES TRUTHY CERTAIN-P).
+
+When CERTAIN-P is NIL, the TRUTHY value is a guess, when CERTAIN-P is TRUTHY we are certain about the answer."
+;;   "Yields truthy if match a and match b are equal.  May provide false
+;; negatives but not false positives."
+  (if (eq (type-of a) (type-of b))
+      (typecase a
+        (match
+            (cond ((and (ebnf-simple-string-p a)
+                        (ebnf-simple-string-p b))
+                   (values (string= (ebnf-string-real-string a) (ebnf-string-real-string b))
+                           t))
+                  ;; TODO: add support for language typed strings
+                  ((and (ebnf-boolean-p a)
+                        (ebnf-boolean-p b))
+                   (values
                     (eq (ebnf-boolean-as-real-boolean a)
-                        (ebnf-boolean-as-real-boolean b)))
-                   ((and (ebnf-numeric-literal-p a)
-                         (ebnf-numeric-literal-p b))
-                    (ebnf-numeric-literal-equal a b))
-                   (t
-                    (and (equal (match-term a) (match-term b))
-                         (= (length (match-submatches a)) (length (match-submatches b)))
-                         (every #'match-equal-p (match-submatches a) (match-submatches b))))))
-         (scanned-token (and (equal (scanned-token-token a) (scanned-token-token b))
-                             (string= (scanned-token-effective-string a)
-                                      (scanned-token-effective-string b)))))))
+                        (ebnf-boolean-as-real-boolean b))
+                    t))
+                  ((and (ebnf-numeric-literal-p a)
+                        (ebnf-numeric-literal-p b))
+                   (if (ebnf-numeric-literal-equal a b)
+                       (values t t)
+                       (values nil nil)))
+                  (t
+                   (cond ((not (equal (match-term a) (match-term b)))
+                          (values nil t))
+                         ((/= (length (match-submatches a)) (length (match-submatches b)))
+                          ;; not entirely certain about all the options here, perhaps this can be (VALUES NIL T)
+                          (values nil nil))
+                         (t (let ((equal-p t)
+                                  (certain-p t))
+                              (loop for submatch-a in (match-submatches a)
+                                    for submatch-b in (match-submatches b)
+                                    for (submatch-equal-p submatch-certain-p)
+                                      = (match-equal-p submatch-a submatch-b)
+                                    do
+                                       (if equal-p
+                                           (setf equal-p (and equal-p submatch-equal-p)
+                                                 certain-p (and certain-p submatch-certain-p))
+                                           ;; if they're not equal, then they might still be because of a datatype we do
+                                           ;; not interpret
+                                           (setf eqaul-p nil
+                                                 certain-p nil))
+                                    until (and (not equal-p) (not certain-p)))
+                              (values equal-p certain-p)))))))
+        (scanned-token (values (and (equal (scanned-token-token a) (scanned-token-token b))
+                                    (string= (scanned-token-effective-string a)
+                                             (scanned-token-effective-string b)))
+                               t)))
+      (values nil t)))
 
