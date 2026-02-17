@@ -380,7 +380,7 @@
                 #:operation-data-subfield
                 #:operation-type
                 #:operation-data)
-  (:import-from #:sparql-parser 
+  (:import-from #:sparql-parser
                 #:make-match
                 #:terminal-match-string)
   (:import-from #:sparql-manipulation

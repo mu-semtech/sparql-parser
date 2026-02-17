@@ -242,7 +242,7 @@ COMPLETE-P is to be understood as by DERIVE-TYPE-FROM-PREFIX-FUNCTION."
                    else
                      do
                         (push (cons uri graph) missing-uri-graph-combinations)))
-    ;; now find which uri graph combitations are missing
+    ;; now find which uri graph combinations are missing
     ;; query all missing uri graph combinations
     (let* ((grouped-by-uri (support:group-by missing-uri-graph-combinations #'string= :key #'car))
            (uri-graphs-combinations (loop for ((uri . graph) . rest) in grouped-by-uri
