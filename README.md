@@ -425,7 +425,7 @@ This service also supports defining policies using [ODRL](https://www.w3.org/TR/
 (setf *use-odrl-config-p* t)
 ```
 
-The actual policy should be defined in [n-triples](https://www.w3.org/TR/n-triples/) format in a config file mounted in `./config/authorization/config.nt`. The following snippet contains the ODRL equivalent, encoded in ttl format, for the lisp access rights shown in the previous section. Note, to use this policy it should be converted from ttl to n-triples. A more comprehensive policy example can be found in the [test config]('./test/exmaple-config.ttl').
+The actual policy should be defined in a [Turtle](https://www.w3.org/TR/turtle) file mounted in `./config/authorization/config.ttl`. The following snippet contains the ODRL equivalent, encoded in ttl format, for the lisp access rights shown in the previous section. A more comprehensive policy example can be found in the [test config]('./test/example-config.ttl').
 
 ```ttl
 @prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
@@ -461,7 +461,6 @@ ext:publicWrite a odrl:Permission ;
 
 
 The following functionality is *not* yet supported when using an ODRL policy:
-- Read policy from a ttl file instead of an n-triples file. Support ttl files is planned, the use of n-triples files is a temporary workaround due to lack of ttl parser in common lisp.
 - Specifying `scopes` for a permission.
 - Specifying an explicit `constraint` for an `allowed-group`, currently this is implicitly set based on whether a query is provided or not.
 - Specifying options, such as whether to generate deltas, per graph definition.
