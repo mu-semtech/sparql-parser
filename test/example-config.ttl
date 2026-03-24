@@ -61,7 +61,7 @@ example:personAsset a odrl:Asset, sh:NodeShape ;
   odrl:partOf example:publicGraph ;
   sh:targetClass foaf:Person .
 
-example:personeFavoriteAuthorAsset a odrl:Asset, sh:NodeShape ;
+example:personFavoriteAuthorAsset a odrl:Asset, sh:NodeShape ;
   odrl:partOf example:userGraph ;
   sh:targetClass foaf:Person ;
   sh:property [
@@ -76,7 +76,7 @@ example:geometryAsset a odrl:Asset, sh:NodeShape ;
   odrl:partOf example:publicGraph ;
   sh:targetClass geo:Geometry .
 
-example:WildCardAssset a odrl:Asset, sh:NodeShape ;
+example:WildCardAsset a odrl:Asset, sh:NodeShape ;
   odrl:partOf example:userGraph ;
   sh:targetClass ext:all ;
   sh:property [ sh:path ext:hasBook ] ,
