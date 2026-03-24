@@ -1,0 +1,3 @@
+[submodule "dependencies/cl-ttl-parser"]
+	path = dependencies/cl-ttl-parser
+	url = https://github.com/lblod/cl-ttl-parser.git
