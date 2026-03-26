@@ -37,6 +37,8 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
     :odrl-permission "http://www.w3.org/ns/odrl/2/permission"
     :odrl-profile "http://www.w3.org/ns/odrl/2/profile"
     :odrl-target "http://www.w3.org/ns/odrl/2/target"
+    :rdf-first "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
+    :rdf-rest "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
     :rdf-type "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     :sh-inverse-path "http://www.w3.org/ns/shacl#inversePath"
     :sh-not "http://www.w3.org/ns/shacl#not"
@@ -59,7 +61,9 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
     :odrl-profile "http://www.w3.org/ns/odrl/2/Profile"
     :odrl-set "http://www.w3.org/ns/odrl/2/Set"
     :sh-node-shape "http://www.w3.org/ns/shacl#NodeShape"
-    :sh-property-shape "http://www.w3.org/ns/shacl#PropertyShape")
+    :sh-property-shape "http://www.w3.org/ns/shacl#PropertyShape"
+    ;; NOTE (27/03/2026): Not actually a resource type
+    :rdfs-nil "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil")
   "A plist containing the full uris for the resources types used in ODRL policies.")
 
 (defun type-uri (indicator)
@@ -85,12 +89,14 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
       uri))
 
 (defun uri-equal-p (left right)
-  "Check whether LEFT and RIGHT are either identical uris or blank node labels."
+  "Check whether LEFT and RIGHT identify the same resource."
   (cond
     ((and (quri:uri-p left) (quri:uri-p right)) (quri:uri-equal left right))
-    ((and (stringp left) (stringp right)) (string= left right))
-    ((quri:uri-p left) (string= (quri:render-uri left) right))
-    ((quri:uri-p right) (string= left (quri:render-uri right)))
+    ((and (cl-ttl-parser:blank-node-p left) (cl-ttl-parser:blank-node-p right))
+     (equal left right)) ; consider blank nodes equal if they have the same label
+    ;; NOTE (27/03/2026): Needed because we do not pass quri:uri to ODRL but their strings
+    ((and (quri:uri-p left) (stringp right)) (string= (uri-string left) right))
+    ((and (stringp left) (quri:uri-p right)) (string= left (uri-string right)))
     (t nil)))
 
 (defun filter-subject (resource graph)
@@ -206,27 +212,42 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
    (lambda (uri) (make-party-collection uri graph))
    (list-party-collections graph)))
 
+(defun collect-rdf-list (uri graph)
+  "Collect all elements in the rdf list starting with element URI.
+
+Return nil if URI does not identify an rdf list element in GRAPH."
+  (alexandria:when-let ((first (car (filter-subject-predicate uri (predicate-uri :rdf-first) graph)))
+                        (rest (car (filter-subject-predicate uri (predicate-uri :rdf-rest) graph))))
+    (append (list (triple-object first))
+            (unless (uri-equal-p (triple-object rest) (type-uri :rdfs-nil))
+              (collect-rdf-list (triple-object rest) graph)))))
+
 (defun make-party-collection (uri graph)
   "Make a `party-collection' instance for the resource with URI."
-  (let* ((triples (filter-subject uri graph))
-         (name (first-value-for-predicate (predicate-uri :vcard-fn) triples))
-         (description (first-value-for-predicate (predicate-uri :dcterms-description) triples))
-         ;; FIXME Order matters, the parameters should be provided as an RDF list.
-         (parameters (filter-predicate (predicate-uri :ext-query-parameters) triples))
-         (query (first-value-for-predicate (predicate-uri :ext-defined-by) triples)))
-    (make-instance
-     'party-collection
-     :uri (uri-string uri)
-     :name (cl-ttl-parser:rdf-literal-value name)
-     :description (when description (cl-ttl-parser:rdf-literal-value description))
-     :parameters (mapcar
-                  (lambda (triple)
-                    (cl-ttl-parser:rdf-literal-value (triple-object triple)))
-                  parameters)
-     ;; TODO: Make sure to remove any newlines and/or trailing spaces at the end of the string;
-     ;; otherwise it will not be parsed correctly
-     ;; Also remove any newlines at the beginning of the string
-     :query (when query (cl-ttl-parser:rdf-literal-value query)))))
+  (flet ((parse-parameters (parameters)
+           (if (cl-ttl-parser:blank-node-p parameters)
+               ;; queryParameters was a collection, converted to an RDF list. `parameters' is the
+               ;; blank node that contains the first element of the RDF list.
+               (mapcar
+                (lambda (elem) (cl-ttl-parser:rdf-literal-value elem))
+                (collect-rdf-list parameters graph))
+               ;; queryParameters was a single string, extract the value from the literal it became
+               (list (cl-ttl-parser:rdf-literal-value parameters)))))
+    (let* ((triples (filter-subject uri graph))
+           (name (first-value-for-predicate (predicate-uri :vcard-fn) triples))
+           (description (first-value-for-predicate (predicate-uri :dcterms-description) triples))
+           (parameters (first-value-for-predicate (predicate-uri :ext-query-parameters) triples))
+           (query (first-value-for-predicate (predicate-uri :ext-defined-by) triples)))
+      (make-instance
+       'party-collection
+       :uri (uri-string uri)
+       :name (cl-ttl-parser:rdf-literal-value name)
+       :description (when description (cl-ttl-parser:rdf-literal-value description))
+       :parameters (when parameters (parse-parameters parameters))
+       ;; TODO: Make sure to remove any newlines and/or trailing spaces at the end of the string;
+       ;; otherwise it will not be parsed correctly
+       ;; Also remove any newlines at the beginning of the string
+       :query (when query (cl-ttl-parser:rdf-literal-value query))))))
 
 ;; Asset Collections and Assets (Node shapes)
 (defun make-asset-collections (graph)

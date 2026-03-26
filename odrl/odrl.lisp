@@ -190,14 +190,22 @@ simply be down cased."
     (with-slots (uri rules) object
       (format
        stream
-       "~a <~a>~&~2t<permissions:~&~4t ~{~2t~a~^~&~}>"
+       "~a ~a~&~2t<permissions:~&~4t ~{~2t~a~^~&~}>"
        (type-of object)
        uri
        (mapcar #'uri rules)))))
 
 (defmethod print-object ((object rule) stream)
   (print-unreadable-object (object stream)
-    (format stream "~a" (uri object))))
+    (with-slots (uri actions target assignee) object
+      (format
+       stream
+       "~a ~a~&~2t<actions: ~{~a~^, ~}>~&~2t<target: ~a>~&~2t<assignee: ~a>"
+       (type-of object)
+       uri
+       actions
+       (uri target)
+       (uri assignee)))))
 
 (defmethod print-object ((concept action) stream)
   (print-unreadable-object (concept stream)
@@ -221,7 +229,7 @@ simply be down cased."
     (with-slots (uri name description parameters query) object
       (format
        stream
-       "~a ~a~&~2t<name: ~a>~&~2t<description: ~a>~&~2t<parameters: ~a>~&~2t<query: ~a>"
+       "~a ~a~&~2t<name: ~a>~&~2t<description: ~a>~&~2t<parameters: ~{~a~^, ~}>~&~2t<query: ~a>"
        (type-of object)
        uri
        name
