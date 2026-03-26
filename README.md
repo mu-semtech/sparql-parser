@@ -698,7 +698,36 @@ The "magic" here happens when sparql-parser processes an appropriate request, i.
 - `http://mu.semte.ch/graphs/organizations/someOrganization`
 - `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization`
 
-TODO: multiple values for `ext:queryParameters` as an RDF list
+If you want to specify multiple values for the `ext:queryParamters` you have to specify them as elements in a Turtle collection. The matches will be appended to graph URIs in the same order as the elements in the collection. For example, you can add `session_role` as a second `ext:queryParameters` argument to the above `example:organizationMemberParty` party collection as follows:
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:organizationMemberParty a odrl:PartyCollection ;
+  vcard:fn "organization-member" ;
+  ext:queryParameters ( "session_group" "session_role" );
+  ext:definedBy """PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          SELECT ?session_group ?session_role WHERE {
+            <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group.
+          }""" .
+```
+
+Let's say that the party collection's query returns the following matches for your application:
+
+| session_group                    | session_role              |
+|----------------------------------|---------------------------|
+| someOrganization                 | someRole                  |
+| aCompletelyDifferentOrganization | aCompletetlyDifferentRole |
+
+In this case sparql-sparser will use the following graph URIs to forward requests for the `example:organizationGraphs` asset collection:
+
+- `http://mu.semte.ch/graphs/organizations/someOrganization/someRole`
+- `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization/aCompletetlyDifferentRole`
+
 
 #### Generating delta messages for data changes in ODRL
 This functionality is not part of the ODRL policy itself. This should be configured in the `config.lisp` file as explained in [this guide](#generating-delta-messages-for-data-changes).

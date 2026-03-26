@@ -44,7 +44,7 @@ example:adminParty a odrl:PartyCollection ;
 
 ext:organizationMemberParty a odrl:PartyCollection ;
   vcard:fn "organization-member" ;
-  ext:queryParameters "session_group", "session_role" ;
+  ext:queryParameters ( "session_group" "session_role" ) ;
   ext:definedBy """PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
           PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
           SELECT ?session_group ?session_role WHERE {
