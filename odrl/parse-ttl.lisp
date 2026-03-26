@@ -211,6 +211,7 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
   (let* ((triples (filter-subject uri graph))
          (name (first-value-for-predicate (predicate-uri :vcard-fn) triples))
          (description (first-value-for-predicate (predicate-uri :dcterms-description) triples))
+         ;; FIXME Order matters, the parameters should be provided as an RDF list.
          (parameters (filter-predicate (predicate-uri :ext-query-parameters) triples))
          (query (first-value-for-predicate (predicate-uri :ext-defined-by) triples)))
     (make-instance
