@@ -147,7 +147,7 @@ If you are interested in a more limited set of triples, you can explicitly speci
   ("foaf:OnlineAccount" -> _))
 ```
 
-Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser provides another operator `x>` to describe such situations his more concisely. For example, if you are interested in all triples with a `foaf:OnlineAccount` resource as subject except those that have as predicate `ext:password` or `account:accountName`. This can be written as follows:
+Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser provides another operator `x>` to describe such situations his more concisely. For example, if you are interested in all triples with a `foaf:OnlineAccount` resource as subject except those that have as predicate `ext:password` or `foaf:accountName`. This can be written as follows:
 
 ```lisp
 (in-package :acl)
@@ -155,7 +155,7 @@ Alternatively, you may be interested in most triples for a resource type except 
   ("foaf:Person" -> "foaf:firstName"
                  -> "foaf:familyName")
   ("foaf:OnlineAccount" x> "ext:password"
-                        x> "account:accountName"))
+                        x> "foaf:accountName"))
 ```
 
 So far the type-specifications only concerned triples with a *subject* of a specific resource type. To specify triples where the *object* is of a given resource type you can use the inverse operators `<-` and `<x`. For example, `("foaf:Person" <- "schema:employee")` means all triples that link an object of resource type `foaf:Person` to some subject resource via the predicate `schema:employee`. This can be added to the `define-graph` snippet as follows:
@@ -167,14 +167,14 @@ So far the type-specifications only concerned triples with a *subject* of a spec
                  -> "foaf:familyName"
                  <- "schema:employee")
   ("foaf:OnlineAccount" x> "ext:password"
-                        x> "account:accountName"))
+                        x> "foaf:accountName"))
 ```
 
 In summary this graph-specification contains all triples in `http://mu.semte.ch/graphs/people` that have
 
 - as *subject* a resource of type `foaf:Person` AND as *predicate* `foaf:firstName` or `foaf:familyName`; OR
-- has as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`; OR
-- as *subject* a resource of type `foaf:OnlineAccount` AND **not** as *predicate* `ext:password` or `account:accountName`.
+- as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`; OR
+- as *subject* a resource of type `foaf:OnlineAccount` AND **not** as *predicate* `ext:password` or `foaf:accountName`.
 
 ### Granting a group rights to a graph
 Once you have defined the necessary [access-groups](#define-a-group-for-users-with-a-certain-role) and [graph-specifications](#define-which-triples-are-accessible-for-a-graph) you can grant rights using the `grant` macro. This macro expects as input a list of granted rights, the target graph-specification(s), and access-group(s). For example, the following snippets grants users that are members of the `authenticated` group read rights to the triples in the `people` graph-specification.
@@ -334,7 +334,7 @@ This allows using that type in graph-specifications the same as other resources:
 **NOTE**: this is not strictly limited to resources without a type. But can also be used to assume additional types for resources next to those types  explicitly specified in the data.
 
 ### Define access rights for specific services
-It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes** which facilitate defining access control rules for such scenarios.
+It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes* which facilitate defining access control rules for such scenarios.
 
 **NOTE**: This requires the service to which rights are granted is created with [mu-javascript-template](https://github.com/mu-semtech/mu-javascript-template) v1.9.0 or newer. Services based on older templates should first be upgraded or can use [mu-auth-sudo](https://github.com/lblod/mu-auth-sudo) as alternative solution.
 
