@@ -343,6 +343,63 @@ For instance, let's assume your application has the following access control pol
 ```lisp
 (in-package :acl)
 
+(supply-allowed-group "public")
+
+(define-graph people ("http://mu.semte.ch/graphs/people")
+  ("foaf:Person" -> _)
+  ("foaf:OnlineAccount" -> _))
+
+(grant (read)
+       :to-graph people
+       :for-allowed-group "public")
+```
+
+Now say you have a service `people-service` in your application which requires to periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `people-service` will supply this value in the header of each outgoing request.
+
+```yaml
+services:
+  people-service:
+    image: example/people-service:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
+```
+
+In your sparql-parser configuration you can use the `with-scope` macro to grant rights within a scope. For instance, the following snippet essentially states that the grant is applicable for requests that belong to the `public` group **and** specify in their header `"http://services.semantic.works/people-service"` as scope. Note, since no query was specified for the `public` group first condition is automatically satisfied.
+
+```lisp
+(with-scope "http://services.semantic.works/people-service"
+  (grant (read)
+         :to-graph people
+         :for-allowed-group "public"))
+```
+
+As an alternative notation you can use the `:scopes` keyword parameter for the `grant` macro as shown below. Note, that the argument value is surrounded by brackets and preceded by a quote `'`.
+
+```lisp
+(grant (read)
+       :to-graph people
+       :for-allowed-group "public"
+       :scopes '("http://services.semantic.works/example-service"))
+```
+
+Using the `:scopes` parameter notation it is possible to provide multiple scope URIs. In this case requests will be considered relevant if they specify either of the listed scopes in their header.
+
+```lisp
+(grant (read write)
+       :to-graph people
+       :for-allowed-group "public"
+       :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
+```
+
+The example so far deal with a grant assigned to a group without a query, i.e. a group for which every requesting entity is a member. Scopes can also be combined with groups that do specify a query. In this case, they can be used to limit the access rights of a service to a subset of those granted to the user that (indirectly) triggers the service's requests.
+
+For example, say we also have an `admin-service` that should also be able to write to the people graph. Since admins need to authenticate to the system you could simply add an `authenticated` group and grant this group both read and write rights to the people graph-specification.
+
+```lisp
+(in-package :acl)
+
+(supply-allowed-group "public")
+
 (supply-allowed-group "authenticated"
   :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
 
@@ -354,46 +411,37 @@ For instance, let's assume your application has the following access control pol
   ("foaf:Person" -> _)
   ("foaf:OnlineAccount" -> _))
 
+(with-scope "http://services.semantic.works/people-service"
+  (grant (read)
+         :to-graph people
+         :for-allowed-group "public"))
+
 (grant (read write)
-       :to people
-       :for "authenticated")
+       :to-graph people
+       :for-allowed-group "authenticated")
 ```
 
-Now say you have a service `peopleservice` in your application which requires periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `peopleservice` will supply this value in the header of each outgoing request.
+This has the possible disadvantage that the `admin-service` can do everything an authenticated user can do, which may be more than desired. To limit this you can define a default scope for the `admin-service` as before:
 
 ```yaml
 services:
-  peopleservice:
-    image: example/peopleservice:0.0.1
+  admin-service:
+    image: example/admin-service:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/admin-service"
+  people-service:
+    image: example/people-service:0.0.1
     environment:
       DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
 ```
 
-In your sparql-parser configuration you can use the `with-scope` macro to grant rights within a scope. For instance, the following snippet essentially states that the grant is also applicable for requests with the scope `"http://services.semantic.works/people-service"`.
+As before you can use the `with-scope` macro (or the `:scopes` keyword argument) to specify a scope for the grant. A request wil now only be allowed if it comes (indirectly) from a user in the `authenticated` group **and** the correct scope is set in its header.
 
 ```lisp
-(with-scope "http://services.semantic.works/people-service"
+(with-scope "http://services.semantic.works/admin-service"
   (grant (read write)
-         :to people
-         :for "authenticated"))
-```
-
-As an alternative notation you can use the `:scopes` keyword parameter for the `grant` macro as shown below. Note, that the argument value is surrounded by brackets and preceded by a quote `'`.
-
-```lisp
-(grant (read write)
-       :to people
-       :for "authenticated"
-       :scopes '("http://services.semantic.works/example-service"))
-```
-
-Using the `:scopes` parameter notation it is possible to provide multiple scope URIs:
-
-```lisp
-(grant (read write)
-       :to people
-       :for "authenticated"
-       :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
+         :to-graph people
+         :for-allowed-group "authenticated"))
 ```
 
 ## Reference
