@@ -25,11 +25,20 @@
          :reader notp))
   (:documentation "A SHACL node shape"))
 
+(defmethod initialize-instance :after ((node node-shape) &key)
+  (with-slots (target-class) node
+    (unless target-class
+      (error "Must supply a TARGET-CLASS for a node shape."))))
+
 (defclass property-shape (shape)
   ((path :initarg :path
-         :initform nil
          :reader path)) ; value is a predicate URI or a `property-path' instance
   (:documentation "A SHACL property shape"))
+
+(defmethod initialize-instance :after ((shape property-shape) &key)
+  (with-slots (path) shape
+    (unless path
+      (error "Must supply a PATH for a property."))))
 
 (defclass property-path ()
   ((predicate-path :initarg :predicate-path
@@ -38,6 +47,12 @@
            :reader object))
   (:documentation "A SHACL property path."))
 
+(defmethod initialize-instance :after ((prop property-path) &key)
+  (with-slots (predicate-path object) prop
+    (unless predicate-path
+      (error "Must supply a PREDICATE PATH for a property path."))
+    (unless object
+      (error "Must supply an OBJECT for a property path."))))
 
 ;;
 ;; Conversion to sparql-parser's ACL

@@ -165,6 +165,11 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
   "Find the uri for the policy resource defined in GRAPH."
   (car (list-resource-uris (type-uri :odrl-set) graph)))
 
+(defun rdf-literal-value-maybe (literal)
+  "Return the value of LITERLAL if it is an rdf literal object."
+  (when (cl-ttl-parser:rdf-literal-p literal)
+    (cl-ttl-parser:rdf-literal-value literal)))
+
 ;; NOTE (01/10/2025): These macros are used to make the init-forms in the `let' operators in the
 ;; conversion functions more readable.
 (defmacro first-value-for-predicate (predicate graph)
@@ -241,13 +246,13 @@ Return nil if URI does not identify an rdf list element in GRAPH."
       (make-instance
        'party-collection
        :uri (uri-string uri)
-       :name (cl-ttl-parser:rdf-literal-value name)
-       :description (when description (cl-ttl-parser:rdf-literal-value description))
+       :name (rdf-literal-value-maybe name)
+       :description (rdf-literal-value-maybe description)
        :parameters (when parameters (parse-parameters parameters))
        ;; TODO: Make sure to remove any newlines and/or trailing spaces at the end of the string;
        ;; otherwise it will not be parsed correctly
        ;; Also remove any newlines at the beginning of the string
-       :query (when query (cl-ttl-parser:rdf-literal-value query))))))
+       :query (rdf-literal-value-maybe query)))))
 
 ;; Asset Collections and Assets (Node shapes)
 (defun make-asset-collections (graph)
@@ -267,8 +272,8 @@ Return nil if URI does not identify an rdf list element in GRAPH."
     (make-instance
      'asset-collection
      :uri (uri-string uri)
-     :name (cl-ttl-parser:rdf-literal-value name)
-     :description (when description (cl-ttl-parser:rdf-literal-value description))
+     :name (rdf-literal-value-maybe name)
+     :description (rdf-literal-value-maybe description)
      :graph (uri-string graph-uri)
      :assets (mapcar
               (lambda (uri) (find-shape-with-uri uri assets))
@@ -340,7 +345,7 @@ ASSET-COL and PARTY-COL should be lists of, respectively, `asset-collection' and
     (make-instance
      'permission
      :uri (uri-string uri)
-     :actions (list (make-action action))
+     :actions (when action (list (make-action action)))
      :target target
      :assignee assignee)))
 

@@ -12,6 +12,13 @@
 ;;
 ;; Furthermore, this implementation explicitly deviates from ODRL's specification in some ways.
 ;; Consult the documentation of individual classes for more information.
+
+(defparameter supported-odrl-actions
+  '("http://www.w3.org/ns/odrl/2/read"
+    "http://www.w3.org/ns/odrl/2/modify"
+    "http://www.w3.org/ns/odrl/2/write")
+  "The absolute URIs of the ODRL actions we support in policies.")
+
 (defclass concept ()
   ((uri :initarg :uri
         :reader uri))
@@ -22,6 +29,14 @@
           :type list
           :reader rules)) ; odrl:permission
   (:documentation "An ODRL Policy consisting of a set of rules."))
+
+;; NOTE (08/04/2026): We use to `initialize-instance' to check arguments instead of `:initform' to
+;; allow more precise checks. For example, passing on `nil' as rules will result in unexpected
+;; behaviour.
+(defmethod initialize-instance :after ((policy policy) &key)
+  (with-slots (rules) policy
+    (unless (and rules (> (length rules) 0))
+      (error "Must supply at least one RULE in a policy."))))
 
 (defclass rule-set (policy)
   ()
@@ -56,7 +71,11 @@ simply be down cased."
   (:documentation "An ODRL party collection.  In contrast to the ODRL specification this does not explicitly contain member parties.  Instead members are essentially defined by the query, if the query returns a result the (implied) party is considered a member of the party collection."))
 
 (defmethod initialize-instance :after ((concept party-collection) &key)
-  (setf (slot-value concept 'name) (to-kebab-case (name concept))))
+  (with-slots (name) concept
+    (unless name
+      (error "Must supply a NAME for a party collection."))
+
+    (setf (slot-value concept 'name) (to-kebab-case (name concept)))))
 
 ;; TODO: `define-graph' allows to specify extra options `:sparql' and `:delta'. The ODRL policy
 ;; currently does not allow such options to be passed. Should extend data model to support this if
@@ -76,7 +95,15 @@ simply be down cased."
   (:documentation "An ODRL Asset collection representing a graph.  In contrast to the ODRL specification this does explicitly refer to its contained assets, thereby modelling the inverse of the ODRL's partOf predicate.  This inversion simplifies converting ODRL policies to ACL configurations as it allows to iterate of the necessary assets when given an asset collection, which is in turn referenced by a rule for the starting point of the ODRL to ACL conversion.  Otherwise, one would somehow have to keep track of all asset instances and link them their collections.  A consequence of this is that the entity creating `asset-collection' instances is responsible for inverting the relations between assets and the asset collections they part of.  Furthermore, assets are represented as instances of `shacl:node-shape' and there is *no* explicit class for ODRL Assets."))
 
 (defmethod initialize-instance :after ((concept asset-collection) &key)
-  (setf (slot-value concept 'name) (to-kebab-case (name concept))))
+  (with-slots (name graph assets) concept
+    (unless name
+      (error "Must supply a NAME for an asset collection."))
+    (unless graph
+      (error "Must supply a GRAPH (PREFIX) for an asset collection."))
+    (unless (and assets (> (length assets) 0))
+      (error "Must supply at least one ASSET that is part of an asset collection"))
+
+    (setf name (to-kebab-case (name concept)))))
 
 (defclass rule (concept)
   ((actions :initarg :actions
@@ -90,9 +117,23 @@ simply be down cased."
              :reader assignee)) ; odrl:assignee
   (:documentation "An ODRL rule combines the common parts for permissions, prohibitions, and duties.  In contrast to the ODRL specification we allow a rule to specify multiple actions, as `acl::access-grant's allows multiple usages to be specified."))
 
+(defmethod initialize-instance :after ((concept rule) &key)
+  (with-slots (actions) concept
+    (unless (and actions (> (length actions) 0))
+      (error "Must supply at least one ACTION for a rule."))))
+
 (defclass permission (rule)
   ()
   (:documentation "An ODRL permission represents that an assignee is allowed to perform an action on a target."))
+
+(defmethod initialize-instance :after ((concept permission) &key)
+  (with-slots (actions target assignee) concept
+    (unless (and actions (> (length actions) 0))
+      (error "Must supply at least one ACTION for a permission."))
+    (unless target
+      (error "Must supply a TARGET asset collection for a permission."))
+    (unless assignee
+      (error "Must supply an ASSIGNEE party collection for a permission."))))
 
 (defclass action (concept)
   ()
@@ -180,7 +221,7 @@ simply be down cased."
       ;; NOTE (23/01/2026): The odrl:write action was deprecated by odrl:modify. We will support it
       ;; anyway for convenience.
       ((cl-ppcre:scan ".*write>?$" uri) 'acl::write)
-      (t (error "No matching right found for \"~a\"" uri)))))
+      (t (error "Encountered a unsupported action \"~a\"" uri)))))
 
 ;;
 ;; Varia
