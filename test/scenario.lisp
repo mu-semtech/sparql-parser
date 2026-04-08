@@ -25,6 +25,12 @@
    :jane "http://mu.semte.ch/sessions/janeuuid"
    :joll "http://mu.semte.ch/sessions/adminuuid"))
 
+;;;; Our services are :admin (read and write public-data), and :catalog (read public)
+(defparameter *known-service-scopes*
+  (list
+   :admin "http://services.semantic.works/admin-service"
+   :catalog "http://services.semantic.works/catalog-service"))
+
 (defun clean-up-graphs ()
   (client:query (coerce
                  "DELETE {
@@ -175,6 +181,15 @@
                 :to acl::push-updates
                 :for "public")
 
+     (acl:grant (acl::read acl::write)
+                :to-graph acl::public-data
+                :for-allowed-group "public"
+                :scopes '("http://services.semantic.works/admin-service"))
+
+     (acl:grant (acl::read)
+                :to-graph acl::public-data
+                :for-allowed-group "public"
+                :scopes '("http://services.semantic.works/catalog-service"))
      ,@body))
 
 ;; TODO: Copied and modified from `with-acl-config', could probably reduce the code duplication
@@ -220,6 +235,12 @@
   "Impersonates USER."
   `(server::with-call-context
        (:mu-session-id (getf *known-session-ids* ,user))
+     ,@body))
+
+(defmacro with-scope-for (service &body body)
+  "Impersonates SERVICE by setting its scope."
+  `(server::with-call-context
+       (:mu-call-scope (getf *known-service-scopes* ,service))
      ,@body))
 
 (defun store-initial-session-data ()
@@ -380,7 +401,7 @@ this point and likely a redpencil image too.")
 
         ASK {
           favorites:me ext:hasFavoriteAuthor ?author.
-        }")      
+        }")
     ;; then let's describe the values
     (format t "~&Jack can describe favorite authors.~%")
     (server:execute-query-for-context
@@ -604,7 +625,114 @@ this point and likely a redpencil image too.")
           ext:myDisplay a ext:NoNameOrLabel;
             ext:score ?score;
             ext:level ?level.
-        }")))
+        }"))
+
+  (format t "~&Admin service can read and write~%")
+  (with-scope-for :admin
+    (format t "~&Can add authors.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+
+        INSERT DATA {
+          authors:david-graeber a foaf:Person;
+            foaf:name \"David Graeber\".
+        }")
+
+    (format t "~&Can add a book for an author.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+
+        INSERT DATA {
+          books:dawn a schema:Book;
+            schema:name \"The Dawn of Everything\";
+            schema:creator authors:david-graeber .
+        }")
+
+    (format t "~&Can add extra author to book.~%")
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+
+        INSERT DATA {
+          authors:david-wengrow a foaf:Person ;
+            schema:name \"David Wengrow\" .
+          books:dawn schema:creator authors:david-wengrow .
+        }")
+
+    (format t "~&Cannot add a favorite.~%")
+    (handler-case
+        (progn
+          (server:execute-query-for-context
+           "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        INSERT DATA {
+          favorites:me ext:hasBook books:gtd, books:fastAndSlow.
+        }")
+          (format t "~&ERROR: Oh noes, Admin service should not be able to add a favorite author!~%"))
+      (error (e) (declare (ignore e)) t)))
+
+  (format t "~&Catalog service can only read~%")
+  (with-scope-for :catalog
+    (format t "~&Cannot add authors.")
+    (handler-case
+        (progn
+          (server:execute-query-for-context
+           "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+
+        INSERT DATA {
+          authors:david-graeber a foaf:Person;
+            foaf:name \"David Graeber\".
+        }")
+          (format t "~&ERROR: Oh noes, Catalog service should not be able to add an author!~%"))
+      (error (e) (declare (ignore e)) t))
+
+    (format t "~&Cannot add book.~%")
+    (handler-case
+        (progn
+          (server:execute-query-for-context
+           "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+
+        INSERT DATA {
+          books:dawn a schema:Book;
+            schema:name \"The Dawn of Everything\";
+            schema:creator authors:david-graeber .
+        }")
+      (format t "~&ERROR: Oh noes, Catalog service should not be able to add a book!~%"))
+      (error (e) (declare (ignore e)) t))
+
+    (format t "~&Cannot add a favorite.~%")
+    (handler-case
+        (progn
+          (server:execute-query-for-context
+           "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX authors: <http://example.com/authors/>
+        PREFIX books: <http://example.com/books/>
+        PREFIX favorites: <http://mu.semte.ch/favorites/>
+        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+        INSERT DATA {
+          favorites:me ext:hasBook books:gtd, books:fastAndSlow.
+        }")
+          (format t "~&ERROR: Oh noes, Catalog service should not be able to add a favorite author!~%"))
+      (error (e) (declare (ignore e)) t))))
 
 (defun delta-only-assertion-tests ()
   (client:query (coerce
