@@ -114,7 +114,10 @@ simply be down cased."
            :reader target) ; odrl:target
    (assignee :initarg :assignee
              :type party-collection
-             :reader assignee)) ; odrl:assignee
+             :reader assignee) ; odrl:assignee
+   (scopes :initarg :scopes
+           :type list
+           :reader scopes))
   (:documentation "An ODRL rule combines the common parts for permissions, prohibitions, and duties.  In contrast to the ODRL specification we allow a rule to specify multiple actions, as `acl::access-grant's allows multiple usages to be specified."))
 
 (defmethod initialize-instance :after ((concept rule) &key)
@@ -146,10 +149,17 @@ simply be down cased."
 (defgeneric odrl-to-acl (concept)
   (:documentation "Convert an ODRL concept to its corresponding sparql-parser configuration macro."))
 
+;; NOTE (08/04/2026): This is NOT equality of rules as it does not take into account actions.
 (defun rules-match-p (left right)
-  "Return t if the rules LEFT and RIGHT have the same target and assignee, nil otherwise."
+  "Return t if the rules LEFT and RIGHT have the same target, assignee, and set of scopes."
   (and (eq (slot-value left 'assignee) (slot-value right 'assignee))
-       (eq (slot-value left 'target) (slot-value right 'target))))
+       (eq (slot-value left 'target) (slot-value right 'target))
+       ;; set equality for scopes slots
+       (let ((lscopes (slot-value left 'scopes))
+             (rscopes (slot-value right 'scopes)))
+         (and
+          (null (set-difference lscopes rscopes :test #'string=))
+          (null (set-difference rscopes lscopes :test #'string=))))))
 
 (defun find-matching-rule (rule rules)
   "Find a rule in RULES that `rules-match-p' RULE."
@@ -203,9 +213,9 @@ simply be down cased."
 
 ;; TODO: This partially replicates the logic in the `acl:grant' macro
 (defmethod odrl-to-acl ((concept permission))
-  (with-slots (actions target assignee) concept
+  (with-slots (actions target assignee scopes) concept
     (acl:grant*
-     :scopes (list 'acl:_) ;; TODO: support scopes
+     :scopes (or scopes (list 'acl:_))
      :rights (mapcar
               (lambda (action)
                 (intern (symbol-name (odrl-to-acl action)) :keyword))
@@ -238,15 +248,16 @@ simply be down cased."
 
 (defmethod print-object ((object rule) stream)
   (print-unreadable-object (object stream)
-    (with-slots (uri actions target assignee) object
+    (with-slots (uri actions target assignee scopes) object
       (format
        stream
-       "~a ~a~&~2t<actions: ~{~a~^, ~}>~&~2t<target: ~a>~&~2t<assignee: ~a>"
+       "~a ~a~&~2t<actions: ~{~a~^, ~}>~&~2t<target: ~a>~&~2t<assignee: ~a>~&~2t<scopes: ~{~a~^, ~}>"
        (type-of object)
        uri
        actions
        (uri target)
-       (uri assignee)))))
+       (uri assignee)
+       scopes))))
 
 (defmethod print-object ((concept action) stream)
   (print-unreadable-object (concept stream)

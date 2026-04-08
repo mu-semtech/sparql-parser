@@ -30,6 +30,8 @@ If FILENAME is nil, fall back to \"config\" as default filename for the policy f
     :ext-defined-by "http://mu.semte.ch/vocabularies/ext/definedBy"
     :ext-graph-prefix "http://mu.semte.ch/vocabularies/ext/graphPrefix"
     :ext-query-parameters "http://mu.semte.ch/vocabularies/ext/queryParameters"
+    ;; TODO: Use proper predicate
+    :ext-scope "http://mu.semte.ch/vocabularies/ext/scope"
     :odrl-action "http://www.w3.org/ns/odrl/2/action"
     :odrl-assignee "http://www.w3.org/ns/odrl/2/assignee"
     :odrl-assigner "http://www.w3.org/ns/odrl/2/assigner"
@@ -341,13 +343,18 @@ ASSET-COL and PARTY-COL should be lists of, respectively, `asset-collection' and
                   asset-col))
          (assignee (find-concept-with-uri
                     (first-value-for-predicate (predicate-uri :odrl-assignee) triples)
-                    party-col)))
+                    party-col))
+         (scopes (filter-predicate (predicate-uri :ext-scope) triples)))
     (make-instance
      'permission
      :uri (uri-string uri)
      :actions (when action (list (make-action action)))
      :target target
-     :assignee assignee)))
+     :assignee assignee
+     :scopes (mapcar
+              (lambda (scope)
+                (cl-ttl-parser:rdf-literal-value (triple-object scope)))
+              scopes))))
 
 (defun make-action (uri)
   "Make an `action' instance for the given URI."
