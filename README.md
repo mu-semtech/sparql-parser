@@ -400,7 +400,7 @@ Using the `:scopes` parameter notation it is possible to provide multiple scope 
 ### Defining an authorization policy in ODRL
 
 > [!WARNING]
-> Support for ODRL policies is under development and some functionality, such as using scopes, is not yet (fully) supported.
+> Support for ODRL policies is under development and some functionality is not yet (fully) supported.
 
 This service also supports defining policies using [ODRL](https://www.w3.org/TR/odrl-model/), as an alternative to the lisp-style configuration illustrated above. To enable ODRL policies, set `*use-odrl-config-p*` to non-nil in the config file mounted in `./config/authorization/config.lisp` as shown below. Note, other service configuration settings, such as `*backend*`, should still be set in the same file.
 
@@ -531,7 +531,7 @@ example:foafPersonNamesOnlyAsset a odrl:Asset, sh:NodeShape ;
 
 Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser supports a shorter notation to describe such situations more concisely. Similar to above this uses SHACL property shapes to specify the desired predicates, but surrounding them with a `sh:not` logical constraint component. For example, say you are interested in all triples with a `foaf:OnlineAccount` resource as subject, except those triples that have as predicate `ext:password` or `account:accountName`. This can be specified as shown in the `example:foafOnlineAccountAsset` shown below.
 
-```lisp
+```ttl
 @prefix example: <http://www.example.org/>
 @prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
@@ -549,7 +549,7 @@ example:foafOnlineAccountAsset a odrl:Asset, sh:NodeShape ;
 
 So far the assets only concerned triples with a *subject* of a specific resource type. To specify triples where the *object* is of a given resource type you can use property shapes with an `sh:inversePath` as property path. For example, the `example:foafPersonObjectAsset` below covers all triples which have an object of type `foaf:Person`. Here the `ext:all` object acts as a wildcard value meaning all predicates.
 
-```lisp
+```ttl
 @prefix example: <http://www.example.org/> .
 @prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
@@ -566,7 +566,7 @@ example:foafPersonObjectAsset a odrl:Asset, sh:NodeShape ;
 
 Similarly as before, you can also specify a concrete predicate for an inverse path to limit an asset to triples with an object of a certain *and* specific predicates. For example, the `example:foafPersonObjectEmployeeAsset` below covers triples that have a `foaf:Person` as object and have `schema:employee` as predicate.
 
-```lisp
+```ttl
 @prefix example: <http://www.example.org/> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix odrl: <http://www.w3.org/ns/odrl/2/> .
@@ -739,7 +739,85 @@ This functionality is not part of the ODRL policy itself. This should be configu
 This functionality is not part of the ODRL policy itself. This should be configured in the `config.lisp` file as explained in [this guide](#enable-additional-logging).
 
 #### Define access rights for specific services in ODRL
-Specifying scopes is **not** yet supported in ODRL policies. If you require this functionality you have to define you configuration in the lisp-style syntax.
+It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes** which facilitate defining access control rules for such scenarios.
+
+**NOTE**: This requires the service to which rights are granted is created with [mu-javascript-template](https://github.com/mu-semtech/mu-javascript-template) v1.9.0 or newer. Services based on older templates should first be upgraded or can use [mu-auth-sudo](https://github.com/lblod/mu-auth-sudo) as alternative solution.
+
+For instance, let's assume your application has the following access control policy:
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:authenticatedUserParty a odrl:PartyCollection ;
+  vcard:fn "authenticated" ;
+  ext:definedBy """PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+
+          SELECT DISTINCT ?account WHERE {
+            <SESSION_ID> session:account ?account.
+          }""" .
+
+example:peopleGraph a odrl:AssetCollection ;
+  vcard:fn "people" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/people> .
+
+example:foafPersonAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person .
+
+example:foafOnlineAccountAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:OnlineAccount .
+
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+
+example:publicWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+```
+
+Now say you have a service `peopleservice` in your application which requires periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `peopleservice` will supply this value in the header of each outgoing request.
+
+```yaml
+services:
+  peopleservice:
+    image: example/peopleservice:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
+```
+
+In your sparql-parser configuration you can use the `ext:scope` predicate to specify a scope for a permission. For instance, the following snippet essentially states that the permissions are applicable for requests with the scope `"http://services.semantic.works/people-service"`.
+
+```ttl
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty ;
+  ext:scope "http://services.semantic.works/people-service" .
+
+example:publicWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty ;
+  ext:scope "http://services.semantic.works/people-service" .
+```
+
+It is possible to specify multiple scopes for a single permission. In this case a permission will be applicable if a request specifies one of the scopes in its header. For example, the following snippet apply to requests that specify as scope header either `"http://services.semantic.works/people-service"` or `"http://services.semantic.works/another-service"`.
+
+```ttl
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty ;
+  ext:scope "http://services.semantic.works/people-service" ,
+    "http://services.semantic.works/another-service"
+```
 
 ## Reference
 ### ACL configuration interface
