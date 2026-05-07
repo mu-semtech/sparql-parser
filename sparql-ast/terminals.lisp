@@ -8,7 +8,7 @@
 ;;;; this library was optimized to understand whether a Lisp based
 ;;;; variant would be sufficiently fast in the interpretation of the
 ;;;; queries or whether it would be too slow.  for this many parsers
-;;;; have to approaches available: a regular expression and hand-rolled
+;;;; have two approaches available: a regular expression and hand-rolled
 ;;;; interpretation.  further optimizations seem possible but the
 ;;;; approach here has shown sufficient promise to verify the desired
 ;;;; performance.
@@ -935,7 +935,7 @@ failure."
 (defmacro with-internal-runtime-processing ((var &optional (activep t)) (&rest operations) &body body)
   "Run code and do something with the time it took after processing.
 
-  The consumed time willb e stored in VAR.
+  The consumed time will be stored in VAR.
   The timed operations are BODY.
   The cleanup processing are OPERATIONS."
   (if activep
