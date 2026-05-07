@@ -640,8 +640,8 @@ locking.
          (untreated-insert-quads (support:filter-array dispatched-insert-quads
                                                        (alexandria:compose #'null #'acl:dispatched-quad-treated-p)))
          ;; we can run user transformations on each of these individual quads
-         (user-transformed-delete-quads (quad-transformations:user-transform-quads dispatched-delete-quads :method :delete))
-         (user-transformed-insert-quads (quad-transformations:user-transform-quads dispatched-insert-quads :method :insert))
+         (user-transformed-delete-quads (quad-transformations:user-transform-quads treated-delete-quads :method :delete))
+         (user-transformed-insert-quads (quad-transformations:user-transform-quads treated-insert-quads :method :insert))
          ;; now fold all quads which are essentially the same so we can treat them together.
          ;; this folding seems redundant, but splitting up beforehand allows us to choose how to handle things here
          (folded-dispatched-delete-quads (fold-dispatched-quads-array user-transformed-delete-quads))
