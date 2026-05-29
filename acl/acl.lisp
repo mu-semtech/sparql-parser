@@ -492,4 +492,4 @@ Yields a new set of quads and how they should be treated."
                                (treat-dispatched-quad input-dispatched-quad
                                                       (first token-graph-specs)
                                                       t))))))
-        dispatched-quads)))
+        target-quads-arr)))
