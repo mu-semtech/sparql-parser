@@ -134,6 +134,10 @@
         ((string= "" header) acl:_)
         (t header)))
 
+(in-package #:server)
+
+(define-condition nothing-error () ())
+
 (defun acceptor (env)
   ;; (declare (ignore env))
   ;; '(200 (:content-type "application/sparql-results+json") ("HELLO HELLO HELLO"))
@@ -175,7 +179,7 @@
                    `(200
                      (:content-type "application/sparql-results+json" :mu-auth-allowed-groups ,(jsown:to-json (mu-auth-allowed-groups)))
                      (,response)))
-               (error (e)
+               (nothing-error (e)
                  (format t "~&Failed to process query, yielding 500.~%") ; more info from inside let
                  ;; (trivial-backtrace:print-backtrace e)
                  (let ((jsown (jsown:new-js ("status" 500)
@@ -191,7 +195,7 @@
                    (format t "~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
                    `(500 (:content-type "application/json")
                          (,(jsown:to-json jsown))))))))))
-    (error (e)
+    (nothing-error (e)
       (format t "Could not process query, yielding 500.  ~%~A~%" e)
       (trivial-backtrace:print-backtrace e)
       `(500 (:content-type "text/plain") (,(format nil "An error occurred ~A" e))))))
