@@ -9,7 +9,13 @@
 
 (defun define-prefix (prefix expansion)
   "Defines a new prefix"
-  (alexandria:appendf *prefixes* (list prefix expansion)))
+  (let ((prefixes-without-new-prefix
+         (loop for (existing-prefix existing-expansion)
+               on *prefixes*
+               by #'cddr
+               unless (eq existing-prefix prefix)
+               append (list existing-prefix existing-expansion))))
+    (alexandria:appendf prefixes-without-new-prefix (list prefix expansion))))
 
 (defmacro define-prefixes (&body body)
   "Defines a series of prefixes by reading the list as a plist.
