@@ -39,7 +39,8 @@
            #:read-string-file
            #:read-path-as-string
            #:string-file-uri
-           #:inline-unicode-escape-sequences))
+           #:inline-unicode-escape-sequences
+           #:garbage-collection-thread))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
@@ -130,7 +131,8 @@
            #:string-literal-string
            #:fold-and-remove-quads-not-triples
            #:make-langtag
-           #:make-nested-match))
+           #:make-nested-match
+           #:deep-replace-optional-with-union))
 
 (defpackage #:type-cache
   (:use :common-lisp)
@@ -384,6 +386,7 @@
                 #:make-match
                 #:terminal-match-string)
   (:import-from #:sparql-manipulation
+                #:deep-replace-optional-with-union
                 #:make-iri
                 #:iriref
                 #:make-nested-match)

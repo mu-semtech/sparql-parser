@@ -64,6 +64,16 @@ variables are missing this will not lead to a pattern."
                    unless (pattern-has-variables filled-in-pattern)
                      collect filled-in-pattern))))))
 
+(defparameter *replace-optional-in-construct-for-modify* t
+  "Replace OPTIONAL { a } with { } UNION { a } in CONSTRUCTs for MODIFY queries.
+
+A MODIFY query can be rewritten to use a CONSTRUCT rather than a SELECT to discover the data to be written in some
+cases.  This CONSTRUCT may contain OPTIONAL statements which is valid, yet sometimes problematic.  Specifically in
+Virtuoso this may yield issues.  This variable being T means we'll rewrite the OPTIONAL so it becomes a UNION with an
+empty accepted clause.
+
+This solution should be verified when various parts of the query are missing.")
+
 (defun create-construct-query-for-modify (group-graph-pattern prefixes base quad-patterns)
   "Builds up a construct query to handle the MODIFY operation within constraints of what CONSTRUCT can achieve."
   (let ((construct-triples
@@ -143,7 +153,10 @@ variables are missing this will not lead to a pattern."
                                               "}")
                                        (ebnf::|WhereClause|
                                               "WHERE"
-                                              ,group-graph-pattern)
+                                              ;; Remove optionals in this pattern for Virtuoso
+                                              ,(if *replace-optional-in-construct-for-modify*
+                                                   (sparql-manipulation:deep-replace-optional-with-union group-graph-pattern)
+                                                   group-graph-pattern))
                                        (ebnf::|SolutionModifier|))
                                 (ebnf::|ValuesClause|))))))))
 

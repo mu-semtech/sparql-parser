@@ -211,8 +211,8 @@ Currently translates jsown's ratio's to floats."
           (when (typep value 'number)
             (setf (jsown:val variable-binding "value")
                   (typecase value
-                    (ratio (format nil "~G"  (coerce value 'float)))
-                    (float (format nil "~G"  (coerce value 'float)))
+                    (ratio (string-trim " " (format nil "~G" (coerce value 'float))))
+                    (float (string-trim " " (format nil "~G" (coerce value 'float))))
                     (otherwise (write-to-string value :readably nil)))))))))
   sparql-results)
 
