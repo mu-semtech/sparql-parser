@@ -133,18 +133,58 @@ Current implementation will try to query even if over this size.")
     (t (make-combined-delete-insert-data-query delete-quads insert-quads))))
 
 (defun quad-equal-p (a b &optional (keys (list :graph :predicate :subject :object)))
-  "Yields truthy iff two quads are equal.  May provide false negatives but
-should never provide false positives.
+  "Yields (VALUES EQUAL-P CERTAIN-P) in which the former indicates whether the two matches are the same given these keys and the second value indicates whether we are certain about the result or not.  When uncertain we should go tothe triplestore to validate.
 
-NOTE: this function works without interaction with the backing triplestore."
+NOTE: this function works without interaction withthe backing triplestore."
   ;; TODO: Is there a better package for this (perhaps in detect-quads package?)
-  (every (lambda (key)
-            (if (eq key :object)
-                (sparql-inspection:match-equal-p (quad-term:object-as-match (getf a :object))
-                                                 (quad-term:object-as-match (getf b :object)))
-                (string= (quad-term:uri (getf a key))
-                         (quad-term:uri (getf b key)))))
-         keys))
+  (let ((equal-p t)
+        (certain-p t))
+    (loop for key in keys
+          if (eq key :object)
+            do
+               (multiple-value-bind (match-equal-p match-certain-p)
+                   (sparql-inspection:match-equal-p (quad-term:object-as-match (getf a :object))
+                                                    (quad-term:object-as-match (getf b :object)))
+                 (setf equal-p (and equal-p match-equal-p)
+                       certain-p (and certain-p match-certain-p)))
+          else
+            do
+               (unless (string= (quad-term:uri (getf a key))
+                                (quad-term:uri (getf b key)))
+                 ;; we're certain it doesn't overlap no matter what other things may have indicated
+                 (return-from quad-equal-p
+                   (values nil t))))
+    (values equal-p certain-p)))
+
+(defun quad-set-difference (a b)
+  "Makes a set difference between two sets of quads splitting it up between quads.
+
+Yields (VALUES DIFFERENCE OVERLAP UNCERTAIN) in which the last set is the set of which we're not sure if they overlap or not.  It would depend on further interpretation of the data (or the triplestore) to be sure."
+  ;; We can most easily make the comparison by grouping source and target quads by graph subject predicate and then
+  ;; comparing the match for the object.  To limit the amount of consing we'll simply loop over both sides for now.
+  (let (difference overlap uncertain)
+    (loop for quad-a in a
+          for (found-p certain-p) = (multiple-value-list
+                                     (let ((found-p nil) (certain-p t))
+                                       (loop for quad-b in b
+                                             for (found-b-p certain-of-discovery-p)
+                                               = (multiple-value-list (quad-equal-p quad-a quad-b))
+                                             if (and found-b-p certain-of-discovery-p)
+                                               do
+                                                  (setf found-p t certain-p t)
+                                                  (loop-finish)
+                                             else
+                                               do (setf found-p (or found-p found-b-p)
+                                                        certain-p (and certain-p certain-of-discovery-p)))
+                                       (values found-p certain-p)))
+          do
+             (cond ((and certain-p found-p)
+                    (push quad-a overlap))
+                   ((and certain-p (not found-p))
+                    (push quad-a difference))
+                   ((not certain-p)
+                    (push quad-a uncertain))))
+    (values difference overlap uncertain)))
 
 (defun remove-database-value-overlaps (quads-to-delete existing-quads-to-insert)
   "Goes to the database to verify that quads-to-delete does not contain
@@ -323,27 +363,32 @@ based on the supplied arguments and the state in the triplestore.
       (declare (ignore non-existing-quads-to-delete))
       (multiple-value-bind (existing-quads-to-insert non-existing-quads-to-insert)
           (find-existing-quads insert-quads)
-        (let ((quads-to-delete (set-difference existing-quads-to-delete existing-quads-to-insert
-                                               :test #'quad-equal-p))
-              (quads-to-insert non-existing-quads-to-insert))
-          (let ((quads-to-delete-with-database-value-check
-                  ;; the database may find some values the same even
-                  ;; though the RDF spec considers them different which
-                  ;; may create false deletes. eg: 12e5 vs 1.2e6
-                  (remove-database-value-overlaps quads-to-delete existing-quads-to-insert)))
-            (values (make-array (length quads-to-delete-with-database-value-check)
-                                :element-type 'acl:dispatched-quad
-                                :initial-contents (mapcar (alexandria:compose
-                                                           #'alter-dispatched-quad-to-string-file-uris
-                                                           (alexandria:rcurry #'gethash deletes-hash))
-                                                          quads-to-delete-with-database-value-check))
-                    (make-array (length quads-to-insert)
-                                :element-type 'acl:dispatched-quad
-                                :initial-contents (mapcar (alexandria:compose
-                                                           #'alter-dispatched-quad-to-string-file-uris
-                                                           (alexandria:rcurry #'gethash inserts-hash))
-                                                          quads-to-insert))
-                    quads-to-insert)))))))
+        (multiple-value-bind (quads-to-certainly-delete quads-which-certainly-overlap uncertain-quads-to-delete)
+            (quad-set-difference existing-quads-to-delete existing-quads-to-insert)
+          (declare (ignore quads-which-certainly-overlap))
+          (let (;; (quads-to-delete (set-difference existing-quads-to-delete existing-quads-to-insert
+                ;;                                  :test #'quad-equal-p))
+                (quads-to-insert non-existing-quads-to-insert))
+            (let ((quads-to-delete-with-database-value-check
+                    ;; the database may find some values the same even
+                    ;; though the RDF spec considers them different which
+                    ;; may create false deletes. eg: 12e5 vs 1.2e6
+                    (remove-database-value-overlaps uncertain-quads-to-delete existing-quads-to-insert)))
+              (values (make-array (+ (length quads-to-delete-with-database-value-check)
+                                     (length quads-to-certainly-delete))
+                                  :element-type 'acl:dispatched-quad
+                                  :initial-contents (mapcar (alexandria:compose
+                                                             #'alter-dispatched-quad-to-string-file-uris
+                                                             (alexandria:rcurry #'gethash deletes-hash))
+                                                            (nconc quads-to-delete-with-database-value-check
+                                                                   quads-to-certainly-delete)))
+                      (make-array (length quads-to-insert)
+                                  :element-type 'acl:dispatched-quad
+                                  :initial-contents (mapcar (alexandria:compose
+                                                             #'alter-dispatched-quad-to-string-file-uris
+                                                             (alexandria:rcurry #'gethash inserts-hash))
+                                                            quads-to-insert))
+                      quads-to-insert))))))))
 
 (defun query-to-detect-existing-quad-indexes (quads)
   "Constructs a query which detects quads exist in the triplestore of quads.  Yields the indexes of those quads."
