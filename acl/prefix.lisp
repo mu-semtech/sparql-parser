@@ -15,7 +15,8 @@
                by #'cddr
                unless (eq existing-prefix prefix)
                append (list existing-prefix existing-expansion))))
-    (alexandria:appendf prefixes-without-new-prefix (list prefix expansion))))
+    (setf *prefixes*
+          (append prefixes-without-new-prefix (list prefix expansion)))))
 
 (defmacro define-prefixes (&body body)
   "Defines a series of prefixes by reading the list as a plist.
