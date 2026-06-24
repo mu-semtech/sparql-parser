@@ -236,14 +236,14 @@ When CERTAIN-P is NIL, the TRUTHY value is a guess, when CERTAIN-P is TRUTHY we 
                               (loop for submatch-a in (match-submatches a)
                                     for submatch-b in (match-submatches b)
                                     for (submatch-equal-p submatch-certain-p)
-                                      = (match-equal-p submatch-a submatch-b)
+                                      = (multiple-value-list (match-equal-p submatch-a submatch-b))
                                     do
                                        (if equal-p
                                            (setf equal-p (and equal-p submatch-equal-p)
                                                  certain-p (and certain-p submatch-certain-p))
                                            ;; if they're not equal, then they might still be because of a datatype we do
                                            ;; not interpret
-                                           (setf eqaul-p nil
+                                           (setf equal-p nil
                                                  certain-p nil))
                                     until (and (not equal-p) (not certain-p)))
                               (values equal-p certain-p)))))))
