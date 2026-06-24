@@ -147,7 +147,7 @@ If you are interested in a more limited set of triples, you can explicitly speci
   ("foaf:OnlineAccount" -> _))
 ```
 
-Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser provides another operator `x>` to describe such situations his more concisely. For example, if you are interested in all triples with a `foaf:OnlineAccount` resource as subject except those that have as predicate `ext:password` or `account:accountName`. This can be written as follows:
+Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser provides another operator `x>` to describe such situations his more concisely. For example, if you are interested in all triples with a `foaf:OnlineAccount` resource as subject except those that have as predicate `ext:password` or `foaf:accountName`. This can be written as follows:
 
 ```lisp
 (in-package :acl)
@@ -155,7 +155,7 @@ Alternatively, you may be interested in most triples for a resource type except 
   ("foaf:Person" -> "foaf:firstName"
                  -> "foaf:familyName")
   ("foaf:OnlineAccount" x> "ext:password"
-                        x> "account:accountName"))
+                        x> "foaf:accountName"))
 ```
 
 So far the type-specifications only concerned triples with a *subject* of a specific resource type. To specify triples where the *object* is of a given resource type you can use the inverse operators `<-` and `<x`. For example, `("foaf:Person" <- "schema:employee")` means all triples that link an object of resource type `foaf:Person` to some subject resource via the predicate `schema:employee`. This can be added to the `define-graph` snippet as follows:
@@ -167,14 +167,14 @@ So far the type-specifications only concerned triples with a *subject* of a spec
                  -> "foaf:familyName"
                  <- "schema:employee")
   ("foaf:OnlineAccount" x> "ext:password"
-                        x> "account:accountName"))
+                        x> "foaf:accountName"))
 ```
 
 In summary this graph-specification contains all triples in `http://mu.semte.ch/graphs/people` that have
 
 - as *subject* a resource of type `foaf:Person` AND as *predicate* `foaf:firstName` or `foaf:familyName`; OR
-- has as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`; OR
-- as *subject* a resource of type `foaf:OnlineAccount` AND **not** as *predicate* `ext:password` or `account:accountName`.
+- as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`; OR
+- as *subject* a resource of type `foaf:OnlineAccount` AND **not** as *predicate* `ext:password` or `foaf:accountName`.
 
 ### Granting a group rights to a graph
 Once you have defined the necessary [access-groups](#define-a-group-for-users-with-a-certain-role) and [graph-specifications](#define-which-triples-are-accessible-for-a-graph) you can grant rights using the `grant` macro. This macro expects as input a list of granted rights, the target graph-specification(s), and access-group(s). For example, the following snippets grants users that are members of the `authenticated` group read rights to the triples in the `people` graph-specification.
@@ -334,7 +334,7 @@ This allows using that type in graph-specifications the same as other resources:
 **NOTE**: this is not strictly limited to resources without a type. But can also be used to assume additional types for resources next to those types  explicitly specified in the data.
 
 ### Define access rights for specific services
-It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes** which facilitate defining access control rules for such scenarios.
+It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes* which facilitate defining access control rules for such scenarios.
 
 **NOTE**: This requires the service to which rights are granted is created with [mu-javascript-template](https://github.com/mu-semtech/mu-javascript-template) v1.9.0 or newer. Services based on older templates should first be upgraded or can use [mu-auth-sudo](https://github.com/lblod/mu-auth-sudo) as alternative solution.
 
@@ -342,6 +342,63 @@ For instance, let's assume your application has the following access control pol
 
 ```lisp
 (in-package :acl)
+
+(supply-allowed-group "public")
+
+(define-graph people ("http://mu.semte.ch/graphs/people")
+  ("foaf:Person" -> _)
+  ("foaf:OnlineAccount" -> _))
+
+(grant (read)
+       :to-graph people
+       :for-allowed-group "public")
+```
+
+Now say you have a service `people-service` in your application which requires to periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `people-service` will supply this value in the header of each outgoing request.
+
+```yaml
+services:
+  people-service:
+    image: example/people-service:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
+```
+
+In your sparql-parser configuration you can use the `with-scope` macro to grant rights within a scope. For instance, the following snippet essentially states that the grant is applicable for requests that belong to the `public` group **and** specify in their header `"http://services.semantic.works/people-service"` as scope. Note, since no query was specified for the `public` group first condition is automatically satisfied.
+
+```lisp
+(with-scope "http://services.semantic.works/people-service"
+  (grant (read)
+         :to-graph people
+         :for-allowed-group "public"))
+```
+
+As an alternative notation you can use the `:scopes` keyword parameter for the `grant` macro as shown below. Note, that the argument value is surrounded by brackets and preceded by a quote `'`.
+
+```lisp
+(grant (read)
+       :to-graph people
+       :for-allowed-group "public"
+       :scopes '("http://services.semantic.works/example-service"))
+```
+
+Using the `:scopes` parameter notation it is possible to provide multiple scope URIs. In this case requests will be considered relevant if they specify either of the listed scopes in their header.
+
+```lisp
+(grant (read write)
+       :to-graph people
+       :for-allowed-group "public"
+       :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
+```
+
+The example so far deal with a grant assigned to a group without a query, i.e. a group for which every requesting entity is a member. Scopes can also be combined with groups that do specify a query. In this case, they can be used to limit the access rights of a service to a subset of those granted to the user that (indirectly) triggers the service's requests.
+
+For example, say we also have an `admin-service` that should also be able to write to the people graph. Since admins need to authenticate to the system you could simply add an `authenticated` group and grant this group both read and write rights to the people graph-specification.
+
+```lisp
+(in-package :acl)
+
+(supply-allowed-group "public")
 
 (supply-allowed-group "authenticated"
   :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
@@ -354,46 +411,37 @@ For instance, let's assume your application has the following access control pol
   ("foaf:Person" -> _)
   ("foaf:OnlineAccount" -> _))
 
+(with-scope "http://services.semantic.works/people-service"
+  (grant (read)
+         :to-graph people
+         :for-allowed-group "public"))
+
 (grant (read write)
-       :to people
-       :for "authenticated")
+       :to-graph people
+       :for-allowed-group "authenticated")
 ```
 
-Now say you have a service `peopleservice` in your application which requires periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `peopleservice` will supply this value in the header of each outgoing request.
+This has the possible disadvantage that the `admin-service` can do everything an authenticated user can do, which may be more than desired. To limit this you can define a default scope for the `admin-service` as before:
 
 ```yaml
 services:
-  peopleservice:
-    image: example/peopleservice:0.0.1
+  admin-service:
+    image: example/admin-service:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/admin-service"
+  people-service:
+    image: example/people-service:0.0.1
     environment:
       DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
 ```
 
-In your sparql-parser configuration you can use the `with-scope` macro to grant rights within a scope. For instance, the following snippet essentially states that the grant is also applicable for requests with the scope `"http://services.semantic.works/people-service"`.
+As before you can use the `with-scope` macro (or the `:scopes` keyword argument) to specify a scope for the grant. A request wil now only be allowed if it comes (indirectly) from a user in the `authenticated` group **and** the correct scope is set in its header.
 
 ```lisp
-(with-scope "http://services.semantic.works/people-service"
+(with-scope "http://services.semantic.works/admin-service"
   (grant (read write)
-         :to people
-         :for "authenticated"))
-```
-
-As an alternative notation you can use the `:scopes` keyword parameter for the `grant` macro as shown below. Note, that the argument value is surrounded by brackets and preceded by a quote `'`.
-
-```lisp
-(grant (read write)
-       :to people
-       :for "authenticated"
-       :scopes '("http://services.semantic.works/example-service"))
-```
-
-Using the `:scopes` parameter notation it is possible to provide multiple scope URIs:
-
-```lisp
-(grant (read write)
-       :to people
-       :for "authenticated"
-       :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
+         :to-graph people
+         :for-allowed-group "authenticated"))
 ```
 
 ## Reference
