@@ -456,7 +456,6 @@ example:publicRead a odrl:Permission ;
 
 
 The following functionality is *not* yet supported when using an ODRL policy:
-- Specifying `scopes` for a permission.
 - Specifying an explicit `constraint` for an `allowed-group`, currently this is implicitly set based on whether a query is provided or not.
 - Specifying options, such as whether to generate deltas, per graph definition.
 
