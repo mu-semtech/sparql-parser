@@ -1,0 +1,155 @@
+@prefix authors: <http://example.com/authors/> .
+@prefix books: <http://example.com/books/> .
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix favorites: <http://mu.semte.ch/favorites/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix push: <http://mu.semte.ch/vocabularies/push/> .
+@prefix schema: <http://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:examplePolicy a odrl:Set ;
+  odrl:permission example:adminPublicRead ,
+    example:adminPublicWrite ,
+    example:publicRead ,
+    example:userUserDataRead ,
+    example:userUserDataWrite ,
+    example:publicPushUpdatesRead ,
+    example:publicPushUpdatesWrite ,
+    example:scopeReadPermission ,
+    example:scopeWritePermission .
+
+example:publicParty a odrl:PartyCollection ;
+  vcard:fn "public" .
+
+example:authenticatedUserParty a odrl:PartyCollection ;
+  vcard:fn "user" ;
+  ext:definedBy """PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+               PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+               SELECT ?id WHERE {
+                 <SESSION_ID> session:account/mu:uuid ?id.
+               }""" ;
+  ext:queryParameters "id" .
+
+example:adminParty a odrl:PartyCollection ;
+  vcard:fn "admin" ;
+  ext:definedBy """PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+               PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+               PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+               SELECT ?account WHERE {
+                 <SESSION_ID> session:account ?account.
+                 ?account ext:hasRole ext:Administrator.
+               }""" .
+
+ext:organizationMemberParty a odrl:PartyCollection ;
+  vcard:fn "organization-member" ;
+  ext:queryParameters ( "session_group" "session_role" ) ;
+  ext:definedBy """PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          SELECT ?session_group ?session_role WHERE {
+            <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group.
+          }""" .
+
+
+example:publicGraph a odrl:AssetCollection ;
+  vcard:fn "public-data" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/public> .
+
+example:userGraph a odrl:AssetCollection ;
+  vcard:fn "user-data" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/personal/> .
+
+# TODO: Additional options provided: `:delta t :sparql nil`
+example:pushUpdatesGraph a odrl:AssetCollection ;
+  vcard:fn "push-updates" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/push> .
+
+
+example:personAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:publicGraph ;
+  sh:targetClass foaf:Person .
+
+example:personFavoriteAuthorAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:userGraph ;
+  sh:targetClass foaf:Person ;
+  sh:property [
+    sh:path [ sh:inversePath ext:hasFavoriteAuthor ]
+    ] .
+
+example:bookAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:publicGraph ;
+  sh:targetClass schema:Book .
+
+example:geometryAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:publicGraph ;
+  sh:targetClass geo:Geometry .
+
+example:WildCardAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:userGraph ;
+  sh:targetClass ext:all ;
+  sh:property [ sh:path ext:hasBook ] ,
+    [ sh:path ext:hasSuperFavorite ] ,
+    [ sh:path ext:longContent ] .
+
+example:noNameOrLabelAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:userGraph ;
+  sh:targetClass ext:NoNameOrLabel ;
+  sh:not [
+    sh:property [ sh:path ext:name ] ,
+      [ sh:path ext:label ]
+    ] .
+
+example:updateAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:pushUpdatesGraph ;
+  sh:targetClass push:Update .
+
+
+example:adminPublicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:publicGraph ;
+  odrl:assignee example:adminParty .
+
+example:adminPublicWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:publicGraph ;
+  odrl:assignee example:adminParty .
+
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:publicGraph ;
+  odrl:assignee example:publicParty .
+
+example:userUserDataRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:userGraph ;
+  odrl:assignee example:authenticatedUserParty .
+
+example:userUserDataWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:userGraph ;
+  odrl:assignee example:authenticatedUserParty .
+
+example:publicPushUpdatesRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:pushUpdatesGraph ;
+  odrl:assignee example:publicParty .
+
+example:publicPushUpdatesWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:pushUpdatesGraph ;
+  odrl:assignee example:publicParty .
+
+example:scopeReadPermission a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:publicGraph ;
+  odrl:assignee example:publicParty ;
+  ext:scope "http://services.semantic.works/admin-service" .
+
+example:scopeWritePermission a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:publicGraph ;
+  odrl:assignee example:publicParty ;
+  ext:scope "http://services.semantic.works/admin-service" .

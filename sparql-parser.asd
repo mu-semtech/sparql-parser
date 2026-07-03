@@ -6,7 +6,8 @@
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."
   :serial t
-  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams)
+  ;; TODO: Add `cl-ttl-parser' as submodule
+  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams cl-ttl-parser)
   :components ((:file "packages")
                ;; supporting code
                (:file "support/support")
@@ -37,6 +38,10 @@
                (:file "acl/acl")
                (:file "acl/configuration-interface")
                (:file "acl/config")
+               ;; ODRL configuration
+               (:file "odrl/parse-ttl")
+               (:file "odrl/odrl")
+               (:file "odrl/shacl")
                ;; ;; reasoning to determine graphs
                ;; (:file "reasoner/tree-mirror")
                ;; (:file "reasoner/prefixes")
@@ -61,4 +66,5 @@
                ;; administration
                (:file "administration/string-files")
                ;; configuration
-               (:file "config/config")))
+               (:file "config/config")
+               (:file "odrl/load-config")))

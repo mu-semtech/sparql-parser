@@ -396,6 +396,428 @@ Using the `:scopes` parameter notation it is possible to provide multiple scope 
        :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
 ```
 
+
+### Defining an authorization policy in ODRL
+
+> [!WARNING]
+> Support for ODRL policies is under development and some functionality is not yet (fully) supported.
+
+This service also supports defining policies using [ODRL](https://www.w3.org/TR/odrl-model/), as an alternative to the lisp-style configuration illustrated above. To enable ODRL policies, set `*use-odrl-config-p*` to non-nil in the config file mounted in `./config/authorization/config.lisp` as shown below. Note, other service configuration settings, such as `*backend*`, should still be set in the same file.
+
+```lisp
+;;;;;;;;;;;;;;;;;;;
+;;; delta messenger
+(in-package :delta-messenger)
+
+(add-delta-logger)
+(add-delta-messenger "http://delta-notifier/")
+
+;;;;;;;;;;;;;;;;;
+;;; configuration
+(in-package :client)
+(setf *log-sparql-query-roundtrip* t)
+(setf *backend* "http://triplestore:8890/sparql")
+
+(in-package :server)
+(setf *log-incoming-requests-p* nil)
+
+(in-package :odrl-config)
+(setf *use-odrl-config-p* t)
+```
+
+The actual policy should be defined in a [Turtle](https://www.w3.org/TR/turtle) file mounted in `./config/authorization/config.ttl`. The following snippet contains the ODRL equivalent, encoded in Turtle format, for the lisp access rights as shown in the [first](#how-to-add-the-sparql-parser-service-to-your-application) in this README. The following subsections describe each part in more detail. Furthermore, a more comprehensive policy example can be found in the [test configuration]('./test/example-config.ttl').
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:examplePolicy a odrl:Set ;
+  odrl:permission ext:publicRead .
+
+example:publicGraph a odrl:AssetCollection ;
+  vcard:fn "public" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/public> .
+
+example:genericAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:publicGraph ;
+  sh:targetClass ext:all .
+
+example:publicParty a odrl:PartyCollection ;
+  vcard:fn "public" .
+
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target ext:publicGraph ;
+  odrl:assignee ext:publicParty .
+```
+
+
+The following functionality is *not* yet supported when using an ODRL policy:
+- Specifying an explicit `constraint` for an `allowed-group`, currently this is implicitly set based on whether a query is provided or not.
+- Specifying options, such as whether to generate deltas, per graph definition.
+
+Furthermore, [policy rule composition](https://www.w3.org/TR/odrl-model/#composition) is *not* yet supported. So each rule should be specified using its normative cardinalities for property relationships.
+
+
+#### Define a group for users with a certain role in ODRL
+An access control policy typically grants different rights to users based on some criteria. For example, an authenticated user may read and edit certain data, whereas other users are only allowed to read data. This requires that we can determine to which group(s) the user performing a request belongs to. In an ODRL configuration this captured by defining a party collection resource. Such a resource should at least have a `vcard:fn` property that specifies the name of the group. The `ext:definedBy` property allows to specify a SPARQL query with which to determine whether a user belongs to a group. More specifically, the provided query should return a match when a user belongs to the defined group.
+
+Say you want to define a group that contains all authenticated users. In a semantic.works application this usually means that there exists a session associated with an account, indicating that the user previously logged in. The following snippet defines a party collection for group named `authenticated` where membership is determined by the existence of a session associated with an account:
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:authenticatedUserParty a odrl:PartyCollection ;
+  vcard:fn "authenticated" ;
+  ext:definedBy """PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+
+          SELECT DISTINCT ?account WHERE {
+            <SESSION_ID> session:account ?account.
+          }""" .
+```
+
+Note that the constant `SESSION_ID` is a placeholder and will be automatically replaced by the actual session identifier found in the request when the query is executed.
+
+#### Define which triples are accessible for a graph in ODRL
+Typically you want to explicitly specify which (kind of) triples within a graph an access control rule can be applied to. In an ODRL configuration such information is captured by an Asset collection along with its contained assets.
+
+For instance, say you have a graph `http://mu.semte.ch/graphs/people` containing triples for resources of types `foaf:Person` and `foaf:OnlineAccount`. The following snippet defines an asset collection `example:peopleGraph`. The `vcard:fn` property specifies the name for this asset collection. This name should be unique as it will be used internally to identify this asset collection. The `ext:graphPrefix` property has as value the URI of the graph the asset collection refers to.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+
+example:peopleGraph a odrl:AssetCollection ;
+  vcard:fn "people" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/people> .
+
+example:foafPersonAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person .
+
+example:foafOnlineAccountAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:OnlineAccount .
+```
+
+The two assets `example:foafPersonAsset` and `example:foafOnlineAccountAsset` specify the relevant triples in a graph. The `odrl:PartOf` property specifies which asset collection(s) the asset belongs to. Note, that these assets are also assigned the type `sh:NodeShape`. This is because we use [SHACL](https://www.w3.org/TR/shacl/) shapes the define exact triples covered by an asset. The simplest case is to specify a resource type as value of the `sh:targetClass` property. This means that the asset covers all triples with a subject resource of the specified type. More concretely, for the `example:foafPersonAsset` this means that asset covers all triples whose subject is a resource of type `foaf:Person`. Keep in mind that the triples for an asset should always be considered with respect to the asset collection(s) it is part of. More concretely, the above `example:foafOnlineAccountAsset` only covers triples in the graph the corresponds to the `example:peopleGraph` it is part of.
+
+If you are interested in a more limited set of triples, you can explicitly specify one or more predicates using SHACL property shapes. This can be achieved by defining the appropriate values for `sh:property` properties. For example, say you only want to cover triples for `foaf:Person` resources that have as predicate `foaf:firstName` or `foaf:familyName`. In that case you can specify two property nodes, one for each predicate, as shown for `example:foafPersonAssetOnlyName` below.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+example:foafPersonNamesOnlyAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person ;
+  sh:property [ sh:path foaf:firstName ] ,
+      [ sh:path foaf:familyName ] .
+```
+
+Alternatively, you may be interested in most triples for a resource type except those with a few specific predicates. While you can list all relevant predicates as above, sparql-parser supports a shorter notation to describe such situations more concisely. Similar to above this uses SHACL property shapes to specify the desired predicates, but surrounding them with a `sh:not` logical constraint component. For example, say you are interested in all triples with a `foaf:OnlineAccount` resource as subject, except those triples that have as predicate `ext:password` or `account:accountName`. This can be specified as shown in the `example:foafOnlineAccountAsset` shown below.
+
+```ttl
+@prefix example: <http://www.example.org/>
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+example:foafOnlineAccountAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:OnlineAccount ;
+  sh:not [
+    sh:property [ sh:path ext:password ],
+        [ sh:path foaf:accountName ]
+  ] .
+```
+
+So far the assets only concerned triples with a *subject* of a specific resource type. To specify triples where the *object* is of a given resource type you can use property shapes with an `sh:inversePath` as property path. For example, the `example:foafPersonObjectAsset` below covers all triples which have an object of type `foaf:Person`. Here the `ext:all` object acts as a wildcard value meaning all predicates.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+example:foafPersonObjectAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person ;
+  sh:property [
+    sh:path [ sh:inversePath ext:all ]
+  ] .
+```
+
+Similarly as before, you can also specify a concrete predicate for an inverse path to limit an asset to triples with an object of a certain *and* specific predicates. For example, the `example:foafPersonObjectEmployeeAsset` below covers triples that have a `foaf:Person` as object and have `schema:employee` as predicate.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix schema: <http://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+example:foafPersonObjectEmployeeAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person ;
+  sh:property [
+    sh:path [ sh:inversePath schema:employee ]
+  ] .
+```
+
+Note that you can combine regular and inverted paths in a single asset. For example, the `example:foafPersonComplexAsset` below covers all triples that have
+
+- as *subject* a resource of type `foaf:Person` AND as *predicate* `foaf:firstName` or `foaf:familyName`; OR
+- as *object* a resource of type `foaf:Person` AND as *predicate* `schema:employee`
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix schema: <http://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+example:foafPersonComplexAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person ;
+  sh:property [ sh:path foaf:firstName ] ,
+      [ sh:path foaf:familyName ] ,
+      [ sh:path [ sh:inversePath schema:employee ] ] .
+```
+
+
+#### Granting a group rights to a graph in ODRL
+Once you have defined the necessary [party collections](#define-a-group-for-users-with-a-certain-role-in-odrl) and [asset collections](#define-which-triples-are-accessible-for-a-graph-in-odrl) you can grant rights by defining ODRL permissions. Each permission requires you define exactly one action, target asset collection, and assignee party collection. For example, the `example:peopleReadPermission` below grants users that are members of the `example:authenticatedUserParty` party collection read rights to the triples in the `example:peopleGraph` asset collection.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+example:peopleReadPermission a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+```
+
+> [!IMPORTANT]
+> Sparql-parser only supports the `odrl:read` and `odrl:modify` actions, specifying any other action will result in an error on loading the defined policy.
+
+To grant multiple rights you have to specify multiple permissions, one for each allowed action. For instance, to grant members of the `example:authenticatedUserParty` party collection also write rights to the triples in the `example:peopleGraph` asset collection you have add a second permission as shown below.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+example:peopleReadPermission a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+
+example:peopleWritePermission a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+```
+
+Similarly, grant members of a party collection rights to multiple asset collections requires you specify one permission per target asset collection. For example, the following snippet grants members of the `example:authenticatedUserParty` party collection read rights to the `example:peopleGraph` asset collection as well as the `example:organizationGraph` asset collection.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+example:peopleReadPermission a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+
+example:organizationReadPermission a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:organizationGraph ;
+  odrl:assignee example:authenticatedUserParty .
+```
+
+#### Define access rights for a set of similar graphs in ODRL
+Your application may have multiple graphs whose contents are structurally similar in that they overlap in terms of resource types and predicates. For example, your application might have a single graph per organization where each graph contains similar triples such as the organization's name, address and employees.
+
+For such situations sparql-parser supports defining the access rights only once for all graphs together, instead of having to define them individually for each graph and group separately. First this requires specifying one or more values for an `ext:queryParameters` property for a party collection. Note, that the literal(s) assigned as object value(s) must be a subset of the variables specified in the `SELECT` clause of the query specified in the `ext:definedBy` property.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:organizationMemberParty a odrl:PartyCollection ;
+  vcard:fn "organization-member" ;
+  ext:queryParameters "session_group" ;
+  ext:definedBy """PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          SELECT ?session_group ?session_role WHERE {
+            <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group.
+          }""" .
+```
+
+Let's assume that the graphs for the different organizations have URIs for the form `http://mu.semte.ch/graphs/organizations/UUID`, where UUID identifies the specific organization this graph pertains to. The following asset collection would cover all such graphs. Note that the provided graph URI specified as value for `ext:graphPrefix` ends with a "/" and does **not** contain the UUID part. (For brevity we do not specify any assets in this example.)
+
+```ttl
+example:organizationGraphs a odrl:AssetCollection ;
+  vcard:fn "organization" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/organizations/> .
+```
+
+To grant read access to members of the `example:organizationMemberParty` party collection to the `example:organizationGraphs` asset collection the following permission can be defined.
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+example:organizationReadPermission a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:organizationGraphs ;
+  odrl:assignee example:organizationMemberParty .
+```
+
+The "magic" here happens when sparql-parser processes an appropriate request, i.e. a request from a member of `example:organizationMemberParty` party collection for triples in the `example:organizationGraphs` asset collection. In such cases sparql-parser determines the target graphs by appending the match(es) for the `session_group` parameter to the graph URI in the `example:organizationGraphs` asset collection. For example, say the query in `example:organizationMemberParty` returns two matches for `session_group`: `someOrganization` and `aCompletelyDifferentOrganization`.  The incoming request will then be forward to two graphs with as URIs:
+
+- `http://mu.semte.ch/graphs/organizations/someOrganization`
+- `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization`
+
+If you want to specify multiple values for the `ext:queryParamters` you have to specify them as elements in a Turtle collection. The matches will be appended to graph URIs in the same order as the elements in the collection. For example, you can add `session_role` as a second `ext:queryParameters` argument to the above `example:organizationMemberParty` party collection as follows:
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:organizationMemberParty a odrl:PartyCollection ;
+  vcard:fn "organization-member" ;
+  ext:queryParameters ( "session_group" "session_role" );
+  ext:definedBy """PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+          SELECT ?session_group ?session_role WHERE {
+            <SESSION_ID> ext:sessionGroup/mu:uuid ?session_group.
+          }""" .
+```
+
+Let's say that the party collection's query returns the following matches for your application:
+
+| session_group                    | session_role              |
+|----------------------------------|---------------------------|
+| someOrganization                 | someRole                  |
+| aCompletelyDifferentOrganization | aCompletetlyDifferentRole |
+
+In this case sparql-sparser will use the following graph URIs to forward requests for the `example:organizationGraphs` asset collection:
+
+- `http://mu.semte.ch/graphs/organizations/someOrganization/someRole`
+- `http://mu.semte.ch/graphs/organizations/aCompletelyDifferentOrganization/aCompletetlyDifferentRole`
+
+
+#### Generating delta messages for data changes in ODRL
+This functionality is not part of the ODRL policy itself. This should be configured in the `config.lisp` file as explained in [this guide](#generating-delta-messages-for-data-changes).
+
+> [!WARNING]
+> Policies in ODRL do not support enabling delta messages only for specific asset collections.
+
+#### Enable additional logging in ODRL
+This functionality is not part of the ODRL policy itself. This should be configured in the `config.lisp` file as explained in [this guide](#enable-additional-logging).
+
+#### Define access rights for specific services in ODRL
+It is likely that in your semantic.works application not all requests sent to the SPARQL endpoint are (indirectly) triggered by users with a session. For example, a service may periodically and autonomously retrieve triples from the endpoint. In such cases, requests are not associated with a session from which the appropriate access-groups can be determined. Sparql-parser supports *scopes** which facilitate defining access control rules for such scenarios.
+
+**NOTE**: This requires the service to which rights are granted is created with [mu-javascript-template](https://github.com/mu-semtech/mu-javascript-template) v1.9.0 or newer. Services based on older templates should first be upgraded or can use [mu-auth-sudo](https://github.com/lblod/mu-auth-sudo) as alternative solution.
+
+For instance, let's assume your application has the following access control policy:
+
+```ttl
+@prefix example: <http://www.example.org/> .
+@prefix ext: <http://mu.semte.ch/vocabularies/ext/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+example:authenticatedUserParty a odrl:PartyCollection ;
+  vcard:fn "authenticated" ;
+  ext:definedBy """PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+
+          SELECT DISTINCT ?account WHERE {
+            <SESSION_ID> session:account ?account.
+          }""" .
+
+example:peopleGraph a odrl:AssetCollection ;
+  vcard:fn "people" ;
+  ext:graphPrefix <http://mu.semte.ch/graphs/people> .
+
+example:foafPersonAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:Person .
+
+example:foafOnlineAccountAsset a odrl:Asset, sh:NodeShape ;
+  odrl:partOf example:peopleGraph ;
+  sh:targetClass foaf:OnlineAccount .
+
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+
+example:publicWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty .
+```
+
+Now say you have a service `peopleservice` in your application which requires periodically retrieve the names of the `foaf:Person`s in the `people` graph. In your `docker-compose.yml` entry for this service, specify a value for the `DEFAULT_MU_AUTH_SCOPE` environment variable. The `peopleservice` will supply this value in the header of each outgoing request.
+
+```yaml
+services:
+  peopleservice:
+    image: example/peopleservice:0.0.1
+    environment:
+      DEFAULT_MU_AUTH_SCOPE: "http://services.semantic.works/people-service"
+```
+
+In your sparql-parser configuration you can use the `ext:scope` predicate to specify a scope for a permission. For instance, the following snippet essentially states that the permissions are applicable for requests with the scope `"http://services.semantic.works/people-service"`.
+
+```ttl
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty ;
+  ext:scope "http://services.semantic.works/people-service" .
+
+example:publicWrite a odrl:Permission ;
+  odrl:action odrl:modify ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty ;
+  ext:scope "http://services.semantic.works/people-service" .
+```
+
+It is possible to specify multiple scopes for a single permission. In this case a permission will be applicable if a request specifies one of the scopes in its header. For example, the following snippet apply to requests that specify as scope header either `"http://services.semantic.works/people-service"` or `"http://services.semantic.works/another-service"`.
+
+```ttl
+example:publicRead a odrl:Permission ;
+  odrl:action odrl:read ;
+  odrl:target example:peopleGraph ;
+  odrl:assignee example:authenticatedUserParty ;
+  ext:scope "http://services.semantic.works/people-service" ,
+    "http://services.semantic.works/another-service"
+```
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`
