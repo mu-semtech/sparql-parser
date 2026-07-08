@@ -1,0 +1,35 @@
+{
+  "version": "0.2",
+  "scripts": [
+    {
+      "documentation": {
+        "command": "move-db-to-files",
+        "description": "Moves long literals (longer than *string-max-size*) from the triplestore into string files under ./data/authorization/strings, replacing them by abbreviation URIs. Run this after lowering *string-max-size*. Settings are read from ./config/authorization/config.lisp.",
+        "arguments": []
+      },
+      "environment": {
+        "interactive": false,
+        "join_networks": true,
+        "script": "move-db-to-files/run.sh"
+      },
+      "mounts": {
+        "app": "/project"
+      }
+    },
+    {
+      "documentation": {
+        "command": "move-files-to-db",
+        "description": "Inlines string files whose content is short enough (<= *string-max-size*) from ./data/authorization/strings back into the triplestore as literals, and reports on the rest. Run this after raising *string-max-size*. Settings are read from ./config/authorization/config.lisp.",
+        "arguments": []
+      },
+      "environment": {
+        "interactive": false,
+        "join_networks": true,
+        "script": "move-files-to-db/run.sh"
+      },
+      "mounts": {
+        "app": "/project"
+      }
+    }
+  ]
+}
