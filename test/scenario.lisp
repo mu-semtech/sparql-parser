@@ -1,7 +1,7 @@
 (defpackage :sparql-parser-test-scenario-a
-  (:use :common-lisp)
+  (:use :common-lisp :fiveam)
   (:export
-   #:run-assertion-tests))
+   #:run-tests))
 
 (in-package :sparql-parser-test-scenario-a)
 
@@ -50,7 +50,7 @@
          (acl::*rights* nil)
          (delta-messenger::*delta-handlers* nil)
          (client::*backend* "http://localhost:8891/sparql")
-         (client::*log-sparql-query-roundtrip* t)
+         (client::*log-sparql-query-roundtrip* nil)
          (type-cache::*uri-graph-user-type-providers* nil)
          (quad-transformations::*user-quad-transform-functions* nil))
 
@@ -212,17 +212,418 @@ this point and likely a redpencil image too.")
 ;;;; Scenario
 ;;;; Boot up a container using:
 ;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.2.0-rc.1; dr rm virtuoso
-(defun run-assertion-tests ()
-  (clean-up-graphs)
-  (store-initial-session-data)
+;; (defun run-assertion-tests ()
+;;   (clean-up-graphs)
+;;   (store-initial-session-data)
 
-  (with-acl-config
-    (format t "~&Joll is an administrator.~%")
-    (with-impersonation-for :joll
-      (format t "~&Can add authors.~%")
+;;   (with-acl-config
+;;     (format t "~&Joll is an administrator.~%")
+;;     (with-impersonation-for :joll
+;;       (format t "~&Can add authors.~%")
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+
+;;         INSERT DATA {
+;;           authors:david a foaf:Person;
+;;             foaf:name \"David Allen\".
+;;           authors:steven a foaf:Person;
+;;             foaf:name \"Steven Kotler\".
+;;           authors:daniel a foaf:Person;
+;;             foaf:name \"Daniel Kahneman\".
+;;         }")
+
+;;       (format t "~&Can add authors. (2)~%")
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+
+;;         INSERT DATA {
+;;           books:gtd a schema:Book;
+;;             schema:name \"Getting Things Done\";
+;;             schema:creator authors:david.
+;;           books:abundance a schema:Book;
+;;             schema:name \"Abundance\";
+;;             schema:creator authors:steven.
+;;           books:fastAndSlow a schema:Book;
+;;             schema:name \"Thinking Fast and Slow\";
+;;             schema:creator authors:daniel.
+;;         }")
+
+;;       (format t "~&Can add extra book for author.~%")
+
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+
+;;         INSERT DATA {
+;;           books:ready a schema:Book;
+;;             schema:name \"Ready for Anything\";
+;;             schema:creator authors:david .
+;;         }")
+
+;;       (format t "~&Can add extra author to book.~%")
+
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+
+;;         INSERT DATA {
+;;           authors:peter a foaf:Person;
+;;             schema:name \"Peter Diamantis\".
+;;           books:abundance schema:creator authors:steven, authors:peter.
+;;         }")
+;;       )
+
+;;     (with-impersonation-for :jack
+;;       (format t "~&Jack is a user.~%")
+
+;;       (format t "~&Jack can add a favorite.~%")
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         INSERT DATA {
+;;           favorites:me ext:hasBook books:gtd, books:fastAndSlow.
+;;         }")
+
+
+;;       ;; jack likes all authors of the book Abundance
+;;       (format t "~&Jack can add conditional favorite authors.~%")
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         INSERT {
+;;           favorites:me ext:hasFavoriteAuthor ?author.
+;;         } WHERE {
+;;           books:abundance schema:creator ?author.
+;;         }")
+
+;;       ;; this data has no place to live, the target must be a foaf:Person and it is a book.
+;;       (format t "~&Jack can't add books as favorite author.~%")
+;;       (handler-case
+;;           (progn
+;;             (server:execute-query-for-context
+;;              "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;             PREFIX schema: <http://schema.org/>
+;;             PREFIX authors: <http://example.com/authors/>
+;;             PREFIX books: <http://example.com/books/>
+;;             PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;             PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;             INSERT {
+;;               favorites:me ext:hasFavoriteAuthor ?book.
+;;             } WHERE {
+;;               books:abundance schema:creator/^schema:creator ?book.
+;;             }")
+;;             (format t "~&ERROR: Oh noes, Jack shouldn't be allowed to do add a book as an author!~%"))
+;;         (error (e) (declare (ignore e)) t))
+
+
+;;       ;; let's check if jack has favorite authors
+;;       (format t "~&Jack can ask for favorite authors.~%")
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         ASK {
+;;           favorites:me ext:hasFavoriteAuthor ?author.
+;;         }")
+
+;;       ;; then let's describe the values
+;;       (format t "~&Jack can describe favorite authors.~%")
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         DESCRIBE ?author {
+;;           favorites:me ext:hasFavoriteAuthor ?author.
+;;         }")
+
+;;       ;; now let's replace the favorite author in two queries rather
+;;       ;; than in one
+;;       (format t "~&Jack can execute delete where and insert data in one query.~%")
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         DELETE {
+;;           favorites:me ext:hasFavoriteAuthor ?book.
+;;         } WHERE {
+;;           favorites:me ext:hasFavoriteAuthor ?book.
+;;         };
+;;         INSERT DATA {
+;;           GRAPH <http://mu.semte.ch/application> {
+;;             favorites:me ext:hasFavoriteAuthor authors:david.
+;;           }
+;;         }"))
+
+
+;;     (with-impersonation-for :joll
+;;       (quad-transformations:define-quad-transformation (quad method)
+;;         ;; fix wktLiteral string representation
+;;         (let* ((object (quad:object quad))
+;;                (datatype-match (and
+;;                                 (sparql-parser:match-p object)
+;;                                 (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+;;                                 (= 3 (length (sparql-parser:match-submatches object)))
+;;                                 (third (sparql-parser:match-submatches object))))
+;;                (datatype-uri (and datatype-match
+;;                                   (quad-term:uri
+;;                                    (first
+;;                                     (sparql-parser:match-submatches datatype-match)))))
+;;                (string-value (and (sparql-parser:match-p object)
+;;                                   (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+;;                                   (sparql-manipulation:string-literal-string
+;;                                    (first (sparql-parser:match-submatches object))))))
+;;           (if (and datatype-uri
+;;                    (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
+;;                    (search "https://www.opengis.net/" string-value))
+;;               (let ((new-quad (quad:copy quad))
+;;                     (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
+;;                 (setf (quad:object new-quad)
+;;                       (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
+;;                 (quad-transformations:update new-quad))
+;;               (quad-transformations:keep))))
+
+;;       (format t "~&Joll can write a book title with the right URI and no type.~%")
+
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         INSERT DATA {
+;;          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+;;        }")
+
+;;       (format t "~&Effective changes contain only the data that was actually changed, which is:~%- insert \"On types too.\"~%- delete \"On types too.\"~%")
+
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         INSERT DATA {
+;;          <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
+;;        }")
+
+;;       (let ((support:*string-max-size* 50))
+;;         (server:execute-query-for-context
+;;          "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;           PREFIX schema: <http://schema.org/>
+;;           PREFIX authors: <http://example.com/authors/>
+;;           PREFIX books: <http://example.com/books/>
+;;           PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;           PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;           INSERT DATA {
+;;            <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
+;;          }")
+
+;;         (format t "~&Matches yield following content for long content: ~%~A"
+;;                 (server:execute-query-for-context
+;;                  "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;                   SELECT ?content WHERE { <http://book-store.example.com/books/my-book> ext:longContent ?content }"))
+;;         (server:execute-query-for-context
+;;          "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;           PREFIX schema: <http://schema.org/>
+;;           PREFIX authors: <http://example.com/authors/>
+;;           PREFIX books: <http://example.com/books/>
+;;           PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;           PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;           INSERT DATA {
+;;            <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
+;;          }"))
+
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         DELETE {
+;;          <http://book-store.example.com/books/my-book> schema:name ?title.
+;;         } INSERT {
+;;          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+;;         } WHERE {
+;;          <http://book-store.example.com/books/my-book> schema:name ?title.
+;;         }")
+
+;;       ;; we can delete the types
+
+;;       (server:execute-query-for-context
+;;        "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+;;         PREFIX schema: <http://schema.org/>
+;;         PREFIX authors: <http://example.com/authors/>
+;;         PREFIX books: <http://example.com/books/>
+;;         PREFIX favorites: <http://mu.semte.ch/favorites/>
+;;         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+;;         DELETE WHERE {
+;;          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+;;         }")
+
+;;       ;; we can have an empty construct where
+
+;;       (server:execute-query-for-context
+;;        "CONSTRUCT { } WHERE { }")
+
+;;       ;; inserting the UUID with xsd:string will just insert the UUID (configured above)
+
+;;       (server:execute-query-for-context
+;;        "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+;;         PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;         INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }")
+
+
+;;       (when *run-geosparql-tests*
+;;         (server:execute-query-for-context
+;;          "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+;;           PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;           PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+;;           PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+;;           INSERT DATA {
+;;             <http://book-store.example.com/geometries/a>
+;;                a geo:Geometry;
+;;                geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
+;;            }")))
+
+;;     (with-impersonation-for :jack
+;;       ;; can insert some random content
+;;       (server:execute-query-for-context
+;;        "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;         INSERT DATA {
+;;           ext:myDisplay a ext:NoNameOrLabel;
+;;             ext:score 9001;
+;;             ext:level 12.
+;;         }")
+
+;;       (block :no-error
+;;         (handler-case
+;;             (server:execute-query-for-context
+;;              "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;               INSERT DATA {
+;;                 ext:myDisplay ext:name \"Failing name\".
+;;               }")
+;;           (handle-update-unit:unwritten-data-error (e)
+;;             (format t "Received expected error ~A" e)
+;;             (return-from :no-error t)))
+;;         (error 'simple-error :format-control "Expected triples not being written, but received no error."))
+;;       (block :no-error
+;;         (handler-case
+;;             (server:execute-query-for-context
+;;              "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;               INSERT DATA {
+;;                 ext:myDisplay ext:label \"Failing label\".
+;;               }")
+;;           (handle-update-unit:unwritten-data-error (e)
+;;             (format t "Received expected error ~A" e)
+;;             (return-from :no-error t)))
+;;         (error 'simple-error :format-control "Expected triples not being written, but received no error."))
+;;       (server:execute-query-for-context
+;;        "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;         INSERT DATA {
+;;           ext:myDisplay ext:anotherThing \"Another thing\".
+;;         }"))
+
+
+;;     ;; jack can delete (which should use CONSTRUCT)
+;;     (with-impersonation-for :jack
+;;       (server:execute-query-for-context
+;;        "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+;;         DELETE {
+;;           ext:myDisplay ext:score ?score; ext:level ?level.
+;;         } WHERE {
+;;           ext:myDisplay a ext:NoNameOrLabel;
+;;             ext:score ?score;
+;;             ext:level ?level.
+;;         }"))))
+
+;; (defun run-delta-only-assertion-tests ()
+;;   "Tests whether we can use graphs which only have emit data through delta-notifier but not through sparql"
+;;   ;; TODO: it would be good if this test would also verify data is effectively creating delta messages but that's not
+;;   ;; the case yet.
+;;   (with-acl-config
+;;     (client:query (coerce
+;;                    "DELETE {
+;;                    GRAPH ?g { ?s ?p ?o }
+;;                  } WHERE {
+;;                    VALUES ?g {
+;;                      <http://mu.semte.ch/graphs/push>
+;;                    }
+;;                    GRAPH ?g { ?s ?p ?o. }
+;;                  }" #-be-cautious 'base-string #+be-cautious 'string))
+
+;;     (with-impersonation-for :jack
+;;       ;; can insert a push update
+;;       (server:execute-query-for-context
+;;        "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+;;         PREFIX dct: <http://purl.org/dc/terms/>
+;;         INSERT DATA {
+;;           push:myUpdate a push:Update;
+;;             dct:title \"Receive delta without writing\".
+;;         }")
+
+;;       ;; can not read back the push update
+;;       (assert (= 0
+;;                  (length
+;;                   (jsown:filter
+;;                    (jsown:parse
+;;                     (server:execute-query-for-context
+;;                      "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+;;         SELECT * WHERE {
+;;           ?thing a push:Update.
+;;         }"))
+;;                    "results" "bindings")))))))
+
+(def-suite test-suite-scenario-a-1)
+(in-suite test-suite-scenario-a-1)
+
+(def-test joll-can-add-authors-test ()
+
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
 
@@ -233,11 +634,26 @@ this point and likely a redpencil image too.")
             foaf:name \"Steven Kotler\".
           authors:daniel a foaf:Person;
             foaf:name \"Daniel Kahneman\".
-        }")
+        }"))
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX authors: <http://example.com/authors/>
+            ASK {
+              authors:david a foaf:Person;
+                foaf:name \"David Allen\".
+              authors:steven a foaf:Person;
+                foaf:name \"Steven Kotler\".
+              authors:daniel a foaf:Person;
+                foaf:name \"Daniel Kahneman\".
+            }"))
+       "boolean")))
 
-      (format t "~&Can add authors. (2)~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+(def-test joll-can-add-authors2-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -252,12 +668,30 @@ this point and likely a redpencil image too.")
           books:fastAndSlow a schema:Book;
             schema:name \"Thinking Fast and Slow\";
             schema:creator authors:daniel.
-        }")
+        }"))
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
+            ASK {
+              books:gtd a schema:Book;
+                schema:name \"Getting Things Done\";
+                schema:creator authors:david.
+              books:abundance a schema:Book;
+                schema:name \"Abundance\";
+                schema:creator authors:steven.
+              books:fastAndSlow a schema:Book;
+                schema:name \"Thinking Fast and Slow\";
+                schema:creator authors:daniel.
+            }"))
+       "boolean")))
 
-      (format t "~&Can add extra book for author.~%")
-
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+(def-test joll-can-add-extra-book-for-author-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -266,12 +700,26 @@ this point and likely a redpencil image too.")
           books:ready a schema:Book;
             schema:name \"Ready for Anything\";
             schema:creator authors:david .
-        }")
+        }"))
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
 
-      (format t "~&Can add extra author to book.~%")
+            ASK {
+              books:ready a schema:Book;
+                schema:name \"Ready for Anything\";
+                schema:creator authors:david .
+            }"))
+       "boolean")))
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+(def-test joll-can-add-extra-author-for-book-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -282,26 +730,54 @@ this point and likely a redpencil image too.")
           books:abundance schema:creator authors:steven, authors:peter.
         }"))
 
-    (with-impersonation-for :jack
-      (format t "~&Jack is a user.~%")
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
 
-      (format t "~&Jack can add a favorite.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            ASK {
+              authors:peter a foaf:Person;
+                schema:name \"Peter Diamantis\".
+              books:abundance schema:creator authors:steven, authors:peter.
+            }"))
+       "boolean")))
+
+
+(def-suite test-suite-scenario-a-2)
+(in-suite test-suite-scenario-a-2)
+
+(def-test jack-can-add-favorite-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
         PREFIX favorites: <http://mu.semte.ch/favorites/>
         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-
         INSERT DATA {
           favorites:me ext:hasBook books:gtd, books:fastAndSlow.
-        }")
+        }"))
 
-      ;; jack likes all authors of the book Abundance
-      (format t "~&Jack can add conditional favorite authors.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX books: <http://example.com/books/>
+            PREFIX favorites: <http://mu.semte.ch/favorites/>
+            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+            ASK {
+              favorites:me ext:hasBook books:gtd.
+              favorites:me ext:hasBook books:fastAndSlow.
+            }"))
+       "boolean")))
+
+(def-test jack-can-add-conditional-favorite-authors-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -312,43 +788,58 @@ this point and likely a redpencil image too.")
           favorites:me ext:hasFavoriteAuthor ?author.
         } WHERE {
           books:abundance schema:creator ?author.
-        }")
-      ;; this data has no place to live, the target must be a foaf:Person and it is a book.
-      (format t "~&Jack can't add books as favorite author.~%")
-      (handler-case
-          (progn
-           (server:execute-query-for-context
-            "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX schema: <http://schema.org/>
-            PREFIX authors: <http://example.com/authors/>
-            PREFIX books: <http://example.com/books/>
+        }"))
+
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX authors: <http://example.com/authors/>
             PREFIX favorites: <http://mu.semte.ch/favorites/>
             PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+            ASK {
+              favorites:me ext:hasFavoriteAuthor authors:steven.
+              favorites:me ext:hasFavoriteAuthor authors:peter.
+            }"))
+       "boolean")))
 
-            INSERT {
-              favorites:me ext:hasFavoriteAuthor ?book.
-            } WHERE {
-              books:abundance schema:creator/^schema:creator ?book.
-            }")
-           (format t "~&ERROR: Oh noes, Jack shouldn't be allowed to do add a book as an author!~%"))
-        (error (e) (declare (ignore e)) t))
-      ;; let's check if jack has favorite authors
-      (format t "~&Jack can ask for favorite authors.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+(def-test jack-cant-add-books-as-favorite-author-test ()
+  (signals
+      handle-update-unit:unwritten-data-error
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
         PREFIX favorites: <http://mu.semte.ch/favorites/>
         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-        ASK {
-          favorites:me ext:hasFavoriteAuthor ?author.
-        }")      
-      ;; then let's describe the values
-      (format t "~&Jack can describe favorite authors.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        INSERT {
+          favorites:me ext:hasFavoriteAuthor ?book.
+        } WHERE {
+          books:abundance schema:creator/^schema:creator ?book.
+        }")))
+
+
+(def-test jack-can-ask-for-favorite-authors-test ()
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
+            PREFIX favorites: <http://mu.semte.ch/favorites/>
+            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+            ASK {
+              favorites:me ext:hasFavoriteAuthor ?author.
+            }"))
+       "boolean")))
+
+(def-test jack-can-describe-favorite-authors-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -357,13 +848,12 @@ this point and likely a redpencil image too.")
 
         DESCRIBE ?author {
           favorites:me ext:hasFavoriteAuthor ?author.
-        }")
+        }")))
 
-      ;; now let's replace the favorite author in two queries rather
-      ;; than in one
-      (format t "~&Jack can execute delete where and insert data in one query.~%")
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+(def-test jack-can-execute-delete-where-and-insert-data-in-one-query-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -381,37 +871,45 @@ this point and likely a redpencil image too.")
           }
         }"))
 
-    (with-impersonation-for :joll
-      (quad-transformations:define-quad-transformation (quad method)
-        ;; fix wktLiteral string representation
-        (let* ((object (quad:object quad))
-               (datatype-match (and
-                                (sparql-parser:match-p object)
-                                (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                                (= 3 (length (sparql-parser:match-submatches object)))
-                                (third (sparql-parser:match-submatches object))))
-               (datatype-uri (and datatype-match
-                                  (quad-term:uri
-                                   (first
-                                    (sparql-parser:match-submatches datatype-match)))))
-               (string-value (and (sparql-parser:match-p object)
-                                  (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                                  (sparql-manipulation:string-literal-string
-                                   (first (sparql-parser:match-submatches object))))))
-          (if (and datatype-uri
-                   (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
-                   (search "https://www.opengis.net/" string-value))
-              (let ((new-quad (quad:copy quad))
-                    (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
-                (setf (quad:object new-quad)
-                      (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
-                (quad-transformations:update new-quad))
-              (quad-transformations:keep))))
+  (is (not (jsown:val
+            (jsown:parse
+             (server:execute-query-for-context
+              "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+                    PREFIX schema: <http://schema.org/>
+                    PREFIX authors: <http://example.com/authors/>
+                    PREFIX books: <http://example.com/books/>
+                    PREFIX favorites: <http://mu.semte.ch/favorites/>
+                    PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-      (format t "~&Joll can write a book title with the right URI and no type.~%")
+                    ASK {
+                      favorites:me ext:hasFavoriteAuthor authors:steven.
+                    }"))
+            "boolean")))
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+              PREFIX schema: <http://schema.org/>
+              PREFIX authors: <http://example.com/authors/>
+              PREFIX books: <http://example.com/books/>
+              PREFIX favorites: <http://mu.semte.ch/favorites/>
+              PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+
+              ASK {
+                favorites:me ext:hasFavoriteAuthor authors:david.
+              }"))
+       "boolean")))
+
+
+(def-suite test-suite-scenario-a-3)
+(in-suite test-suite-scenario-a-3)
+
+(def-test joll-can-write-a-book-title-with-the-right-uri-and-no-type-test ()
+
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -420,12 +918,27 @@ this point and likely a redpencil image too.")
 
         INSERT DATA {
          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
-       }")
+       }"))
 
-      (format t "~&Effective changes contain only the data that was actually changed, which is:~%- insert \"On types too.\"~%- delete \"On types too.\"~%")
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
+            PREFIX favorites: <http://mu.semte.ch/favorites/>
+            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            ASK {
+              <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+            }"))
+       "boolean")))
+
+(def-test changes-contain-only-the-data-that-was-actually-changed-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -433,41 +946,59 @@ this point and likely a redpencil image too.")
         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
         INSERT DATA {
-         <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
-       }")
+          <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
+        }"))
 
-      (let ((support:*string-max-size* 50))
+
+  (is (jsown:val
+       (jsown:parse
         (server:execute-query-for-context
          "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-          PREFIX schema: <http://schema.org/>
-          PREFIX authors: <http://example.com/authors/>
-          PREFIX books: <http://example.com/books/>
-          PREFIX favorites: <http://mu.semte.ch/favorites/>
-          PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
+            PREFIX favorites: <http://mu.semte.ch/favorites/>
+            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-          INSERT DATA {
-           <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
-         }")
+            ASK {
+              <http://book-store.example.com/books/my-book> schema:name \"On Types\", \"On Types Too\".
+            }"))
+       "boolean")))
 
-        (format t "~&Matches yield following content for long content: ~%~A"
-                (server:execute-query-for-context
-                 "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-                  SELECT ?content WHERE { <http://book-store.example.com/books/my-book> ext:longContent ?content }"))
-        (server:execute-query-for-context
-         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-          PREFIX schema: <http://schema.org/>
-          PREFIX authors: <http://example.com/authors/>
-          PREFIX books: <http://example.com/books/>
-          PREFIX favorites: <http://mu.semte.ch/favorites/>
-          PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-
-          INSERT DATA {
-           <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
-         }"))
-
+(def-test reinserting-long-content-does-not-duplicate-abbreviation-test ()
+  (let ((support:*string-max-size* 50))
+    (finishes
       (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+       INSERT DATA {
+        <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
+      }"))
+    (finishes
+      (server:execute-query-for-context
+       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+       INSERT DATA {
+        <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
+      }"))
+    (is (= 1 (parse-integer
+              (jsown:val
+               (jsown:val
+                (first (jsown:filter
+                        (jsown:parse
+                         (server:execute-query-for-context
+                          "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+                       SELECT (COUNT(DISTINCT ?content) AS ?count) WHERE {
+                         <http://book-store.example.com/books/my-book> ext:longContent ?content.
+                         FILTER(isURI(?content))
+                       }"))
+                        "results" "bindings"))
+                "count")
+               "value"))))))
+
+(def-test joll-can-collapse-multiple-tiles-via-delete-insert-where-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -480,12 +1011,31 @@ this point and likely a redpencil image too.")
          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
         } WHERE {
          <http://book-store.example.com/books/my-book> schema:name ?title.
-        }")
+        }"))
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX schema: <http://schema.org/>
+            PREFIX authors: <http://example.com/authors/>
+            PREFIX books: <http://example.com/books/>
+            PREFIX favorites: <http://mu.semte.ch/favorites/>
+            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-      ;; we can delete the types
+            ASK {
+              <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+              FILTER NOT EXISTS {
+                <http://book-store.example.com/books/my-book> schema:name ?other.
+                FILTER (?other != \"On Types\")
+              }
+            }"))
+       "boolean")))
 
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+(def-test we-can-delete-the-types-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -493,115 +1043,246 @@ this point and likely a redpencil image too.")
         PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
         DELETE WHERE {
-         <http://book-store.example.com/books/my-book> schema:name \"On Types\".
-        }")
+          <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+        }"))
+  (is (not (jsown:val
+            (jsown:parse
+             (server:execute-query-for-context
+              "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+                  PREFIX schema: <http://schema.org/>
+                  PREFIX authors: <http://example.com/authors/>
+                  PREFIX books: <http://example.com/books/>
+                  PREFIX favorites: <http://mu.semte.ch/favorites/>
+                  PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
 
-      ;; we can have an empty construct where
+                  ASK {
+                    <http://book-store.example.com/books/my-book> schema:name \"On Types\".
+                  }"))
+            "boolean"))))
 
-      (server:execute-query-for-context
-       "CONSTRUCT { } WHERE { }")
 
-      ;; inserting the UUID with xsd:string will just insert the UUID (configured above)
+(def-test we-can-have-an-empty-construct-where-test ()
+  (finishes
+    (server:execute-query-for-context
+     "CONSTRUCT { } WHERE { }")))
 
-      (server:execute-query-for-context
-       "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-        PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-        INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }")
+;; TODO: is this ok?
+(def-test inserting-the-uuid-will-just-insert-the-uuid-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+     PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+     INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }"))
+  (let ((binding (first (jsown:filter
+                         (jsown:parse
+                          (server:execute-query-for-context
+                           "PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+                             SELECT ?uuid WHERE { <http://book-store.example.com/books/my-book> mu:uuid ?uuid }"))
+                         "results" "bindings"))))
+    (is (string= "literal" (jsown:val (jsown:val binding "uuid") "type")))
+    (is (jsown:val (jsown:val binding "uuid") "value") "123")))
 
-      (when *run-geosparql-tests*
-        (server:execute-query-for-context
-         "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-          PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
-          PREFIX geo: <http://www.opengis.net/ont/geosparql#>
-          INSERT DATA {
-            <http://book-store.example.com/geometries/a>
-               a geo:Geometry;
-               geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
-           }")))
 
-    (with-impersonation-for :jack
-      ;; can insert some random content
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+(def-test geo-sparql-test ()
+  (if *run-geosparql-tests*
+      (progn
+        (finishes
+          (server:execute-query-for-context
+           "PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+           INSERT DATA {
+             <http://book-store.example.com/geometries/a>
+                a geo:Geometry;
+                geo:asWKT \"<https://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^geo:wktLiteral.
+            }"))
+        (is (jsown:val
+             (jsown:parse
+              (server:execute-query-for-context
+               "PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+                ASK {
+                  <http://book-store.example.com/geometries/a> geo:asWKT
+                    \"<http://www.opengis.net/def/crs/EPSG/0/31370> POINT (155822.2 132723.18)\"^^geo:wktLiteral.
+                }"))
+             "boolean")))
+      (is (identity t))))
+
+(def-suite test-suite-scenario-a-4)
+(in-suite test-suite-scenario-a-4)
+
+(def-test can-insert-some-random-content-test ()
+
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay a ext:NoNameOrLabel;
             ext:score 9001;
             ext:level 12.
-        }")
-      ;; can't insert name or label
-      (block :no-error
-        (handler-case
-            (server:execute-query-for-context
-             "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+        }"))
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+            ASK {
+              ext:myDisplay a ext:NoNameOrLabel;
+                ext:score 9001;
+                ext:level 12.
+            }"))
+       "boolean")))
+
+(def-test jack-cant-add-name-to-nonameorlabel-test ()
+  (signals handle-update-unit:unwritten-data-error
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
               INSERT DATA {
                 ext:myDisplay ext:name \"Failing name\".
-              }")
-          (handle-update-unit:unwritten-data-error (e)
-            (format t "Received expected error ~A" e)
-            (return-from :no-error t)))
-        (error 'simple-error :format-control "Expected triples not being written, but received no error."))
-      (block :no-error
-        (handler-case
-            (server:execute-query-for-context
-             "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+              }")))
+
+(def-test jack-cant-add-label-to-nonameorlabel-test ()
+  (signals handle-update-unit:unwritten-data-error
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
               INSERT DATA {
                 ext:myDisplay ext:label \"Failing label\".
-              }")
-          (handle-update-unit:unwritten-data-error (e)
-            (format t "Received expected error ~A" e)
-            (return-from :no-error t)))
-        (error 'simple-error :format-control "Expected triples not being written, but received no error."))
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+              }")))
+
+(def-test jack-can-add-other-predicates-to-nonameorlabel-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay ext:anotherThing \"Another thing\".
         }"))
 
-    ;; jack can delete (which should use CONSTRUCT)
-    (with-impersonation-for :jack
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-        DELETE {
-          ext:myDisplay ext:score ?score; ext:level ?level.
-        } WHERE {
-          ext:myDisplay a ext:NoNameOrLabel;
-            ext:score ?score;
-            ext:level ?level.
-        }"))))
+  (is (jsown:val
+       (jsown:parse
+        (server:execute-query-for-context
+         "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+          ASK {
+            ext:myDisplay ext:anotherThing \"Another thing\".
+          }"))
+       "boolean")))
 
-(defun run-delta-only-assertion-tests ()
-  "Tests whether we can use graphs which only have emit data through delta-notifier but not through sparql"
-  ;; TODO: it would be good if this test would also verify data is effectively creating delta messages but that's not
-  ;; the case yet.
-  (with-acl-config
+
+(def-test jack-can-delete-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+      DELETE {
+        ext:myDisplay ext:score ?score; ext:level ?level.
+      } WHERE {
+        ext:myDisplay a ext:NoNameOrLabel;
+          ext:score ?score;
+          ext:level ?level.
+      }"))
+
+  (is (not (jsown:val
+            (jsown:parse
+             (server:execute-query-for-context
+              "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+                ASK {
+                 ext:myDisplay a ext:NoNameOrLabel;
+                   ext:score ?score;
+                   ext:level ?level.
+                }"))
+            "boolean"))))
+
+(def-suite test-suite-scenario-a-5)
+(in-suite test-suite-scenario-a-5)
+
+(def-test coerce-test ()
+  (finishes
     (client:query (coerce
                    "DELETE {
-                   GRAPH ?g { ?s ?p ?o }
-                 } WHERE {
-                   VALUES ?g {
-                     <http://mu.semte.ch/graphs/push>
-                   }
-                   GRAPH ?g { ?s ?p ?o. }
-                 }" #-be-cautious 'base-string #+be-cautious 'string))
-    (with-impersonation-for :jack
-      ;; can insert a push update
-      (server:execute-query-for-context
-       "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+                      GRAPH ?g { ?s ?p ?o }
+                    } WHERE {
+                      VALUES ?g {
+                        <http://mu.semte.ch/graphs/push>
+                      }
+                      GRAPH ?g { ?s ?p ?o. }
+                    }" #-be-cautious 'base-string #+be-cautious 'string))))
+
+(def-suite test-suite-scenario-a-6)
+(in-suite test-suite-scenario-a-6)
+
+(def-test can-insert-a-push-update-test ()
+
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
         PREFIX dct: <http://purl.org/dc/terms/>
         INSERT DATA {
           push:myUpdate a push:Update;
             dct:title \"Receive delta without writing\".
-        }")
-
-      ;; can not read back the push update
-      (assert (= 0
-                 (length
-                  (jsown:filter
-                   (jsown:parse
-                    (server:execute-query-for-context
-                     "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
-        SELECT * WHERE {
-          ?thing a push:Update.
         }"))
-                   "results" "bindings")))))))
+
+  (is (= 0
+         (length
+          (jsown:filter
+           (jsown:parse
+            (server:execute-query-for-context
+             "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+              SELECT * WHERE {
+                ?thing a push:Update.
+              }"))
+           "results" "bindings")))))
+
+
+(defun run-tests ()
+
+  (with-acl-config
+    (clean-up-graphs)
+    (store-initial-session-data)
+
+    (quad-transformations:define-quad-transformation (quad method)
+      ;; fix wktLiteral string representation
+      (let* ((object (quad:object quad))
+             (datatype-match (and
+                              (sparql-parser:match-p object)
+                              (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                              (= 3 (length (sparql-parser:match-submatches object)))
+                              (third (sparql-parser:match-submatches object))))
+             (datatype-uri (and datatype-match
+                                (quad-term:uri
+                                 (first
+                                  (sparql-parser:match-submatches datatype-match)))))
+             (string-value (and (sparql-parser:match-p object)
+                                (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                                (sparql-manipulation:string-literal-string
+                                 (first (sparql-parser:match-submatches object))))))
+        (if (and datatype-uri
+                 (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
+                 (search "https://www.opengis.net/" string-value))
+            (let ((new-quad (quad:copy quad))
+                  (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
+              (setf (quad:object new-quad)
+                    (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
+              (quad-transformations:update new-quad))
+            (quad-transformations:keep))))
+
+    (with-impersonation-for :joll
+      (run! 'test-suite-scenario-a-1))
+
+    (with-impersonation-for :jack
+      (run! 'test-suite-scenario-a-2))
+
+    (with-impersonation-for :joll
+      (run! 'test-suite-scenario-a-3))
+
+    (with-impersonation-for :jack
+      (run! 'test-suite-scenario-a-4)))
+
+  (with-acl-config
+    (run! 'test-suite-scenario-a-5)
+
+    (with-impersonation-for :jack
+      (run! 'test-suite-scenario-a-6))))
+
+;; TODO: remove this
+;; (with-acl-config
+;;   (print
+;;    (client:query (coerce
+;;                   "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+;;                    ASK { GRAPH <http://mu.semte.ch/graphs/push> {
+;;                      push:myUpdate a push:Update.
+;;                    } }"
+;;                   #-be-cautious 'base-string #+be-cautious 'string))))

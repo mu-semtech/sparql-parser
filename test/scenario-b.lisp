@@ -1,5 +1,5 @@
 (defpackage :sparql-parser-test-scenario-b
-  (:use :common-lisp)
+  (:use :common-lisp :fiveam)
   (:export
    #:run-assertion-tests))
 
@@ -36,7 +36,7 @@
          (acl::*rights* nil)
          (delta-messenger::*delta-handlers* nil)
          (client::*backend* "http://localhost:8891/sparql")
-         (client::*log-sparql-query-roundtrip* t)
+         (client::*log-sparql-query-roundtrip* nil)
          (type-cache::*uri-graph-user-type-providers* nil)
          (quad-transformations::*user-quad-transform-functions* nil))
 
@@ -68,24 +68,33 @@ this point and likely a redpencil image too.")
 ;;;; Scenario
 ;;;; Boot up a container using:
 ;;;; docker run --name virtuoso -p 8891:8890 -e SPARQL_UPDATE=true -e "DEFAULT_GRAPH=http://mu.semte.ch/application" redpencil/virtuoso:1.2.0-rc.1; dr rm virtuoso
-(defun run-assertion-tests ()
-  (clean-up-graphs)
+(def-suite test-suite-scenario-b)
+(in-suite test-suite-scenario-b)
 
+(def-test ungraphed-insert-duplicates-into-all-writable-graphs-test ()
+  (finishes
+    (server:execute-query-for-context
+     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+      INSERT DATA {
+        ext:me foaf:name \"\"\"Aad\"\"\".
+      }"))
+  (let* ((response (client:query (coerce
+                                  "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+                                   PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+                                   SELECT ?g WHERE { GRAPH ?g { ext:me foaf:name \"Aad\". } }"
+                                  #-be-cautious 'base-string #+be-cautious 'string)))
+         (graphs (mapcar (lambda (binding) (jsown:val (jsown:val binding "g") "value"))
+                         (jsown:filter (jsown:parse response) "results" "bindings"))))
+    ;; all graphs have been edited
+    (is (= 2 (length graphs)))
+    ;; check if individual graphs are in the results
+    (is (member "http://mu.semte.ch/graphs/a" graphs :test #'string=))
+    (is (member "http://mu.semte.ch/graphs/b" graphs :test #'string=))))
+
+
+(defun run-tests ()
+  (clean-up-graphs)
   (with-acl-config
     (with-session-id
-      (server:execute-query-for-context
-       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-        PREFIX schema: <http://schema.org/>
-        PREFIX authors: <http://example.com/authors/>
-        PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-  
-  
-        INSERT DATA {
-          ext:me foaf:name \"\"\"Aad\"\"\".
-        }")
-      (let ((response (server:execute-query-for-context
-               "SELECT * WHERE { ?s ?p ?o. }")))
-        (assert (= (length (jsown:filter (jsown:parse response)
-                                         "results"
-                                         "bindings"))
-                   2))))))
+      (run! 'test-suite-scenario-b))))
