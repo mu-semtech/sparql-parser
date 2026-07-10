@@ -57,21 +57,21 @@
      (type-cache::add-type-for-prefix "http://book-store.example.com/books/" "http://schema.org/Book")
 
      (quad-transformations:define-quad-transformation (quad method)
-       ;; make quad objects which have datatype in uuid specification just strings
-       (if (and
-            ;; predicate is uuid
-            (string= (quad-term:uri (quad:predicate quad))
-                     "http://mu.semte.ch/vocabularies/core/uuid")
-            ;; object has datatype
-            (= (length (sparql-parser:match-submatches (quad:object quad))) 3))
-           (let ((new-quad (quad:copy quad))) ; make new quad
-             (setf (quad:object new-quad)
-                   (sparql-manipulation:make-nested-match
-                    `(ebnf::|RDFLiteral| ,(first (sparql-parser:match-submatches (quad:object quad))))))
-             ;; use the new quad
-             (quad-transformations:update new-quad))
-           ;; otherwise keep it
-           (quad-transformations:keep)))
+         ;; make quad objects which have datatype in uuid specification just strings
+         (if (and
+              ;; predicate is uuid
+              (string= (quad-term:uri (quad:predicate quad))
+                       "http://mu.semte.ch/vocabularies/core/uuid")
+              ;; object has datatype
+              (= (length (sparql-parser:match-submatches (quad:object quad))) 3))
+             (let ((new-quad (quad:copy quad))) ; make new quad
+               (setf (quad:object new-quad)
+                     (sparql-manipulation:make-nested-match
+                      `(ebnf::|RDFLiteral| ,(first (sparql-parser:match-submatches (quad:object quad))))))
+               ;; use the new quad
+               (quad-transformations:update new-quad))
+             ;; otherwise keep it
+             (quad-transformations:keep)))
 
      ;; (quad-transformations:add-quad-processor
      ;;  (lambda (quad &key method)
@@ -115,7 +115,7 @@
 
      ;; initialize rights
      (acl::define-prefixes
-       :foaf "http://xmlns.com/foaf/0.1/"
+         :foaf "http://xmlns.com/foaf/0.1/"
        :authors "http://example.com/authors/"
        :ext "http://mu.semte.ch/vocabularies/ext/"
        :schema "http://schema.org/"
@@ -127,16 +127,16 @@
      (acl:supply-allowed-group "public")
 
      (acl:supply-allowed-group "user"
-       :parameters ("id")
-       :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+                               :parameters ("id")
+                               :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
                PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
                SELECT ?id WHERE {
                  <SESSION_ID> session:account/mu:uuid ?id.
                }")
 
      (acl:supply-allowed-group "admin"
-       :parameters ()
-       :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
+                               :parameters ()
+                               :query "PREFIX session: <http://mu.semte.ch/vocabularies/session/>
                PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
                PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
                SELECT ?account WHERE {
@@ -622,8 +622,8 @@ this point and likely a redpencil image too.")
 (def-test joll-can-add-authors-test ()
 
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
 
@@ -652,8 +652,8 @@ this point and likely a redpencil image too.")
 
 (def-test joll-can-add-authors2-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -690,8 +690,8 @@ this point and likely a redpencil image too.")
 
 (def-test joll-can-add-extra-book-for-author-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -718,8 +718,8 @@ this point and likely a redpencil image too.")
 
 (def-test joll-can-add-extra-author-for-book-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -751,8 +751,8 @@ this point and likely a redpencil image too.")
 
 (def-test jack-can-add-favorite-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -776,8 +776,8 @@ this point and likely a redpencil image too.")
 
 (def-test jack-can-add-conditional-favorite-authors-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -804,9 +804,9 @@ this point and likely a redpencil image too.")
 
 (def-test jack-cant-add-books-as-favorite-author-test ()
   (signals
-      handle-update-unit:unwritten-data-error
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   handle-update-unit:unwritten-data-error
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -838,8 +838,8 @@ this point and likely a redpencil image too.")
 
 (def-test jack-can-describe-favorite-authors-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -852,8 +852,8 @@ this point and likely a redpencil image too.")
 
 (def-test jack-can-execute-delete-where-and-insert-data-in-one-query-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -908,8 +908,8 @@ this point and likely a redpencil image too.")
 (def-test joll-can-write-a-book-title-with-the-right-uri-and-no-type-test ()
 
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -937,8 +937,8 @@ this point and likely a redpencil image too.")
 
 (def-test changes-contain-only-the-data-that-was-actually-changed-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -969,14 +969,14 @@ this point and likely a redpencil image too.")
 (def-test reinserting-long-content-does-not-duplicate-abbreviation-test ()
   (let ((support:*string-max-size* 50))
     (finishes
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+     (server:execute-query-for-context
+      "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
        INSERT DATA {
         <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
       }"))
     (finishes
-      (server:execute-query-for-context
-       "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+     (server:execute-query-for-context
+      "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
        INSERT DATA {
         <http://book-store.example.com/books/my-book> ext:longContent \"This is a string which has more than 50 characters in length\", \"String < 50 chars\" .
       }"))
@@ -997,8 +997,8 @@ this point and likely a redpencil image too.")
 
 (def-test joll-can-collapse-multiple-tiles-via-delete-insert-where-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -1034,8 +1034,8 @@ this point and likely a redpencil image too.")
 
 (def-test we-can-delete-the-types-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+   (server:execute-query-for-context
+    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
         PREFIX schema: <http://schema.org/>
         PREFIX authors: <http://example.com/authors/>
         PREFIX books: <http://example.com/books/>
@@ -1063,14 +1063,14 @@ this point and likely a redpencil image too.")
 
 (def-test we-can-have-an-empty-construct-where-test ()
   (finishes
-    (server:execute-query-for-context
-     "CONSTRUCT { } WHERE { }")))
+   (server:execute-query-for-context
+    "CONSTRUCT { } WHERE { }")))
 
 ;; TODO: is this ok?
 (def-test inserting-the-uuid-will-just-insert-the-uuid-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+   (server:execute-query-for-context
+    "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
      PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
      INSERT DATA { <http://book-store.example.com/books/my-book> mu:uuid \"123\"^^xsd:string. }"))
   (let ((binding (first (jsown:filter
@@ -1087,8 +1087,8 @@ this point and likely a redpencil image too.")
   (if *run-geosparql-tests*
       (progn
         (finishes
-          (server:execute-query-for-context
-           "PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+         (server:execute-query-for-context
+          "PREFIX geo: <http://www.opengis.net/ont/geosparql#>
            INSERT DATA {
              <http://book-store.example.com/geometries/a>
                 a geo:Geometry;
@@ -1111,8 +1111,8 @@ this point and likely a redpencil image too.")
 (def-test can-insert-some-random-content-test ()
 
   (finishes
-    (server:execute-query-for-context
-     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+   (server:execute-query-for-context
+    "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay a ext:NoNameOrLabel;
             ext:score 9001;
@@ -1131,24 +1131,24 @@ this point and likely a redpencil image too.")
 
 (def-test jack-cant-add-name-to-nonameorlabel-test ()
   (signals handle-update-unit:unwritten-data-error
-    (server:execute-query-for-context
-     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+           (server:execute-query-for-context
+            "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
               INSERT DATA {
                 ext:myDisplay ext:name \"Failing name\".
               }")))
 
 (def-test jack-cant-add-label-to-nonameorlabel-test ()
   (signals handle-update-unit:unwritten-data-error
-    (server:execute-query-for-context
-     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+           (server:execute-query-for-context
+            "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
               INSERT DATA {
                 ext:myDisplay ext:label \"Failing label\".
               }")))
 
 (def-test jack-can-add-other-predicates-to-nonameorlabel-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+   (server:execute-query-for-context
+    "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
         INSERT DATA {
           ext:myDisplay ext:anotherThing \"Another thing\".
         }"))
@@ -1165,8 +1165,8 @@ this point and likely a redpencil image too.")
 
 (def-test jack-can-delete-test ()
   (finishes
-    (server:execute-query-for-context
-     "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
+   (server:execute-query-for-context
+    "PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
       DELETE {
         ext:myDisplay ext:score ?score; ext:level ?level.
       } WHERE {
@@ -1191,8 +1191,8 @@ this point and likely a redpencil image too.")
 
 (def-test coerce-test ()
   (finishes
-    (client:query (coerce
-                   "DELETE {
+   (client:query (coerce
+                  "DELETE {
                       GRAPH ?g { ?s ?p ?o }
                     } WHERE {
                       VALUES ?g {
@@ -1207,13 +1207,23 @@ this point and likely a redpencil image too.")
 (def-test can-insert-a-push-update-test ()
 
   (finishes
-    (server:execute-query-for-context
-     "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+   (server:execute-query-for-context
+    "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
         PREFIX dct: <http://purl.org/dc/terms/>
         INSERT DATA {
           push:myUpdate a push:Update;
             dct:title \"Receive delta without writing\".
         }"))
+
+  (is (not (jsown:val
+            (jsown:parse
+             (client:query (coerce
+                            "PREFIX push: <http://mu.semte.ch/vocabularies/push/>
+                        ASK { GRAPH <http://mu.semte.ch/graphs/push> {
+                          push:myUpdate a push:Update.
+                        } }"
+                            #-be-cautious 'base-string #+be-cautious 'string)))
+            "boolean")))
 
   (is (= 0
          (length
@@ -1230,34 +1240,34 @@ this point and likely a redpencil image too.")
 (defun run-tests ()
 
   (with-acl-config
-    (clean-up-graphs)
+      (clean-up-graphs)
     (store-initial-session-data)
 
     (quad-transformations:define-quad-transformation (quad method)
-      ;; fix wktLiteral string representation
-      (let* ((object (quad:object quad))
-             (datatype-match (and
-                              (sparql-parser:match-p object)
-                              (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                              (= 3 (length (sparql-parser:match-submatches object)))
-                              (third (sparql-parser:match-submatches object))))
-             (datatype-uri (and datatype-match
-                                (quad-term:uri
-                                 (first
-                                  (sparql-parser:match-submatches datatype-match)))))
-             (string-value (and (sparql-parser:match-p object)
+        ;; fix wktLiteral string representation
+        (let* ((object (quad:object quad))
+               (datatype-match (and
+                                (sparql-parser:match-p object)
                                 (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                                (sparql-manipulation:string-literal-string
-                                 (first (sparql-parser:match-submatches object))))))
-        (if (and datatype-uri
-                 (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
-                 (search "https://www.opengis.net/" string-value))
-            (let ((new-quad (quad:copy quad))
-                  (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
-              (setf (quad:object new-quad)
-                    (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
-              (quad-transformations:update new-quad))
-            (quad-transformations:keep))))
+                                (= 3 (length (sparql-parser:match-submatches object)))
+                                (third (sparql-parser:match-submatches object))))
+               (datatype-uri (and datatype-match
+                                  (quad-term:uri
+                                   (first
+                                    (sparql-parser:match-submatches datatype-match)))))
+               (string-value (and (sparql-parser:match-p object)
+                                  (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                                  (sparql-manipulation:string-literal-string
+                                   (first (sparql-parser:match-submatches object))))))
+          (if (and datatype-uri
+                   (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
+                   (search "https://www.opengis.net/" string-value))
+              (let ((new-quad (quad:copy quad))
+                    (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
+                (setf (quad:object new-quad)
+                      (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
+                (quad-transformations:update new-quad))
+              (quad-transformations:keep))))
 
     (with-impersonation-for :joll
       (run! 'test-suite-scenario-a-1))
@@ -1272,7 +1282,7 @@ this point and likely a redpencil image too.")
       (run! 'test-suite-scenario-a-4)))
 
   (with-acl-config
-    (run! 'test-suite-scenario-a-5)
+      (run! 'test-suite-scenario-a-5)
 
     (with-impersonation-for :jack
       (run! 'test-suite-scenario-a-6))))
