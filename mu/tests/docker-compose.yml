@@ -1,0 +1,14 @@
+services:
+  database:
+    build: ../../
+  triplestore:
+    image: redpencil/virtuoso:1.4.0
+    environment:
+      SPARQL_UPDATE: "true"
+      DEFAULT_GRAPH: "http://mu.semte.ch/application"
+
+  tests:
+    image: semtech/mu-scripts:1.0.0
+    volumes:
+      - ./scripts/tests/:/app/scripts/
+    restart: "no"

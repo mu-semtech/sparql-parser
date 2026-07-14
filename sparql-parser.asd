@@ -7,6 +7,7 @@
   :description "Parser for the SPARQL1.1 specification."
   :serial t
   :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams fiveam)
+  :in-order-to ((asdf:test-op (asdf:test-op :sparql-parser/tests)))
   :components ((:file "packages")
                ;; supporting code
                (:file "support/support")
@@ -62,3 +63,13 @@
                (:file "administration/string-files")
                ;; configuration
                (:file "config/config")))
+
+(asdf:defsystem :sparql-parser/tests
+  :depends-on (:sparql-parser :fiveam)
+  :components ((:module "test"
+                :components ((:file "scenario")
+                             (:file "scenario-b")
+                             (:file "run-all"))))
+  :perform (asdf:test-op (op c)
+                         (unless (uiop:symbol-call :test-runner '#:run-all-tests)
+                           (error "Test suite failed"))))

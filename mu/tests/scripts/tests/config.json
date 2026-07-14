@@ -1,0 +1,20 @@
+{
+  "version": "0.2",
+  "scripts": [
+    {
+      "documentation": {
+        "command": "run",
+        "description": "Runs all tests.",
+        "arguments": []
+      },
+      "environment": {
+        "interactive": false,
+        "join_networks": true,
+        "script": "run-tests/run.sh"
+      },
+      "mounts": {
+        "app": "/project"
+      }
+    }
+  ]
+}

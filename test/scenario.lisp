@@ -1238,51 +1238,53 @@ this point and likely a redpencil image too.")
 
 
 (defun run-tests ()
+  (let (results)
+    (with-acl-config
+      (clean-up-graphs)
+      (store-initial-session-data)
 
-  (with-acl-config
-    (clean-up-graphs)
-    (store-initial-session-data)
-
-    (quad-transformations:define-quad-transformation (quad method)
-      ;; fix wktLiteral string representation
-      (let* ((object (quad:object quad))
-             (datatype-match (and
-                              (sparql-parser:match-p object)
-                              (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                              (= 3 (length (sparql-parser:match-submatches object)))
-                              (third (sparql-parser:match-submatches object))))
-             (datatype-uri (and datatype-match
-                                (quad-term:uri
-                                 (first
-                                  (sparql-parser:match-submatches datatype-match)))))
-             (string-value (and (sparql-parser:match-p object)
+      (quad-transformations:define-quad-transformation (quad method)
+        ;; fix wktLiteral string representation
+        (let* ((object (quad:object quad))
+               (datatype-match (and
+                                (sparql-parser:match-p object)
                                 (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
-                                (sparql-manipulation:string-literal-string
-                                 (first (sparql-parser:match-submatches object))))))
-        (if (and datatype-uri
-                 (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
-                 (search "https://www.opengis.net/" string-value))
-            (let ((new-quad (quad:copy quad))
-                  (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
-              (setf (quad:object new-quad)
-                    (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
-              (quad-transformations:update new-quad))
-            (quad-transformations:keep))))
+                                (= 3 (length (sparql-parser:match-submatches object)))
+                                (third (sparql-parser:match-submatches object))))
+               (datatype-uri (and datatype-match
+                                  (quad-term:uri
+                                   (first
+                                    (sparql-parser:match-submatches datatype-match)))))
+               (string-value (and (sparql-parser:match-p object)
+                                  (eq (sparql-parser:match-term object) 'ebnf::|RDFLiteral|)
+                                  (sparql-manipulation:string-literal-string
+                                   (first (sparql-parser:match-submatches object))))))
+          (if (and datatype-uri
+                   (string= "http://www.opengis.net/ont/geosparql#wktLiteral" datatype-uri)
+                   (search "https://www.opengis.net/" string-value))
+              (let ((new-quad (quad:copy quad))
+                    (new-string (cl-ppcre:regex-replace "https://" string-value "http://")))
+                (setf (quad:object new-quad)
+                      (sparql-manipulation:make-rdfliteral new-string :datatype-match datatype-match))
+                (quad-transformations:update new-quad))
+              (quad-transformations:keep))))
 
-    (with-impersonation-for :joll
-      (run! 'test-suite-scenario-a-1))
+      (with-impersonation-for :joll
+        (push (run! 'test-suite-scenario-a-1) results))
 
-    (with-impersonation-for :jack
-      (run! 'test-suite-scenario-a-2))
+      (with-impersonation-for :jack
+        (push (run! 'test-suite-scenario-a-2) results))
 
-    (with-impersonation-for :joll
-      (run! 'test-suite-scenario-a-3))
+      (with-impersonation-for :joll
+        (push (run! 'test-suite-scenario-a-3) results))
 
-    (with-impersonation-for :jack
-      (run! 'test-suite-scenario-a-4)))
+      (with-impersonation-for :jack
+        (push (run! 'test-suite-scenario-a-4) results)))
 
-  (with-acl-config
-    (run! 'test-suite-scenario-a-5)
+    (with-acl-config
+      (push (run! 'test-suite-scenario-a-5) results)
 
-    (with-impersonation-for :jack
-      (run! 'test-suite-scenario-a-6))))
+      (with-impersonation-for :jack
+        (push (run! 'test-suite-scenario-a-6) results)))
+
+    (every #'identity results)))
