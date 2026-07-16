@@ -73,46 +73,6 @@
            ;; otherwise keep it
            (quad-transformations:keep)))
 
-     ;; (quad-transformations:add-quad-processor
-     ;;  (lambda (quad &key method)
-     ;;    (declare (ignorable method))
-     ;;    (labels ((quad-transformations:update (quad-transformations::quads)
-     ;;               (cond ((null quad-transformations::quads) (values nil t t))
-     ;;                     ((listp (first quad-transformations::quads))
-     ;;                      (values quad-transformations::quads t t))
-     ;;                     (t (values (list quad-transformations::quads) t t))))
-     ;;             (quad-transformations:keep ()
-     ;;               (values nil nil t))
-     ;;             (quad-transformations::execute-body ()
-     ;;               (multiple-value-bind
-     ;;                     (quad-transformations::result
-     ;;                      quad-transformations::update-quad-p
-     ;;                      quad-transformations::used-internal-function-p)
-     ;;                   (progn
-     ;;                     (if (and
-     ;;                          (string=
-     ;;                           (detect-quads:quad-term-uri (quad:predicate quad))
-     ;;                           "http://mu.semte.ch/vocabularies/core/uuid")
-     ;;                          (=
-     ;;                           (length
-     ;;                            (sparql-parser:match-submatches (quad:object quad)))
-     ;;                           3))
-     ;;                         (let ((new-quad (quad:copy quad)))
-     ;;                           (setf (quad:object new-quad)
-     ;;                                 (sparql-manipulation:make-nested-match
-     ;;                                  `(ebnf::|RDFLiteral|
-     ;;                                          ,(first
-     ;;                                            (sparql-parser:match-submatches
-     ;;                                             (quad:object quad))))))
-     ;;                           (quad-transformations:update new-quad))
-     ;;                         (quad-transformations:keep)))
-     ;;                 (unless quad-transformations::used-internal-function-p
-     ;;                   (format t
-     ;;                           "~&[ERROR][QUAD-PROCESSOR] Quad processor user function did not call internal replacement function REPLACE or KEEP. Ignoring possible changes.~%"))
-     ;;                 (values quad-transformations::result
-     ;;                         quad-transformations::update-quad-p))))
-     ;;      (quad-transformations::execute-body))))
-
      ;; initialize rights
      (acl::define-prefixes
        :foaf "http://xmlns.com/foaf/0.1/"
@@ -183,6 +143,15 @@
        (:mu-session-id (getf *known-session-ids* ,user))
      ,@body))
 
+(defmacro db-test (testname (&rest options) &body body)
+  "Runs BODY inside a fiveam test inside a freshly made acl config
+  with cleaned up graphs and freshly stored initial session data."
+  `(def-test ,testname (,@options)
+     (with-acl-config
+       (clean-up-graphs)
+       (store-initial-session-data)
+       ,@body)))
+
 (defun store-initial-session-data ()
   "Stores the initial session data in the triplestore."
   (client:query (coerce
@@ -214,42 +183,39 @@ this point and likely a redpencil image too.")
 (def-suite test-suite-scenario-a-1)
 (in-suite test-suite-scenario-a-1)
 
-(def-test joll-can-add-authors-test ()
-  (with-acl-config
-    (clean-up-graphs)
-    (store-initial-session-data)
-    (with-impersonation-for :joll
-      (finishes
-        (server:execute-query-for-context
-         "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-          PREFIX schema: <http://schema.org/>
-          PREFIX authors: <http://example.com/authors/>
+(db-test joll-can-add-authors-test ()
+  (with-impersonation-for :joll
+    (finishes
+      (server:execute-query-for-context
+       "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+               PREFIX schema: <http://schema.org/>
+               PREFIX authors: <http://example.com/authors/>
 
-          INSERT DATA {
-            authors:david a foaf:Person;
-              foaf:name \"David Allen\".
-            authors:steven a foaf:Person;
-              foaf:name \"Steven Kotler\".
-            authors:daniel a foaf:Person;
-              foaf:name \"Daniel Kahneman\".
-          }"))
+               INSERT DATA {
+                 authors:david a foaf:Person;
+                   foaf:name \"David Allen\".
+                 authors:steven a foaf:Person;
+                   foaf:name \"Steven Kotler\".
+                 authors:daniel a foaf:Person;
+                   foaf:name \"Daniel Kahneman\".
+               }"))
 
-      (is (jsown:val
-           (jsown:parse
-            (server:execute-query-for-context
-             "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX authors: <http://example.com/authors/>
-            ASK {
-              authors:david a foaf:Person;
-                foaf:name \"David Allen\".
-              authors:steven a foaf:Person;
-                foaf:name \"Steven Kotler\".
-              authors:daniel a foaf:Person;
-                foaf:name \"Daniel Kahneman\".
-            }"))
-           "boolean")))))
+    (is (jsown:val
+         (jsown:parse
+          (server:execute-query-for-context
+           "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+                   PREFIX authors: <http://example.com/authors/>
+                   ASK {
+                     authors:david a foaf:Person;
+                       foaf:name \"David Allen\".
+                     authors:steven a foaf:Person;
+                       foaf:name \"Steven Kotler\".
+                     authors:daniel a foaf:Person;
+                       foaf:name \"Daniel Kahneman\".
+                   }"))
+         "boolean"))))
 
-(def-test joll-can-add-authors2-test ()
+(db-test joll-can-add-authors2-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -291,7 +257,7 @@ this point and likely a redpencil image too.")
               }"))
            "boolean")))))
 
-(def-test joll-can-add-extra-book-for-author-test ()
+(db-test joll-can-add-extra-book-for-author-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -323,7 +289,7 @@ this point and likely a redpencil image too.")
               }"))
            "boolean")))))
 
-(def-test joll-can-add-extra-author-for-book-test ()
+(db-test joll-can-add-extra-author-for-book-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -360,7 +326,7 @@ this point and likely a redpencil image too.")
 (def-suite test-suite-scenario-a-2)
 (in-suite test-suite-scenario-a-2)
 
-(def-test jack-can-add-favorite-test ()
+(db-test jack-can-add-favorite-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -389,7 +355,7 @@ this point and likely a redpencil image too.")
               }"))
            "boolean")))))
 
-(def-test jack-can-add-conditional-favorite-authors-test ()
+(db-test jack-can-add-conditional-favorite-authors-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -453,7 +419,7 @@ this point and likely a redpencil image too.")
               }"))
            "boolean")))))
 
-(def-test jack-cant-add-books-as-favorite-author-test ()
+(db-test jack-cant-add-books-as-favorite-author-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -496,7 +462,7 @@ this point and likely a redpencil image too.")
           }")))))
 
 
-(def-test jack-can-ask-for-favorite-authors-test ()
+(db-test jack-can-ask-for-favorite-authors-test ()
 
   (with-acl-config
     (clean-up-graphs)
@@ -553,7 +519,7 @@ this point and likely a redpencil image too.")
               }"))
            "boolean")))))
 
-(def-test jack-can-describe-favorite-authors-test ()
+(db-test jack-can-describe-favorite-authors-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -606,7 +572,7 @@ this point and likely a redpencil image too.")
             favorites:me ext:hasFavoriteAuthor ?author.
           }")))))
 
-(def-test jack-can-execute-delete-where-and-insert-data-in-one-query-test ()
+(db-test jack-can-execute-delete-where-and-insert-data-in-one-query-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -702,7 +668,7 @@ this point and likely a redpencil image too.")
 (def-suite test-suite-scenario-a-3)
 (in-suite test-suite-scenario-a-3)
 
-(def-test joll-can-write-a-book-title-with-the-right-uri-and-no-type-test ()
+(db-test joll-can-write-a-book-title-with-the-right-uri-and-no-type-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -738,7 +704,7 @@ this point and likely a redpencil image too.")
               }"))
            "boolean")))))
 
-(def-test changes-contain-only-the-data-that-was-actually-changed-test ()
+(db-test changes-contain-only-the-data-that-was-actually-changed-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -775,7 +741,7 @@ this point and likely a redpencil image too.")
            "boolean")))))
 
 
-(def-test reinserting-long-content-does-not-duplicate-abbreviation-test ()
+(db-test reinserting-long-content-does-not-duplicate-abbreviation-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -810,7 +776,7 @@ this point and likely a redpencil image too.")
                     "count")
                    "value"))))))))
 
-(def-test joll-can-collapse-multiple-tiles-via-delete-insert-where-test ()
+(db-test joll-can-collapse-multiple-tiles-via-delete-insert-where-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -866,7 +832,7 @@ this point and likely a redpencil image too.")
            "boolean")))))
 
 
-(def-test we-can-delete-the-types-test ()
+(db-test we-can-delete-the-types-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -914,7 +880,7 @@ this point and likely a redpencil image too.")
                 "boolean"))))))
 
 
-(def-test we-can-have-an-empty-construct-where-test ()
+(db-test we-can-have-an-empty-construct-where-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -926,7 +892,7 @@ this point and likely a redpencil image too.")
          "CONSTRUCT { } WHERE { }")))))
 
 ;; ;; TODO: is this ok?
-(def-test inserting-the-uuid-will-just-insert-the-uuid-test ()
+(db-test inserting-the-uuid-will-just-insert-the-uuid-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -948,7 +914,7 @@ this point and likely a redpencil image too.")
         (is (jsown:val (jsown:val binding "uuid") "value") "123")))))
 
 
-(def-test geo-sparql-test ()
+(db-test geo-sparql-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -979,7 +945,7 @@ this point and likely a redpencil image too.")
 (def-suite test-suite-scenario-a-4)
 (in-suite test-suite-scenario-a-4)
 
-(def-test can-insert-some-random-content-test ()
+(db-test can-insert-some-random-content-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -1005,7 +971,7 @@ this point and likely a redpencil image too.")
                 }"))
            "boolean")))))
 
-(def-test jack-cant-add-name-to-nonameorlabel-test ()
+(db-test jack-cant-add-name-to-nonameorlabel-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -1019,7 +985,7 @@ this point and likely a redpencil image too.")
             ext:myDisplay ext:name \"Failing name\".
           }")))))
 
-(def-test jack-cant-add-label-to-nonameorlabel-test ()
+(db-test jack-cant-add-label-to-nonameorlabel-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -1033,7 +999,7 @@ this point and likely a redpencil image too.")
             ext:myDisplay ext:label \"Failing label\".
           }")))))
 
-(def-test jack-can-add-other-predicates-to-nonameorlabel-test ()
+(db-test jack-can-add-other-predicates-to-nonameorlabel-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -1057,7 +1023,7 @@ this point and likely a redpencil image too.")
            "boolean")))))
 
 
-(def-test jack-can-delete-test ()
+(db-test jack-can-delete-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -1089,7 +1055,7 @@ this point and likely a redpencil image too.")
 (def-suite test-suite-scenario-a-5)
 (in-suite test-suite-scenario-a-5)
 
-(def-test coerce-test ()
+(db-test coerce-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
@@ -1109,7 +1075,7 @@ this point and likely a redpencil image too.")
 (def-suite test-suite-scenario-a-6)
 (in-suite test-suite-scenario-a-6)
 
-(def-test can-insert-a-push-update-test ()
+(db-test can-insert-a-push-update-test ()
   (with-acl-config
     (clean-up-graphs)
     (store-initial-session-data)
