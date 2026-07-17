@@ -5,5 +5,4 @@
 (in-package :test-runner)
 
 (defun run-all-tests ()
-  (sparql-parser-test-scenario-a::run-tests)
-  (sparql-parser-test-scenario-b::run-tests))
+  (sparql-parser-test-integration::run-tests))

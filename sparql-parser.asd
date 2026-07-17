@@ -65,10 +65,18 @@
                (:file "config/config")))
 
 (asdf:defsystem :sparql-parser/tests
+  :serial t
   :depends-on (:sparql-parser :fiveam)
   :components ((:module "test"
-                :components ((:file "scenario")
-                             (:file "scenario-b")
+                :components ((:file "utils")
+                             (:file "integration")
+                             (:file "authors")
+                             (:file "books")
+                             (:file "duplicates")
+                             (:file "favorites")
+                             (:file "graph-cleanup")
+                             (:file "restrictions")
+                             (:file "updates")
                              (:file "run-all"))))
   :perform (asdf:test-op (op c)
                          (unless (uiop:symbol-call :test-runner '#:run-all-tests)
