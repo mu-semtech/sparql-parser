@@ -3,7 +3,8 @@
    :common-lisp
    :fiveam
    :sparql-parser-test-integration
-   :sparql-parser-test-utils))
+   :sparql-parser-test-utils)
+  (:export :books))
 
 (in-package :sparql-parser-test-books)
 
