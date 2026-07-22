@@ -112,7 +112,7 @@ those.  Allows for manipulation without destroying the original."
 ;;;; Stub language rules
 
 (defparameter *start-symbol* 'ebnf::|UpdateUnit|
-  "The symbol used to start processing.")
+              "The symbol used to start processing.")
 ;; (defparameter *start-symbol* 'ebnf::|QueryUnit|
 ;;   "The symbol used to start processing.")
 
@@ -331,7 +331,7 @@ as the starting point in STRING."
   "Sets up variables for parsing the given set of tokens."
   ;; (setf *tokens* `(,@tokens ,+END+))
   (setf *scanning-string* string)
-  (setf *next-char-idx*  0)
+  (setf *next-char-idx*  (scan-whitespace 0 string))
   (setf *current-token* nil)
   (setf *match-tree* (make-match :term *start-symbol*))
   (setf *stack* (list *match-tree* (make-match :term +END+))))
@@ -510,8 +510,8 @@ longest match is thrown."
   (declare (ignore max-steps print-intermediate-states print-solution as-ebnf))
   (setf string (support:inline-unicode-escape-sequences string))
   (setf *scanning-string* string) ; initialize the scanning string early
-                                  ; on because it will be shadowed by
-                                  ; with-reset-parser-setup-state
+                                        ; on because it will be shadowed by
+                                        ; with-reset-parser-setup-state
   (let ((parser-setup-initial-state (get-parser-setup-state))
         (keyword-args-to-pass (loop for (key value)
                                       on args by #'cddr

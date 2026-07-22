@@ -121,10 +121,10 @@
                             (sparql-parser:sparql-ast-top-node ast)
                             0 1)
                            'ebnf::|ConstructQuery|)))
-                   (setf (jsown:val (jsown:val jsown-result "results") "bindings")
-                         (expand-bindings (jsown:filter jsown-result "results" "bindings")
-                                          :virtuoso-p t
-                                          :construct-p construct-query-p))))
+                    (setf (jsown:val (jsown:val jsown-result "results") "bindings")
+                          (expand-bindings (jsown:filter jsown-result "results" "bindings")
+                                           :virtuoso-p t
+                                           :construct-p construct-query-p))))
                 (error 'simple-error :format-control "Failed to execute query"))
             (jsown:to-json jsown-result))))))
 
@@ -190,7 +190,7 @@
                                 ("source-ip" (source-ip)))))
                    (format t "~%Error: ~A~%Request info: ~A~%" e (jsown:to-json jsown))
                    `(500 (:content-type "application/json")
-                         (,(jsown:to-json jsown))))))))))
+                     (,(jsown:to-json jsown))))))))))
     (error (e)
       (format t "Could not process query, yielding 500.  ~%~A~%" e)
       (trivial-backtrace:print-backtrace e)
