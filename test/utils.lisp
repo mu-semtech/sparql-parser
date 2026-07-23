@@ -57,7 +57,7 @@
          (acl::*graphs* nil)
          (acl::*rights* nil)
          (delta-messenger::*delta-handlers* nil)
-         (client::*backend* "http://localhost:8891/sparql")
+         (client::*backend* (or (uiop:getenv "SPARQL_TEST_BACKEND") "http://localhost:8891/sparql"))
          (client::*log-sparql-query-roundtrip* nil)
          (type-cache::*uri-graph-user-type-providers* nil)
          (quad-transformations::*user-quad-transform-functions* nil))
