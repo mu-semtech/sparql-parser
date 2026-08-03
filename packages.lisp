@@ -40,7 +40,8 @@
            #:read-path-as-string
            #:string-file-uri
            #:inline-unicode-escape-sequences
-           #:garbage-collection-thread))
+           #:garbage-collection-thread
+           #:multi-value-or))
 
 (defpackage :woo.worker.utils
   (:use :common-lisp)
@@ -85,54 +86,79 @@
 (defpackage #:sparql-inspection
   (:use :common-lisp)
   (:import-from #:sparql-parser
-                #:match
-                #:scanned-token
-                #:match-submatches
-                #:match-term
-                #:scanned-token-token
-                #:scanned-token-effective-string)
-  (:export #:match-equal-p
-           #:ebnf-string-real-string
+                 #:match
+                 #:scanned-token
+                 #:match-submatches
+                 #:match-term
+                 #:scanned-token-token
+                 #:scanned-token-effective-string)
+  (:export #:ebnf-string-real-string
            #:first-found-scanned-token
            #:rdf-literal-datatype
            #:ebnf-numeric-literal-extract-info
            #:ebnf-simple-string-p
            #:nth-submatch
            #:rdf-literal-lang
-           #:map-matches))
+           #:ebnf-boolean-p
+           #:ebnf-boolean-as-real-boolean
+           #:ebnf-numeric-literal-p
+           #:map-matches
+           #:*boolean-accept-numeric-string-p*))
 
-(defpackage #:sparql-manipulation
+(defpackage #:match-equality
   (:use :common-lisp)
   (:import-from #:sparql-parser
-                #:make-match
-                #:match-submatches
-                #:match-term
-                #:match-p)
+                #:match #:match-p #:match-term #:match-submatches
+                #:scanned-token
+                #:scanned-token-p #:scanned-token-token
+                #:scanned-token-effective-string)
   (:import-from #:sparql-inspection
-                #:map-matches)
-  (:export #:remove-dataset-clauses #:remove-graph-graph-patterns #:add-from-graphs #:replace-iriref
-           #:add-default-base-decl-to-prologue
-           #:loop-matches
-           #:loop-matches-symbol-case
-           #:do-grouped-children
-           #:match-symbol-case
-           #:with-named-child
-           #:expanded-term-case
-           #:iriref
-           #:make-iri
-           #:make-word-match
-           #:uri-wrap-marks
-           #:uri-unwrap-marks
-           #:make-var
-           #:make-match-up-to-scanned-token
-           #:make-token-match
-           #:make-string-literal
-           #:make-rdfliteral
-           #:string-literal-string
-           #:fold-and-remove-quads-not-triples
-           #:make-langtag
-           #:make-nested-match
-           #:deep-replace-optional-with-union))
+                #:ebnf-string-real-string
+                #:ebnf-boolean-p #:ebnf-boolean-as-real-boolean
+                #:ebnf-numeric-literal-p #:ebnf-numeric-literal-extract-info
+                #:rdf-literal-datatype #:rdf-literal-lang)
+  (:export #:match-equal-p
+           #:define-kind-matcher
+           #:define-comparator
+           #:*matcher-kind-groups*
+           #:*plain-vs-xsd-string-treatment*
+           #:*allow-number-comparison-p*
+           #:*numeric-certain-equal-epsilon*
+           #:*numeric-certain-different-epsilon*
+           #:*numeric-exact-vs-float-promotion-bound*))
+
+(defpackage #:sparql-manipulation
+            (:use :common-lisp)
+            (:import-from #:sparql-parser
+                          #:make-match
+                          #:match-submatches
+                          #:match-term
+                          #:match-p)
+            (:import-from #:sparql-inspection
+                          #:map-matches)
+            (:export #:remove-dataset-clauses #:remove-graph-graph-patterns #:add-from-graphs #:replace-iriref
+                     #:add-default-base-decl-to-prologue
+                     #:loop-matches
+                     #:loop-matches-symbol-case
+                     #:do-grouped-children
+                     #:match-symbol-case
+                     #:with-named-child
+                     #:expanded-term-case
+                     #:iriref
+                     #:make-iri
+                     #:make-word-match
+                     #:uri-wrap-marks
+                     #:uri-unwrap-marks
+                     #:make-var
+                     #:make-match-up-to-scanned-token
+                     #:make-token-match
+                     #:make-string-literal
+                     #:make-rdfliteral
+                     #:string-literal-string
+                     #:fold-and-remove-quads-not-triples
+                     #:make-langtag
+                     #:make-nested-match
+                     #:deep-replace-optional-with-union))
 
 (defpackage #:type-cache
   (:use :common-lisp)

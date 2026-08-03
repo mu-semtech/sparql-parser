@@ -62,17 +62,21 @@ Behaviour when not enough children are available is currently unspecified."
        (third (match-submatches ebnf-rdfliteral-match)))))))
 
 (defun rdf-literal-lang (ebnf-rdfliteral-match &key skip-@)
-  "Yields the langstring of an ebnf::|RDFLiteral|
+  "Yields the langtag string of an ebnf::|RDFLiteral|, or NIL when the
+match has no language-tag submatch or the langtag is too short to strip.
 
-If `:SKIP-@' is supplied, the @ is cut off the langtag."
+If `:SKIP-@' is supplied, the leading @ is cut off the langtag."
   (when (= 2 (length (match-submatches ebnf-rdfliteral-match)))
     (let ((raw-lang
             (sparql-parser:scanned-token-effective-string
              (sparql-inspection:first-found-scanned-token
               (second (match-submatches ebnf-rdfliteral-match))))))
-      (if skip-@
-          (subseq raw-lang 1)
-          raw-lang))))
+      (cond
+        ((null skip-@) raw-lang)
+        ((and (plusp (length raw-lang))
+              (char= (char raw-lang 0) #\@))
+         (subseq raw-lang 1))
+        (t nil)))))
 
 (defun ebnf-simple-string-p (ebnf-match)
   "Yields truthy iff ebnf-match represents a string, thus being ebnf::|String| or ebnf::|RDFLiteral| with type xsd:string or no LANGTAG and no iri."
@@ -134,6 +138,9 @@ or the string part of any ebnf::|RDFLiteral|."
            (string= (rdf-literal-datatype ebnf-match)
                     "http://www.w3.org/2001/XMLSchema#boolean"))))
 
+(defparameter *boolean-accept-numeric-string-p* t
+  "When T, the lexical forms \"0\" and \"1\" are accepted as xsd:boolean (matching Virtuoso).")
+
 (defun ebnf-boolean-as-real-boolean (ebnf-match)
   "Takes an EBNF boolean for match of type ebnf::|BooleanLiteral| or an ebnf::|RDFLiteral| with type xsd:boolean."
   (let* ((raw-string
@@ -145,8 +152,8 @@ or the string part of any ebnf::|RDFLiteral|."
          (string (string-downcase raw-string)))
     (cond ((string= "true" string) (values t t))
           ((string= "false" string) (values nil t))
-          ((string= "0" string) (values nil t))
-          ((string= "1" string) (values t t))
+          ((string= "0" string) (values nil *boolean-accept-numeric-string-p*))
+          ((string= "1" string) (values t *boolean-accept-numeric-string-p*))
           (t (values nil nil)))))
 
 (defun ebnf-numeric-literal-p (ebnf-match)
@@ -185,71 +192,4 @@ xsd type.  The STRING-VALUE is the literal value string in the EBNF-MATCH."
                                        match))))))
     (cons (extract-number-type ebnf-match)
           (extract-number-string ebnf-match))))
-
-(defun ebnf-numeric-literal-equal (left-ebnf-match right-ebnf-match)
-  "Yields truethy iff both matches represent the same number by some
-sensible equality, assuming both represent a numeric literal."
-  (destructuring-bind (left-number-type . left-number-string)
-      (ebnf-numeric-literal-extract-info left-ebnf-match)
-    (destructuring-bind (right-number-type . right-number-string)
-        (ebnf-numeric-literal-extract-info right-ebnf-match)
-      ;; TODO: this is a more stringent version of equality than what can
-      ;; be expected from current triplestores we use.  Add an
-      ;; implementation which is friendlier towards what the triplestore
-      ;; expects.
-      (and (eq left-number-type right-number-type)
-           (equalp left-number-string right-number-string)))))
-
-(defun match-equal-p (a b)
-  "Compares match a to match b and returns (VALUES TRUTHY CERTAIN-P).
-
-When CERTAIN-P is NIL, the TRUTHY value is a guess, when CERTAIN-P is TRUTHY we are certain about the answer."
-;;   "Yields truthy if match a and match b are equal.  May provide false
-;; negatives but not false positives."
-  (if (eq (type-of a) (type-of b))
-      (typecase a
-        (match
-            (cond ((and (ebnf-simple-string-p a)
-                        (ebnf-simple-string-p b))
-                   (values (string= (ebnf-string-real-string a) (ebnf-string-real-string b))
-                           t))
-                  ;; TODO: add support for language typed strings
-                  ((and (ebnf-boolean-p a)
-                        (ebnf-boolean-p b))
-                   (values
-                    (eq (ebnf-boolean-as-real-boolean a)
-                        (ebnf-boolean-as-real-boolean b))
-                    t))
-                  ((and (ebnf-numeric-literal-p a)
-                        (ebnf-numeric-literal-p b))
-                   (if (ebnf-numeric-literal-equal a b)
-                       (values t t)
-                       (values nil nil)))
-                  (t
-                   (cond ((not (equal (match-term a) (match-term b)))
-                          (values nil t))
-                         ((/= (length (match-submatches a)) (length (match-submatches b)))
-                          ;; not entirely certain about all the options here, perhaps this can be (VALUES NIL T)
-                          (values nil nil))
-                         (t (let ((equal-p t)
-                                  (certain-p t))
-                              (loop for submatch-a in (match-submatches a)
-                                    for submatch-b in (match-submatches b)
-                                    for (submatch-equal-p submatch-certain-p)
-                                      = (multiple-value-list (match-equal-p submatch-a submatch-b))
-                                    do
-                                       (if equal-p
-                                           (setf equal-p (and equal-p submatch-equal-p)
-                                                 certain-p (and certain-p submatch-certain-p))
-                                           ;; if they're not equal, then they might still be because of a datatype we do
-                                           ;; not interpret
-                                           (setf equal-p nil
-                                                 certain-p nil))
-                                    until (and (not equal-p) (not certain-p)))
-                              (values equal-p certain-p)))))))
-        (scanned-token (values (and (equal (scanned-token-token a) (scanned-token-token b))
-                                    (string= (scanned-token-effective-string a)
-                                             (scanned-token-effective-string b)))
-                               t)))
-      (values nil t)))
 

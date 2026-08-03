@@ -9,6 +9,18 @@
         (setf construct new-construct)))
     construct))
 
+(defmacro multi-value-or (&rest clauses)
+  "Like `CL:OR' but supports multiple values, first match for which the first value is truthy and no other values exist is returned."
+  (when clauses
+    (let ((self (first clauses))
+          (others (rest clauses))
+          (response-gensym (gensym "RESPONSE")))
+      `(let ((,response-gensym (multiple-value-list ,self)))
+         (if (and (null (first ,response-gensym))
+                  (null (cdr ,response-gensym)))
+             (multi-value-or ,@others)
+             (apply #'values ,response-gensym))))))
+
 (defun hex-char (number-string)
   "Yields the character for the given number."
   (code-char (parse-integer number-string :radix 16)))

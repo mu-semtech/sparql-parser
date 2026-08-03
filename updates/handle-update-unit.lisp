@@ -143,8 +143,8 @@ NOTE: this function works without interaction withthe backing triplestore."
           if (eq key :object)
             do
                (multiple-value-bind (match-equal-p match-certain-p)
-                   (sparql-inspection:match-equal-p (quad-term:object-as-match (getf a :object))
-                                                    (quad-term:object-as-match (getf b :object)))
+                   (match-equality:match-equal-p (quad-term:object-as-match (getf a :object))
+                                                 (quad-term:object-as-match (getf b :object)))
                  (setf equal-p (and equal-p match-equal-p)
                        certain-p (and certain-p match-certain-p)))
           else
