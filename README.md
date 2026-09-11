@@ -397,6 +397,44 @@ Using the `:scopes` parameter notation it is possible to provide multiple scope 
 ```
 
 ## Reference
+### Supported SPARQL request and response formats
+Sparql-parser accepts SPARQL queries sent according to the [SPARQL 1.1 Protocol](https://www.w3.org/TR/sparql11-protocol/), but not all of the protocol's request variants are currently supported. The table below summarizes which methods can be used to send a query.
+
+| Operation                                                                                        | `Content-Type`                      | Supported |
+|--------------------------------------------------------------------------------------------------|-------------------------------------|-----------|
+| [Query via GET](https://www.w3.org/TR/sparql11-protocol/#query-via-get)                          | – (query in URL)                    | Yes       |
+| [Query via URL-encoded POST](https://www.w3.org/TR/sparql11-protocol/#query-via-post-urlencoded) | `application/x-www-form-urlencoded` | Yes       |
+| [Query via POST directly](https://www.w3.org/TR/sparql11-protocol/#query-via-post-direct)        | `application/sparql-query`          | No        |
+| [Update via POST directly](https://www.w3.org/TR/sparql11-protocol/#update-via-post-direct)      | `application/sparql-update`         | Yes       |
+
+
+Sending a request as a direct POST with `Content-Type: application/sparql-query` is **not currently supported**: the body is not parsed as a query and the request fails with an HTTP 500 error. Use one of the methods above instead.
+
+```bash
+# Supported: GET
+curl -G "https://<host>/sparql" \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode "query=ASK {}"
+```
+
+```bash
+# Supported: URL-encoded POST
+curl -X POST "https://<host>/sparql" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Accept: application/sparql-results+json" \
+  --data-urlencode "query=ASK {}"
+```
+
+```bash
+# Supported: raw body POST (query or update)
+curl -X POST "https://<host>/sparql" \
+  -H "Content-Type: application/sparql-update" \
+  -H "Accept: application/sparql-results+json" \
+  --data-raw "INSERT DATA { ... }"
+```
+
+**Responses** are currently only returned in the [SPARQL 1.1 Query Results JSON Format](https://www.w3.org/TR/sparql11-results-json/) (`application/sparql-results+json`). Clients should send `Accept: application/sparql-results+json`, as shown in the examples above. Other result serializations (e.g. XML, CSV/TSV) are not currently supported.
+
 ### ACL configuration interface
 #### `define-graph`
 A graph-specification essentially describes the set of triples in a graph to which rights can be assigned. It does this using one or more type-specifications. A type-specification in turn specifies a resource type and predicates that capture the relevant triples. A graph-specification is created using the `define-graph` macro:
