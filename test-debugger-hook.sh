@@ -3,5 +3,5 @@
 sbcl --non-interactive \
     --eval '(load "sparql-parser.asd")' \
     --eval '(ql:quickload :sparql-parser)' \
-    --eval '(let ((result (asdf:test-system :sparql-parser))) (uiop:quit (if result 0 1)))' \
-    --quit
+    --eval '(sb-thread:make-thread (lambda () (error "test error")))' \
+    --eval '(sleep 1)'

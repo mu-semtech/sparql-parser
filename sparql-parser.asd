@@ -18,6 +18,7 @@
                (:file "support/parallel-event-sequencer")
                (:file "support/woo-workers")
                (:file "support/garbage-collection-thread")
+               (:file "support/debugger-hook")
                ;; parsing an EBNF tree
                (:file "sparql-ast/ebnf")
                (:file "sparql-ast/terminals")
