@@ -1,0 +1,3 @@
+[submodule "dependencies/luckless"]
+	path = dependencies/luckless
+	url = https://github.com/madnificent/luckless.git

@@ -6,7 +6,8 @@
   :license "MIT"
   :description "Parser for the SPARQL1.1 specification."
   :serial t
-  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams)
+  :depends-on (alexandria cl-ppcre bordeaux-threads woo dexador jsown luckless sha1 trivial-backtrace flexi-streams fiveam)
+  :in-order-to ((asdf:test-op (asdf:test-op :sparql-parser/tests)))
   :components ((:file "packages")
                ;; supporting code
                (:file "support/support")
@@ -16,6 +17,8 @@
                (:file "support/semaphores")
                (:file "support/parallel-event-sequencer")
                (:file "support/woo-workers")
+               (:file "support/garbage-collection-thread")
+               (:file "support/debugger-hook")
                ;; parsing an EBNF tree
                (:file "sparql-ast/ebnf")
                (:file "sparql-ast/terminals")
@@ -23,6 +26,8 @@
                (:file "sparql-ast/generator") ; output manipulated AST
                (:file "sparql-ast/inspection") ; TODO: refactor so inspection contains everything manipulation needs and move it earlier
                (:file "sparql-ast/manipulation")
+               (:file "sparql-ast/match-equality-framework")
+               (:file "sparql-ast/match-equality")
                ;; sparql http - part 1
                (:file "connection/globals")
                (:file "connection/client")
@@ -62,3 +67,22 @@
                (:file "administration/string-files")
                ;; configuration
                (:file "config/config")))
+
+(asdf:defsystem :sparql-parser/tests
+  :serial t
+  :depends-on (:sparql-parser :fiveam)
+  :components ((:module "test"
+                :components ((:file "utils")
+                             (:file "integration")
+                             (:file "match-equality")
+                             (:file "authors")
+                             (:file "books")
+                             (:file "duplicates")
+                             (:file "favorites")
+                             (:file "graph-cleanup")
+                             (:file "restrictions")
+                             (:file "updates")
+                             (:file "run-all"))))
+  :perform (asdf:test-op (op c)
+                         (unless (uiop:symbol-call :test-runner '#:run-all-tests)
+                           (error "Test suite failed"))))

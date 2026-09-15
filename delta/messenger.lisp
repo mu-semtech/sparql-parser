@@ -44,9 +44,7 @@
                                                 :effective-deletes effective-deletes
                                                 :effective-inserts effective-inserts
                                                 :scope (connection-globals:mu-call-scope)
-                                                :allowed-groups (if (connection-globals:mu-auth-sudo)
-                                                                    "sudo"
-                                                                    (connection-globals:mu-auth-allowed-groups))
+                                                :allowed-groups (connection-globals:mu-auth-allowed-groups)
                                                 :source-ip (connection-globals:source-ip)
                                                 :sequence-id sequence-id))))))
             (headers `(("content-type" . "application/json")
@@ -108,9 +106,7 @@
             ("sequenceId" sequence-id)
             ("origin" source-ip)))) ; source ip is shared in origin key
     (when allowed-groups
-      (setf (jsown:val delta "allowedGroups") (if (equal allowed-groups "sudo")
-                                                  "sudo"
-                                                  (jsown:to-json allowed-groups))))
+      (setf (jsown:val delta "allowedGroups") (jsown:to-json allowed-groups)))
     (when (and scope (not (eq scope acl:_)))
       (setf (jsown:val delta "scope") scope))
     delta))

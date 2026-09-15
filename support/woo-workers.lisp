@@ -36,15 +36,20 @@ cleared for others."
 (defparameter *max-tries-for-adding-job* 10
   "After this amount of tries, we assign the job to a worker, even if that worker is decommissioned.")
 
-(defun woo.worker::add-job-to-cluster (cluster job &key (tries *max-tries-for-adding-job*))
+(defparameter *update-next-worker-lock* (bt:make-lock "add-job-to-cluster"))
+
+(defun woo.worker::add-job-to-cluster (cluster job &key (tries *max-tries-for-adding-job*) (require-lock-p t))
   "Add a job to te cluster, overrides original function.
 
   Tries to assign to REMAINING-TRIES workers and forces when all of theme are decommissioned."
   ;; Try to assign to `*max-tries-for-adding-job*' workers, then force-queue
   (let* ((workers (woo.worker::cluster-circular-workers cluster))
          (worker (car workers)))
-    (setf (woo.worker::cluster-circular-workers cluster)
-          (cdr workers))
+    (bt:with-lock-held (*update-next-worker-lock*)
+      (setf workers (woo.worker::cluster-circular-workers cluster))
+      (setf worker (car workers))
+      (setf (woo.worker::cluster-circular-workers cluster)
+            (cdr workers)))
     (if (and (>= tries 0) 
              (eq (woo.worker::worker-status worker)
                  :decommissioned))

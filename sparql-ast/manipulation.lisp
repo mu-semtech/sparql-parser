@@ -594,3 +594,24 @@ Used to replace <SESSION_URI> in access calculation."
              (if (string= from (sparql-parser:terminal-match-string match))
                  to
                  match)))))
+
+(defun deep-replace-optional-with-union (match)
+  "Replaces an OPTIONAL { a } with a { } UNION { a }."
+  (when (match-p match)
+    ;; handle current level
+    (when (and (eq (match-term match) 'ebnf::|GraphPatternNotTriples|)
+               (eq (match-term (sparql-inspection:nth-submatch match 0))
+                   'ebnf::|OptionalGraphPattern|))
+      (setf (match-submatches match)
+            (list
+             (mk-match `(ebnf::|GroupOrUnionGraphPattern|
+                              (ebnf::|GroupGraphPattern|
+                                    "{" (ebnf::|GroupGraphPatternSub|) "}")
+                              "UNION"
+                              ,(sparql-inspection:nth-submatch match 0 1))))))
+    ;; traverse children
+    (dolist (submatch (match-submatches match))
+      (deep-replace-optional-with-union submatch)))
+  match)
+
+
