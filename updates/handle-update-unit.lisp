@@ -714,7 +714,8 @@ locking.
                                                        :insert-quads (loop for (key . quad) in group
                                                                            when (eq key :insert)
                                                                              collect quad))
-                               :send-to-single nil))
+                               :send-to-single nil
+                               :update-p t))
                ;; NOTE: we base `type-cache:update-known-types' on data in the SPARQL endpoint for now but it's not
                ;; clear to me whether this should only be what we can find back in the stored data or whether it should
                ;; be anything we have heard about (also just delta).  The latter may yield to hard to track down bugs

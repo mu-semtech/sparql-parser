@@ -70,7 +70,8 @@ LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is
                                (sparql-escape-uri (jsown:filter binding "g" "value"))
                                (sparql-escape-uri (jsown:filter binding "s" "value"))
                                (sparql-escape-uri (jsown:filter binding "p" "value"))
-                               (sparql-escape-uri replacement)))))
+                               (sparql-escape-uri replacement))))
+                :update-p t)
                ;; then delete the old values
                (client:query
                 (format nil "DELETE DATA {~{~% GRAPH ~{~A {~A ~A ~A}~}~}~%}"
@@ -81,7 +82,8 @@ LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is
                                (sparql-escape-uri (jsown:filter binding "g" "value"))
                                (sparql-escape-uri (jsown:filter binding "s" "value"))
                                (sparql-escape-uri (jsown:filter binding "p" "value"))
-                               (sparql-escape-string value :lang lang :datatype datatype)))))))))
+                               (sparql-escape-string value :lang lang :datatype datatype))))
+                :update-p t)))))
 
 (defun all-string-files ()
   "Lists all string files."
@@ -135,7 +137,8 @@ LANG and DATATYPE may be supplied, but only one of them may be non-nil.  LANG is
                                       (sparql-escape-uri (jsown:filter quad "g" "value"))
                                       (sparql-escape-uri (jsown:filter quad "s" "value"))
                                       (sparql-escape-uri (jsown:filter quad "p" "value"))
-                                      (sparql-escape-uri (jsown:filter quad "o" "value")))))))
+                                      (sparql-escape-uri (jsown:filter quad "o" "value")))))
+                        :update-p t))
         else
           do (format t "~&FILE TO DB string-file ~A is ok~%" sha)))
 

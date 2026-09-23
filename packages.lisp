@@ -317,6 +317,7 @@
 (defpackage #:client
   (:use :common-lisp #:connection-globals)
   (:export #:query #:bindings
+           #:qlever-backend-p
            #:batch-map-solutions-for-select-query
            #:batch-create-full-solution-for-select-query
            #:expand-bindings

@@ -10,6 +10,18 @@
   nil
   "If this special variable is set, it will contain objects representing the current backends.  It will replace *backend* over time.")
 
+(defparameter *backend-type* :virtuoso
+  "Type of the triplestore backing this instance.  Supported values are :VIRTUOSO (the default) and :QLEVER.
+
+QLever executes SPARQL update queries (INSERT/DELETE) through raw update
+requests rather than through the query parameter used by Virtuoso.  It also
+requires an access token for updates, see `*QLEVER-ACCESS-TOKEN*'.")
+
+(defparameter *qlever-access-token* "dba"
+  "Access token sent in the authorization header when executing SPARQL update queries against a QLever backend.
+
+QLever rejects update queries without a valid access token.")
+
 (defparameter *max-concurrent-connections* 8
   "The maximum amount of concurrent queries sent to a sparql endpoint.")
 
@@ -106,6 +118,36 @@ Yields what `DEX:REQUEST' yields, the first three being BODY CODE HEADERS."
                      :headers headers
                      :content `(("query" . ,query))))))
 
+(defun qlever-backend-p ()
+  "Truethy iff the backing triplestore is a QLever instance."
+  (eq *backend-type* :qlever))
+
+(defun qlever-authorization-headers ()
+  "Headers needed to authorize against a QLever backend.
+
+Yields an empty list if no access token is configured."
+  (when *qlever-access-token*
+    `(("authorization" . ,(format nil "Bearer ~A" *qlever-access-token*)))))
+
+(defun send-update-to-triplestore (endpoint update headers)
+  "Sends UPDATE as a SPARQL update request to the triplestore at url ENDPOINT with headers HEADERS.
+
+QLever expects SPARQL updates to be sent as a raw body via POST with
+content-type application/sparql-update, rather than as a query parameter.
+The authorization headers reported by `QLEVER-AUTHORIZATION-HEADERS' are
+added as QLever requires an access token for updates.
+
+Yields what `DEX:REQUEST' yields, the first three being BODY CODE HEADERS."
+  (dex:request endpoint
+               :method :post
+               :use-connection-pool nil
+               :keep-alive nil
+               :force-string t
+               :headers (append (qlever-authorization-headers)
+                                '(("content-type" . "application/sparql-update"))
+                                headers)
+               :content update))
+
 (defun ensure-backends-variable ()
   "Users can set the backends using the `*BACKEND*' variable in simple string form.  We now have a more complex structure
 which is stored in the `*BACKENDS*' variable.  This function handles the upgrade from one format to the other."
@@ -142,10 +184,15 @@ When the VERBOSE keyword is truethy, output is written to STDOUT."
                              (format t "~&Could not access endpoint ~A, signaled ~A, will retry.~%" url e))
                            (sleep 1))))))
 
-(defun query (string &key (send-to-single nil))
+(defun query (string &key (send-to-single nil) (update-p nil))
   "Sends a query to the backend and responds with the response body.
 
-When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request is sent to only one of them."
+When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request is sent to only one of them.
+
+When UPDATE-P is truethy, the request is treated as a SPARQL update query
+(INSERT/DELETE).  For a QLever backend the update is then sent as a raw
+body via POST with content-type application/sparql-update as expected by
+QLever.  Other backends receive updates the same way as regular queries."
   (ensure-backends-variable)
   (let* ((selected-endpoints
            (if send-to-single
@@ -175,7 +222,9 @@ When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request
 
                                           ("mu-call-id" . ,(mu-call-id))
                                           ("mu-session-id" . ,(mu-session-id)))))
-                           (send-query-to-triplestore (sparql-endpoint-url endpoint) string headers))
+                           (if (and update-p (qlever-backend-p))
+                               (send-update-to-triplestore (sparql-endpoint-url endpoint) string headers)
+                               (send-query-to-triplestore (sparql-endpoint-url endpoint) string headers)))
                        (declare (ignore code headers))
                        (when *log-sparql-query-roundtrip*
                          (format t "~&Requested:~%~A~%and received~%~A~%"
