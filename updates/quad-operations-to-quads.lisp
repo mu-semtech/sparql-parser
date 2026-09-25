@@ -252,9 +252,6 @@ handled through CONSTRUCT queries, some may only be handled through SELECT queri
   (let ((insert-patterns (operation-data-subfield operation :insert-patterns))
         (delete-patterns (operation-data-subfield operation :delete-patterns)))
     (if (and *allow-construct-query-p*
-             ;; QLever yields CONSTRUCT results as turtle rather than as the
-             ;; JSON bindings yielded by Virtuoso which we can't parse.
-             (not (client:qlever-backend-p))
              (not (connection-globals:mu-auth-sudo))
              (or (null insert-patterns)
                  (null delete-patterns)))

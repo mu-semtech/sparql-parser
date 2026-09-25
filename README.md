@@ -312,6 +312,8 @@ QLever executes SPARQL update queries (INSERT/DELETE) as raw update requests rat
 (setf *qlever-access-token* "dba")
 ```
 
+QLever does not support serialising CONSTRUCT query results as JSON: it responds with Turtle or N-Triples instead. When the backend type is set to `:qlever`, sparql-parser requests N-Triples for such queries and converts the response into the same JSON bindings structure yielded by Virtuoso, so the responses keep the same shape regardless of the backend.
+
 ### Enable additional logging
 By default sparql-parser only logs to its standard output when requests fail to execute. To log more information different variables can be set to non-nil values.
 
