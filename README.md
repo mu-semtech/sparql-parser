@@ -296,6 +296,24 @@ The `define-graph` macro supports more fine-grained control for which graph-spec
 
 Any other value than `nil` will be interpreted as `t`, which is the default value, and will enable delta messages for the graph specification.
 
+### Use QLever as the triplestore backend
+By default sparql-parser assumes a Virtuoso backend. To use a [QLever](https://qlever.cs.uni-freiburg.de/) triplestore instead, point sparql-parser at the QLever endpoint and set the backend type accordingly:
+
+```lisp
+(in-package :client)
+(setf *backend* "http://triplestore:8890/sparql")
+(setf *backend-type* :qlever)
+```
+
+QLever executes SPARQL update queries (INSERT/DELETE) as raw update requests rather than through the query parameter used by Virtuoso, and it requires an access token to execute such updates. The access token can be configured through `client:*qlever-access-token*`:
+
+```lisp
+(in-package :client)
+(setf *qlever-access-token* "dba")
+```
+
+QLever does not support serialising CONSTRUCT query results as JSON: it responds with Turtle or N-Triples instead. When the backend type is set to `:qlever`, sparql-parser requests N-Triples for such queries and converts the response into the same JSON bindings structure yielded by Virtuoso, so the responses keep the same shape regardless of the backend.
+
 ### Enable additional logging
 By default sparql-parser only logs to its standard output when requests fail to execute. To log more information different variables can be set to non-nil values.
 
@@ -503,6 +521,8 @@ The following sections list, per package, the available variables that can be (i
 #### client
 - *`*backend*`* The SPARQL endpoint(s) to talk to, allowed values are either a single string or a list of strings. Over time this variable will be deprecated in favor of using `*backends*`. (default: `"http://triplestore:8890/sparql"`)
 - *`*backends*`* A list of objects representing SPARQL endpoint(s) to talk to. The contained objects should be created using the `acl::make-sparql-endpoint` function with a URL string as argument. If not explicitly set, this variable is populated based on the value of `*backend*`. (default: `nil`)
+- *`*backend-type*`* Type of the triplestore backing this instance. Supported values are `:virtuoso` and `:qlever`. When set to `:qlever`, SPARQL update queries (INSERT/DELETE) are sent to the backend as raw update requests with content-type `application/sparql-update` as expected by QLever, rather than through the query parameter. (default: `:virtuoso`)
+- *`*qlever-access-token*`* Access token sent in the authorization header when executing SPARQL update queries against a QLever backend. QLever rejects updates without a valid access token. (default: `"dba"`)
 - *`*max-concurrent-connections*`* The maximum amount of concurrent queries sent to an individual backend. (default: `8`)
 
 - *`*log-sparql-query-roundtrip*`* If set to non-nil, log both the outgoing query sent to and response received from the backend to the standard output. (default: `nil`)

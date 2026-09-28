@@ -10,6 +10,18 @@
   nil
   "If this special variable is set, it will contain objects representing the current backends.  It will replace *backend* over time.")
 
+(defparameter *backend-type* :virtuoso
+  "Type of the triplestore backing this instance.  Supported values are :VIRTUOSO (the default) and :QLEVER.
+
+QLever executes SPARQL update queries (INSERT/DELETE) through raw update
+requests rather than through the query parameter used by Virtuoso.  It also
+requires an access token for updates, see `*QLEVER-ACCESS-TOKEN*'.")
+
+(defparameter *qlever-access-token* "dba"
+  "Access token sent in the authorization header when executing SPARQL update queries against a QLever backend.
+
+QLever rejects update queries without a valid access token.")
+
 (defparameter *max-concurrent-connections* 8
   "The maximum amount of concurrent queries sent to a sparql endpoint.")
 
@@ -106,6 +118,143 @@ Yields what `DEX:REQUEST' yields, the first three being BODY CODE HEADERS."
                      :headers headers
                      :content `(("query" . ,query))))))
 
+(defun qlever-backend-p ()
+  "Truethy iff the backing triplestore is a QLever instance."
+  (eq *backend-type* :qlever))
+
+(defun accept-header ()
+  "Accept header sent along with outgoing queries.
+
+QLever does not support serialising CONSTRUCT query results as JSON
+and responds with a turtle-family format instead.  For a QLever
+backend we request N-Triples as additional accepted format so we
+receive a predictable serialisation we can convert, see
+`CONSTRUCT-RESULT-AS-JSON'."
+  (if (qlever-backend-p)
+      "application/sparql-results+json, application/n-triples"
+      "application/sparql-results+json"))
+
+(defun qlever-authorization-headers ()
+  "Headers needed to authorize against a QLever backend.
+
+Yields an empty list if no access token is configured."
+  (when *qlever-access-token*
+    `(("authorization" . ,(format nil "Bearer ~A" *qlever-access-token*)))))
+
+(defun send-update-to-triplestore (endpoint update headers)
+  "Sends UPDATE as a SPARQL update request to the triplestore at url ENDPOINT with headers HEADERS.
+
+QLever expects SPARQL updates to be sent as a raw body via POST with
+content-type application/sparql-update, rather than as a query parameter.
+The authorization headers reported by `QLEVER-AUTHORIZATION-HEADERS' are
+added as QLever requires an access token for updates.
+
+Yields what `DEX:REQUEST' yields, the first three being BODY CODE HEADERS."
+  (dex:request endpoint
+               :method :post
+               :use-connection-pool nil
+               :keep-alive nil
+               :force-string t
+               :headers (append (qlever-authorization-headers)
+                                '(("content-type" . "application/sparql-update"))
+                                headers)
+               :content update))
+
+;; begin CONSTRUCT conversion for QLever
+
+(defun turtle-family-content-type-p (content-type)
+  "Truethy iff CONTENT-TYPE indicates a turtle-family response.
+
+QLever responds to CONSTRUCT queries with turtle or N-Triples rather
+than with the JSON responses Virtuoso yields."
+  (and content-type
+       (cl-ppcre:scan "^(text/turtle|application/n-triples)" content-type)))
+
+(defun decode-turtle-escapes (string)
+  "Decodes the ECHAR escape sequences in STRING.
+
+The ttl parser keeps escaped characters like quotes and backslashes in
+their escaped form.  Virtuoso reports the unescaped values, hence we
+decode them to yield equivalent results."
+  (cl-ppcre:regex-replace-all
+   "\\\\([tbnrf\"'\\\\])"
+   string
+   (lambda (string start end match-start match-end reg-starts reg-ends)
+     (declare (ignore start end match-start match-end reg-ends))
+     (string (case (char string (aref reg-starts 0))
+               (#\t #\Tab)
+               (#\b (code-char 8))
+               (#\n #\Newline)
+               (#\r #\Return)
+               (#\f (code-char 12))
+               (#\" #\")
+               (#\' #\')
+               (#\\ #\\))))))
+
+(defun construct-term-as-binding (term)
+  "Converts a TERM of a parsed turtle triple into its JSON binding value.
+
+Mimics the values Virtuoso yields for CONSTRUCT queries: URIs are
+reported as \"uri\", blank nodes as \"bnode\", plain and language
+tagged literals as \"literal\" and typed literals as
+\"typed-literal\".  Language tags are reported under the \"lang\" key
+as Virtuoso does for CONSTRUCT queries."
+  (cond
+    ((quri:uri-p term)
+     (jsown:new-js ("type" "uri") ("value" (quri:render-uri term))))
+    ((cl-ttl-parser:blank-node-p term)
+     (jsown:new-js ("type" "bnode") ("value" (cl-ttl-parser:blank-node-label term))))
+    ((cl-ttl-parser:rdf-literal-p term)
+     (let* ((lang (cl-ttl-parser:rdf-literal-lang term))
+            (datatype (cl-ttl-parser:rdf-literal-datatype term))
+            (datatype-string (when datatype (quri:render-uri datatype)))
+            ;; a plain literal and an xsd:string literal are the same
+            ;; thing in RDF 1.1, Virtuoso reports both as plain literal
+            (plain-p (or (not datatype)
+                         (string= datatype-string "http://www.w3.org/2001/XMLSchema#string")))
+            (binding (jsown:new-js
+                       ("type" (if (and datatype (not plain-p)) "typed-literal" "literal"))
+                       ("value" (decode-turtle-escapes (cl-ttl-parser:rdf-literal-value term))))))
+       (when lang
+         (setf (jsown:val binding "lang") lang))
+       (when (and datatype (not plain-p))
+         (setf (jsown:val binding "datatype") datatype-string))
+       binding))
+    (t (error "Cannot convert ~A into a CONSTRUCT binding" term))))
+
+(defun construct-result-as-json (body)
+  "Converts the turtle-family BODY of a QLever CONSTRUCT response into the sparql-results+json format Virtuoso yields.
+
+QLever does not support serialising CONSTRUCT query results as JSON,
+so we parse the N-Triples response and construct the JSON bindings
+ourselves.  The result contains one binding per triple, reporting the
+subject under the \"s\" key, the predicate under \"p\" and the object
+under \"o\"."
+  (let ((bindings
+          (loop for (subject predicate object) in (cl-ttl-parser:parse-ttl body)
+                collect (jsown:new-js
+                          ("s" (construct-term-as-binding subject))
+                          ("p" (construct-term-as-binding predicate))
+                          ("o" (construct-term-as-binding object))))))
+    (jsown:to-json
+     (jsown:new-js
+       ("head" (jsown:new-js ("link" '()) ("vars" '("s" "p" "o"))))
+       ("results" (jsown:new-js ("distinct" :false)
+                                ("ordered" :true)
+                                ("bindings" bindings)))))))
+
+(defun maybe-construct-result-as-json (body headers)
+  "Converts the response BODY to the JSON bindings format if it is a turtle-family CONSTRUCT result from a QLever backend.
+
+Other responses are returned as is."
+  (if (and (qlever-backend-p)
+           headers
+           (turtle-family-content-type-p (gethash "content-type" headers)))
+      (construct-result-as-json body)
+      body))
+
+;; end CONSTRUCT conversion for QLever
+
 (defun ensure-backends-variable ()
   "Users can set the backends using the `*BACKEND*' variable in simple string form.  We now have a more complex structure
 which is stored in the `*BACKENDS*' variable.  This function handles the upgrade from one format to the other."
@@ -142,10 +291,15 @@ When the VERBOSE keyword is truethy, output is written to STDOUT."
                              (format t "~&Could not access endpoint ~A, signaled ~A, will retry.~%" url e))
                            (sleep 1))))))
 
-(defun query (string &key (send-to-single nil))
+(defun query (string &key (send-to-single nil) (update-p nil))
   "Sends a query to the backend and responds with the response body.
 
-When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request is sent to only one of them."
+When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request is sent to only one of them.
+
+When UPDATE-P is truethy, the request is treated as a SPARQL update query
+(INSERT/DELETE).  For a QLever backend the update is then sent as a raw
+body via POST with content-type application/sparql-update as expected by
+QLever.  Other backends receive updates the same way as regular queries."
   (ensure-backends-variable)
   (let* ((selected-endpoints
            (if send-to-single
@@ -171,16 +325,21 @@ When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request
                  ;; 2. send out queries
                  (handler-case
                      (multiple-value-bind (body code headers)
-                         (let ((headers `(("accept" . "application/sparql-results+json")
+                         (let ((headers `(("accept" . ,(accept-header))
 
                                           ("mu-call-id" . ,(mu-call-id))
                                           ("mu-session-id" . ,(mu-session-id)))))
-                           (send-query-to-triplestore (sparql-endpoint-url endpoint) string headers))
-                       (declare (ignore code headers))
+                           (if (and update-p (qlever-backend-p))
+                               (send-update-to-triplestore (sparql-endpoint-url endpoint) string headers)
+                               (send-query-to-triplestore (sparql-endpoint-url endpoint) string headers)))
+                       (declare (ignore code))
                        (when *log-sparql-query-roundtrip*
                          (format t "~&Requested:~%~A~%and received~%~A~%"
                                  string body))
-                       (setf result body))
+                       ;; QLever responds to CONSTRUCT queries with a
+                       ;; turtle-family format which we convert to the
+                       ;; JSON bindings Virtuoso yields.
+                       (setf result (maybe-construct-result-as-json body headers)))
                    (FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE (e)
                      ;; This should also be logged in exponential backoff retry so might be good enough to log there.
                      ;; (format t
