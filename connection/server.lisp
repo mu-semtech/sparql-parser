@@ -33,7 +33,7 @@
            "/recovery-status"))
 
 (defun return-recovery-status ()
-  (let* ((cluster woo.worker.utils::*backup-cluster*)
+  (let* ((cluster woo.worker.utils::*cluster-reference*)
          (workers (woo.worker::cluster-workers cluster))
          (amount-of-workers (length workers))
          (worker-states

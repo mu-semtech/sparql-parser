@@ -12,19 +12,34 @@ Throws SEMAPHORE-TIMEOUT when timeout passed."
          ,semaphore-sym :timeout ,timeout))))
 
 (defun with-semaphore* (functor semaphore &key timeout)
-  (if (bt:wait-on-semaphore semaphore :timeout timeout)
-      (unwind-protect (funcall functor)
-        (sb-thread:signal-semaphore semaphore))
-      (error 'semaphore-timeout :semaphore semaphore)))
+  (cond ((and timeout (< timeout 0))
+         (error 'semaphore-timeout :semaphore semaphore))
+        ((bt:wait-on-semaphore semaphore :timeout timeout)
+         (unwind-protect (funcall functor)
+           (sb-thread:signal-semaphore semaphore)))
+        (t (error 'semaphore-timeout :semaphore semaphore))))
 
-(defun with-multiple-semaphores* (semaphores functor &key timeout)
-  "Executes functor when all fo the SEMAPHOREs"
+(defun with-multiple-semaphores* (semaphores functor &key individual-timeout total-timeout)
+  "Executes functor once all SEMAPHOREs have been acquired in order,
+waiting at most `INDIVIDUAL-TIMEOUT' seconds for each acquisition and
+`TOTAL-TIMEOUT' in total.  IF both are nil, timeout is infinite."
   (if semaphores
-      (with-semaphore ((first semaphores))
-        (with-multiple-semaphores* (rest semaphores) functor :timeout timeout))
+      (let ((start (get-internal-real-time))
+            (timeout (and (or individual-timeout total-timeout)
+                          (apply #'min
+                                 (remove-if-not
+                                  #'identity
+                                  (list individual-timeout total-timeout))))))
+        (with-semaphore ((first semaphores) :timeout timeout)
+          (with-multiple-semaphores* (rest semaphores)
+            functor
+            :individual-timeout individual-timeout
+            :total-timeout (and total-timeout
+                                (- total-timeout
+                                   (/ (- (get-internal-real-time) start) internal-time-units-per-second))))))
       (funcall functor)))
 
-(defmacro with-multiple-semaphores ((semaphores &rest args &key timeout) &body body)
-  (declare (ignore timeout))
+(defmacro with-multiple-semaphores ((semaphores &rest args &key individual-timeout total-timeout) &body body)
+  (declare (ignore individual-timeout total-timeout))
   `(with-multiple-semaphores* ,semaphores (lambda () ,@body) ,@args))
 

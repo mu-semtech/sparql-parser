@@ -158,7 +158,7 @@ When SEND-TO-SINGLE is truethy and multiple endpoints are available, the request
     ;; - a single failing endpoint will bring the whole setup down in this implementation
     ;; - the implementation does not fire off the queries in parallel, we may want a thread per semaphore for that
     ;; - a full-fledged and parallel implementation likely means rewriting this whole logic and the construction of the sparql-endpoint struct
-    (support:with-multiple-semaphores ((mapcar #'sparql-endpoint-semaphore selected-endpoints) :timeout *acquire-db-semaphore-timeout*)
+    (support:with-multiple-semaphores ((mapcar #'sparql-endpoint-semaphore selected-endpoints) :total-timeout *acquire-db-semaphore-timeout*)
       (let ((post-handler (lambda () nil))) ; overwritten with handler on error
         (unwind-protect
              (support:with-exponential-backoff-retry
