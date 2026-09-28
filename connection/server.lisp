@@ -153,8 +153,24 @@
 
 (defun log-error-backtrace (err)
   "Prints the backtrace of the error."
-  (format t "~&Error: ~A~%Backtrace: ~%" err)
-  (trivial-backtrace:print-backtrace err :output *standard-output*))
+  (handler-case
+      (ignore-errors
+       (format t "~&Error: ~A~%Backtrace: ~%" err)
+       (trivial-backtrace:print-backtrace err :output *standard-output*))
+    (serious-condition (e)
+      ;; nothing we can do about this :/
+      (declare (ignore e)))))
+
+(defun log-serious-condition-backtrace (err)
+  "Tries to print the backtrace of a serious condition."
+  (handler-case
+      (ignore-errors
+       (format t "~&Serious condition occurred: ~A~%" err)
+       (format t "Trying to print backtrace:~%")
+       (trivial-backtrace:print-backtrace err :output *standard-output*))
+    (serious-condition (e)
+      ;; nothing we can do about this :/
+      (declare (ignore e)))))
 
 (defun acceptor (env)
   ;; (declare (ignore env))
@@ -166,7 +182,8 @@
             (incf *request-count*)))
     (handler-case
         (handler-bind
-            ((error #'log-error-backtrace))
+            ((error #'log-error-backtrace)
+             (serious-condition #'log-serious-condition-backtrace))
           (let* ((headers (getf env :headers))
                  (allowed-groups-header (gethash "mu-auth-allowed-groups" headers))
                  (sudo-header (gethash "mu-auth-sudo" headers))
