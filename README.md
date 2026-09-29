@@ -396,6 +396,24 @@ Using the `:scopes` parameter notation it is possible to provide multiple scope 
        :scopes '("http://services.semantic.works/people-service" "http://services.semantic.works/another-service"))
 ```
 
+### Update the string files after changing `*string-max-size*`
+
+When you change `*string-max-size*` in your `config.lisp`, the triplestore and the string-file store are out of sync.  The image ships two mu-scripts to bring them back in line.  Run them from the top-level folder of a mu-project that contains a `sparql-parser` service (the stack must have been `docker compose up -d` at least once so the containers exist).
+
+After lowering `*string-max-size*`, move long literals that are now over the new limit from the triplestore into string files:
+
+```
+mu script database move-db-to-files
+```
+
+After raising `*string-max-size*`, inline string files that are now under the new limit back into the triplestore as literals:
+
+```
+mu script database move-files-to-db
+```
+
+Both scripts read their settings from your `config.lisp` (the endpoint, the string directory and the `*string-max-size*` you just changed), so there are no extra arguments to pass.  Start the triplestore of the stack before running them.
+
 ## Reference
 ### ACL configuration interface
 #### `define-graph`
